@@ -394,8 +394,8 @@ URL: http://your-server:4533
 ### Главная страница
 ![Home](media/home.png)
 
-### Vibe Similarity
-![Vibe](media/vibe.png)
+### Для вас
+![for-you](media/for-you.png)
 
 ### Audiobookshelf
 ![Audiobooks](media/audiobooks.png)
