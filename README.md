@@ -400,8 +400,6 @@ URL: http://your-server:4533
 ### Audiobookshelf
 ![Audiobooks](media/audiobooks.png)
 
-### Настройки тем
-![Themes](media/themes.png)
 
 ---
 
