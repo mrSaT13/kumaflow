@@ -1,0 +1,337 @@
+/**
+ * CSS переменные для тем KumaFlow
+ * Применяются автоматически при смене темы
+ */
+
+:root {
+  /* Темы по умолчанию */
+  --theme-background: rgb(12, 12, 12);
+  --theme-background-alternate: rgb(8, 8, 8);
+  --theme-foreground: rgb(225, 225, 225);
+  --theme-foreground-muted: rgb(150, 150, 150);
+  --theme-surface: rgb(20, 20, 20);
+  --theme-surface-foreground: rgb(215, 215, 215);
+  --theme-primary: rgb(53, 116, 252);
+  --theme-primary-foreground: rgb(255, 255, 255);
+  --theme-state-error: rgb(204, 50, 50);
+  --theme-state-info: rgb(53, 116, 252);
+  --theme-state-success: rgb(50, 204, 50);
+  --theme-state-warning: rgb(255, 120, 120);
+  --theme-black: rgb(0, 0, 0);
+  --theme-white: rgb(255, 255, 255);
+  
+  /* App настройки */
+  --theme-content-max-width: 1800px;
+  --theme-root-font-size: 16px;
+  --theme-scrollbar-size: 9px;
+  --theme-scrollbar-handle-background: rgba(160, 160, 160, 20%);
+  --theme-scrollbar-handle-hover-background: rgba(160, 160, 160, 60%);
+  --theme-scrollbar-handle-active-background: rgba(160, 160, 160, 40%);
+  --theme-scrollbar-track-background: transparent;
+  --theme-scrollbar-track-hover-background: transparent;
+  --theme-scrollbar-track-active-background: transparent;
+  --theme-scrollbar-handle-border-radius: 0;
+  --theme-scrollbar-track-border-radius: 0;
+}
+
+/* Применение тем через data-атрибуты */
+[data-theme="dracula"] {
+  --theme-background: rgb(40, 42, 54);
+  --theme-background-alternate: rgb(34, 35, 46);
+  --theme-foreground: rgb(248, 248, 242);
+  --theme-foreground-muted: rgb(98, 114, 164);
+  --theme-surface: rgb(68, 71, 90);
+  --theme-surface-foreground: rgb(248, 248, 242);
+  --theme-primary: rgb(189, 147, 249);
+  --theme-primary-foreground: rgb(40, 42, 54);
+  --theme-state-error: rgb(255, 85, 85);
+  --theme-state-info: rgb(139, 233, 253);
+  --theme-state-success: rgb(80, 250, 123);
+  --theme-state-warning: rgb(255, 184, 108);
+}
+
+[data-theme="github-dark"] {
+  --theme-background: rgb(13, 17, 23);
+  --theme-background-alternate: rgb(22, 27, 34);
+  --theme-foreground: rgb(201, 209, 217);
+  --theme-foreground-muted: rgb(139, 148, 158);
+  --theme-surface: rgb(22, 27, 34);
+  --theme-surface-foreground: rgb(201, 209, 217);
+  --theme-primary: rgb(88, 166, 255);
+  --theme-primary-foreground: rgb(13, 17, 23);
+  --theme-state-error: rgb(248, 81, 73);
+  --theme-state-info: rgb(88, 166, 255);
+  --theme-state-success: rgb(46, 160, 67);
+  --theme-state-warning: rgb(210, 153, 34);
+}
+
+[data-theme="nord"] {
+  --theme-background: rgb(46, 52, 64);
+  --theme-background-alternate: rgb(59, 66, 82);
+  --theme-foreground: rgb(216, 222, 233);
+  --theme-foreground-muted: rgb(129, 161, 193);
+  --theme-surface: rgb(59, 66, 82);
+  --theme-surface-foreground: rgb(216, 222, 233);
+  --theme-primary: rgb(136, 192, 208);
+  --theme-primary-foreground: rgb(46, 52, 64);
+  --theme-state-error: rgb(191, 97, 106);
+  --theme-state-info: rgb(129, 161, 193);
+  --theme-state-success: rgb(163, 190, 140);
+  --theme-state-warning: rgb(235, 203, 139);
+}
+
+[data-theme="gruvbox-dark"] {
+  --theme-background: rgb(40, 40, 40);
+  --theme-background-alternate: rgb(29, 32, 33);
+  --theme-foreground: rgb(235, 219, 178);
+  --theme-foreground-muted: rgb(168, 153, 132);
+  --theme-surface: rgb(60, 56, 54);
+  --theme-surface-foreground: rgb(235, 219, 178);
+  --theme-primary: rgb(235, 180, 84);
+  --theme-primary-foreground: rgb(40, 40, 40);
+  --theme-state-error: rgb(251, 73, 52);
+  --theme-state-info: rgb(131, 165, 152);
+  --theme-state-success: rgb(184, 187, 38);
+  --theme-state-warning: rgb(254, 128, 25);
+}
+
+[data-theme="tokyo-night"] {
+  --theme-background: rgb(26, 27, 38);
+  --theme-background-alternate: rgb(22, 22, 30);
+  --theme-foreground: rgb(169, 177, 214);
+  --theme-foreground-muted: rgb(108, 114, 148);
+  --theme-surface: rgb(35, 35, 50);
+  --theme-surface-foreground: rgb(169, 177, 214);
+  --theme-primary: rgb(125, 207, 255);
+  --theme-primary-foreground: rgb(26, 27, 38);
+  --theme-state-error: rgb(255, 117, 127);
+  --theme-state-info: rgb(125, 207, 255);
+  --theme-state-success: rgb(158, 206, 106);
+  --theme-state-warning: rgb(224, 175, 104);
+}
+
+[data-theme="catppuccin-mocha"] {
+  --theme-background: rgb(30, 30, 46);
+  --theme-background-alternate: rgb(24, 24, 37);
+  --theme-foreground: rgb(205, 214, 244);
+  --theme-foreground-muted: rgb(166, 173, 200);
+  --theme-surface: rgb(49, 50, 68);
+  --theme-surface-foreground: rgb(205, 214, 244);
+  --theme-primary: rgb(180, 190, 254);
+  --theme-primary-foreground: rgb(30, 30, 46);
+  --theme-state-error: rgb(243, 139, 168);
+  --theme-state-info: rgb(137, 221, 255);
+  --theme-state-success: rgb(166, 227, 161);
+  --theme-state-warning: rgb(250, 179, 135);
+}
+
+[data-theme="monokai"] {
+  --theme-background: rgb(39, 40, 34);
+  --theme-background-alternate: rgb(32, 33, 28);
+  --theme-foreground: rgb(248, 248, 242);
+  --theme-foreground-muted: rgb(117, 117, 117);
+  --theme-surface: rgb(68, 69, 62);
+  --theme-surface-foreground: rgb(248, 248, 242);
+  --theme-primary: rgb(166, 226, 46);
+  --theme-primary-foreground: rgb(39, 40, 34);
+  --theme-state-error: rgb(249, 38, 114);
+  --theme-state-info: rgb(102, 217, 239);
+  --theme-state-success: rgb(166, 226, 46);
+  --theme-state-warning: rgb(253, 151, 31);
+}
+
+[data-theme="one-dark"] {
+  --theme-background: rgb(40, 44, 52);
+  --theme-background-alternate: rgb(33, 37, 43);
+  --theme-foreground: rgb(224, 226, 228);
+  --theme-foreground-muted: rgb(152, 159, 177);
+  --theme-surface: rgb(59, 66, 78);
+  --theme-surface-foreground: rgb(224, 226, 228);
+  --theme-primary: rgb(97, 175, 239);
+  --theme-primary-foreground: rgb(40, 44, 52);
+  --theme-state-error: rgb(224, 108, 117);
+  --theme-state-info: rgb(97, 175, 239);
+  --theme-state-success: rgb(152, 195, 121);
+  --theme-state-warning: rgb(229, 192, 123);
+}
+
+[data-theme="rose-pine"] {
+  --theme-background: rgb(30, 28, 45);
+  --theme-background-alternate: rgb(22, 20, 34);
+  --theme-foreground: rgb(224, 222, 244);
+  --theme-foreground-muted: rgb(156, 154, 174);
+  --theme-surface: rgb(47, 43, 65);
+  --theme-surface-foreground: rgb(224, 222, 244);
+  --theme-primary: rgb(194, 178, 228);
+  --theme-primary-foreground: rgb(30, 28, 45);
+  --theme-state-error: rgb(234, 118, 203);
+  --theme-state-info: rgb(125, 207, 255);
+  --theme-state-success: rgb(152, 205, 149);
+  --theme-state-warning: rgb(241, 196, 107);
+}
+
+[data-theme="shades-of-purple"] {
+  --theme-background: rgb(45, 43, 85);
+  --theme-background-alternate: rgb(37, 36, 71);
+  --theme-foreground: rgb(255, 255, 255);
+  --theme-foreground-muted: rgb(176, 176, 255);
+  --theme-surface: rgb(67, 64, 127);
+  --theme-surface-foreground: rgb(255, 255, 255);
+  --theme-primary: rgb(179, 97, 254);
+  --theme-primary-foreground: rgb(45, 43, 85);
+  --theme-state-error: rgb(255, 94, 92);
+  --theme-state-info: rgb(79, 195, 247);
+  --theme-state-success: rgb(80, 250, 123);
+  --theme-state-warning: rgb(255, 204, 0);
+}
+
+[data-theme="solarized-dark"] {
+  --theme-background: rgb(0, 43, 54);
+  --theme-background-alternate: rgb(7, 54, 66);
+  --theme-foreground: rgb(131, 148, 150);
+  --theme-foreground-muted: rgb(88, 110, 117);
+  --theme-surface: rgb(7, 54, 66);
+  --theme-surface-foreground: rgb(131, 148, 150);
+  --theme-primary: rgb(133, 153, 0);
+  --theme-primary-foreground: rgb(0, 43, 54);
+  --theme-state-error: rgb(220, 50, 47);
+  --theme-state-info: rgb(38, 139, 210);
+  --theme-state-success: rgb(133, 153, 0);
+  --theme-state-warning: rgb(203, 75, 22);
+}
+
+[data-theme="material-dark"] {
+  --theme-background: rgb(36, 36, 36);
+  --theme-background-alternate: rgb(30, 30, 30);
+  --theme-foreground: rgb(230, 230, 230);
+  --theme-foreground-muted: rgb(150, 150, 150);
+  --theme-surface: rgb(48, 48, 48);
+  --theme-surface-foreground: rgb(230, 230, 230);
+  --theme-primary: rgb(66, 165, 245);
+  --theme-primary-foreground: rgb(36, 36, 36);
+  --theme-state-error: rgb(229, 115, 115);
+  --theme-state-info: rgb(66, 165, 245);
+  --theme-state-success: rgb(102, 187, 106);
+  --theme-state-warning: rgb(255, 183, 77);
+}
+
+[data-theme="night-owl"] {
+  --theme-background: rgb(1, 22, 39);
+  --theme-background-alternate: rgb(0, 15, 28);
+  --theme-foreground: rgb(214, 222, 235);
+  --theme-foreground-muted: rgb(109, 126, 148);
+  --theme-surface: rgb(15, 38, 62);
+  --theme-surface-foreground: rgb(214, 222, 235);
+  --theme-primary: rgb(128, 203, 196);
+  --theme-primary-foreground: rgb(1, 22, 39);
+  --theme-state-error: rgb(255, 105, 180);
+  --theme-state-info: rgb(128, 203, 196);
+  --theme-state-success: rgb(195, 232, 141);
+  --theme-state-warning: rgb(255, 203, 139);
+}
+
+[data-theme="ayu-dark"] {
+  --theme-background: rgb(10, 14, 22);
+  --theme-background-alternate: rgb(5, 8, 14);
+  --theme-foreground: rgb(186, 198, 212);
+  --theme-foreground-muted: rgb(92, 106, 123);
+  --theme-surface: rgb(18, 24, 36);
+  --theme-surface-foreground: rgb(186, 198, 212);
+  --theme-primary: rgb(255, 184, 108);
+  --theme-primary-foreground: rgb(10, 14, 22);
+  --theme-state-error: rgb(255, 103, 100);
+  --theme-state-info: rgb(57, 186, 230);
+  --theme-state-success: rgb(217, 237, 159);
+  --theme-state-warning: rgb(255, 184, 108);
+}
+
+[data-theme="glassy-dark"] {
+  --theme-background: rgb(18, 18, 24);
+  --theme-background-alternate: rgb(12, 12, 16);
+  --theme-foreground: rgb(235, 235, 245);
+  --theme-foreground-muted: rgb(140, 140, 160);
+  --theme-surface: rgb(28, 28, 36);
+  --theme-surface-foreground: rgb(235, 235, 245);
+  --theme-primary: rgb(116, 199, 236);
+  --theme-primary-foreground: rgb(18, 18, 24);
+  --theme-state-error: rgb(239, 98, 122);
+  --theme-state-info: rgb(116, 199, 236);
+  --theme-state-success: rgb(115, 218, 202);
+  --theme-state-warning: rgb(255, 184, 82);
+}
+
+[data-theme="high-contrast-dark"] {
+  --theme-background: rgb(0, 0, 0);
+  --theme-background-alternate: rgb(10, 10, 10);
+  --theme-foreground: rgb(255, 255, 255);
+  --theme-foreground-muted: rgb(200, 200, 200);
+  --theme-surface: rgb(20, 20, 20);
+  --theme-surface-foreground: rgb(255, 255, 255);
+  --theme-primary: rgb(0, 255, 255);
+  --theme-primary-foreground: rgb(0, 0, 0);
+  --theme-state-error: rgb(255, 100, 100);
+  --theme-state-info: rgb(100, 200, 255);
+  --theme-state-success: rgb(100, 255, 100);
+  --theme-state-warning: rgb(255, 255, 100);
+}
+
+[data-theme="vscode-dark"] {
+  --theme-background: rgb(30, 30, 30);
+  --theme-background-alternate: rgb(25, 25, 25);
+  --theme-foreground: rgb(204, 204, 204);
+  --theme-foreground-muted: rgb(153, 153, 153);
+  --theme-surface: rgb(37, 37, 38);
+  --theme-surface-foreground: rgb(204, 204, 204);
+  --theme-primary: rgb(0, 122, 204);
+  --theme-primary-foreground: rgb(255, 255, 255);
+  --theme-state-error: rgb(244, 67, 54);
+  --theme-state-info: rgb(0, 122, 204);
+  --theme-state-success: rgb(76, 175, 80);
+  --theme-state-warning: rgb(255, 193, 7);
+}
+
+[data-theme="default-light"] {
+  --theme-background: rgb(245, 245, 245);
+  --theme-background-alternate: rgb(255, 255, 255);
+  --theme-foreground: rgb(25, 25, 25);
+  --theme-foreground-muted: rgb(100, 100, 100);
+  --theme-surface: rgb(255, 255, 255);
+  --theme-surface-foreground: rgb(25, 25, 25);
+  --theme-primary: rgb(53, 116, 252);
+  --theme-primary-foreground: rgb(255, 255, 255);
+  --theme-state-error: rgb(204, 50, 50);
+  --theme-state-info: rgb(53, 116, 252);
+  --theme-state-success: rgb(50, 204, 50);
+  --theme-state-warning: rgb(255, 120, 120);
+}
+
+/* Применение CSS переменных к элементам */
+body {
+  background-color: var(--theme-background);
+  color: var(--theme-foreground);
+  font-size: var(--theme-root-font-size);
+}
+
+/* Scrollbar стили */
+::-webkit-scrollbar {
+  width: var(--theme-scrollbar-size);
+  height: var(--theme-scrollbar-size);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--theme-scrollbar-track-background);
+  border-radius: var(--theme-scrollbar-track-border-radius);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--theme-scrollbar-handle-background);
+  border-radius: var(--theme-scrollbar-handle-border-radius);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-scrollbar-handle-hover-background);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--theme-scrollbar-handle-active-background);
+}

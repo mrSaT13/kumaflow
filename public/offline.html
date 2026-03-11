@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KumaFlow - Офлайн</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+        background: linear-gradient(135deg, #060e23 0%, #1a1a2e 100%);
+        color: #ffffff;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .container {
+        text-align: center;
+        max-width: 500px;
+      }
+
+      .icon {
+        font-size: 96px;
+        margin-bottom: 24px;
+      }
+
+      h1 {
+        font-size: 32px;
+        font-weight: 700;
+        margin-bottom: 16px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      p {
+        font-size: 18px;
+        line-height: 1.6;
+        color: #a0aec0;
+        margin-bottom: 32px;
+      }
+
+      .button {
+        display: inline-block;
+        padding: 14px 32px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        text-decoration: none;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 16px;
+        transition: transform 0.2s, box-shadow 0.2s;
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 4px 14px rgba(102, 126, 234, 0.4);
+      }
+
+      .button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+      }
+
+      .button:active {
+        transform: translateY(0);
+      }
+
+      .status {
+        margin-top: 24px;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .status-title {
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #ffffff;
+      }
+
+      .status-text {
+        font-size: 14px;
+        color: #a0aec0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="icon">📻</div>
+      <h1>KumaFlow Офлайн</h1>
+      <p>
+        Похоже, у вас нет подключения к интернету. Проверьте соединение и попробуйте снова.
+      </p>
+
+      <button class="button" onclick="window.location.reload()">
+        🔄 Попробовать снова
+      </button>
+
+      <div class="status">
+        <div class="status-title">💡 Совет</div>
+        <div class="status-text">
+          KumaFlow может работать офлайн с кэшированными данными. Подключитесь к интернету для загрузки музыки.
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Проверяем наличие подключения
+      window.addEventListener('online', () => {
+        window.location.reload()
+      })
+
+      // Проверяем статус подключения при загрузке
+      if (navigator.onLine) {
+        window.location.reload()
+      }
+    </script>
+  </body>
+</html>

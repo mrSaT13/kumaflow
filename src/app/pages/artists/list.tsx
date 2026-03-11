@@ -1,0 +1,137 @@
+import { useQuery } from '@tanstack/react-query'
+import { memo } from 'react'
+import { useTranslation } from 'react-i18next'
+import { ShadowHeader } from '@/app/components/album/shadow-header'
+import { ArtistGridCard } from '@/app/components/artist/artist-grid-card'
+import { ArtistsFallback } from '@/app/components/fallbacks/artists.tsx'
+import { GridViewWrapper } from '@/app/components/grid-view-wrapper'
+import { HeaderTitle } from '@/app/components/header-title'
+import ListWrapper from '@/app/components/list-wrapper'
+import { MainViewTypeSelector } from '@/app/components/main-grid'
+import { DataTable } from '@/app/components/ui/data-table'
+import { Button } from '@/app/components/ui/button'
+import { useInfiniteArtists } from '@/app/hooks/use-infinite-artists'
+import { useSongList } from '@/app/hooks/use-song-list'
+import { artistsColumns } from '@/app/tables/artists-columns'
+import { subsonic } from '@/service/subsonic'
+import { useAppArtistsViewType } from '@/store/app.store'
+import { usePlayerActions } from '@/store/player.store'
+import { ISimilarArtist } from '@/types/responses/artist'
+import { queryKeys } from '@/utils/queryKeys'
+
+const MemoShadowHeader = memo(ShadowHeader)
+const MemoHeaderTitle = memo(HeaderTitle)
+const MemoViewTypeSelector = memo(MainViewTypeSelector)
+const MemoDataTable = memo(DataTable) as typeof DataTable
+const MemoListWrapper = memo(ListWrapper)
+
+export default function ArtistsList() {
+  const { t } = useTranslation()
+  const { getArtistAllSongs } = useSongList()
+  const { setSongList } = usePlayerActions()
+  const {
+    artistsPageViewType,
+    setArtistsPageViewType,
+    isTableView,
+    isGridView,
+  } = useAppArtistsViewType()
+
+  const columns = artistsColumns()
+
+  // Используем бесконечную загрузку
+  const {
+    data: artistsData,
+    isLoading,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteArtists()
+
+  const artists = artistsData?.artists || []
+  const total = artistsData?.total || 0
+
+  async function handlePlayArtistRadio(artist: ISimilarArtist) {
+    const songList = await getArtistAllSongs(artist.name)
+
+    if (songList) setSongList(songList, 0)
+  }
+
+  const handleLoadMore = () => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage()
+    }
+  }
+
+  if (isLoading) return <ArtistsFallback />
+  if (!artists) return null
+
+  return (
+    <div className="w-full h-full">
+      <MemoShadowHeader className="flex justify-between">
+        <MemoHeaderTitle 
+          title={t('sidebar.artists')} 
+          count={artists.length}
+          subtitle={total > 0 ? `Всего: ${total}` : undefined}
+        />
+
+        <MemoViewTypeSelector
+          viewType={artistsPageViewType}
+          setViewType={setArtistsPageViewType}
+        />
+      </MemoShadowHeader>
+
+      {isTableView && (
+        <MemoListWrapper>
+          <MemoDataTable
+            columns={columns}
+            data={artists}
+            showPagination={false}
+            showSearch={true}
+            searchColumn="name"
+            handlePlaySong={(row) => handlePlayArtistRadio(row.original)}
+            allowRowSelection={false}
+            dataType="artist"
+          />
+          
+          {hasNextPage && (
+            <div className="flex justify-center mt-6 mb-4">
+              <Button
+                onClick={handleLoadMore}
+                disabled={isFetchingNextPage}
+                variant="outline"
+                size="lg"
+              >
+                {isFetchingNextPage ? 'Загрузка...' : 'Показать ещё'}
+              </Button>
+            </div>
+          )}
+        </MemoListWrapper>
+      )}
+
+      {isGridView && (
+        <MemoListWrapper className="px-0">
+          <GridViewWrapper
+            list={artists}
+            data-testid="artists-grid"
+            type="artists"
+          >
+            {(artist) => <ArtistGridCard artist={artist} />}
+          </GridViewWrapper>
+          
+          {hasNextPage && (
+            <div className="flex justify-center mt-6 mb-4">
+              <Button
+                onClick={handleLoadMore}
+                disabled={isFetchingNextPage}
+                variant="outline"
+                size="lg"
+              >
+                {isFetchingNextPage ? 'Загрузка...' : 'Показать ещё'}
+              </Button>
+            </div>
+          )}
+        </MemoListWrapper>
+      )}
+    </div>
+  )
+}
