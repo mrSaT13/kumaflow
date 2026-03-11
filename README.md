@@ -10,6 +10,7 @@
 ---
 
 ## 📖 О проекте
+<img width="1015" height="759" alt="home" src="https://github.com/user-attachments/assets/82642d04-27cc-4a53-b3bb-a6e97d0a0ace" />
 
 **KumaFlow** — это глубоко переработанный форк [Aonsoku](https://github.com/victoralvesf/aonsoku)  с  **полностью переработанными ML-рекомендациями**, уникальной системой **Vibe Similarity** и **расширенной интеграцией Audiobookshelf**.
 
