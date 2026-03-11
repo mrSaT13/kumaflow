@@ -1,0 +1,177 @@
+/* KumaFlow - Пользовательские темы */
+/* Используем формат как в основных темах Tailwind */
+
+/* ================================
+   NEON THEME - Розово-голубой неон
+   ================================ */
+.neon {
+  --background: 240 10% 4%;
+  --foreground: 0 0% 100%;
+  --card: 240 10% 6%;
+  --card-foreground: 0 0% 100%;
+  --popover: 240 10% 6%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 300 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 180 100% 50%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 240 5% 15%;
+  --muted-foreground: 240 5% 65%;
+  --accent: 280 100% 50%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 100% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 5% 20%;
+  --input: 240 5% 20%;
+  --ring: 300 100% 50%;
+}
+
+/* ================================
+   CYBERPUNK THEME - Ярко-розовый и циан
+   ================================ */
+.cyberpunk {
+  --background: 240 10% 8%;
+  --foreground: 60 100% 90%;
+  --card: 240 10% 10%;
+  --card-foreground: 60 100% 90%;
+  --popover: 240 10% 10%;
+  --popover-foreground: 60 100% 90%;
+  --primary: 340 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 190 100% 50%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 240 5% 20%;
+  --muted-foreground: 240 5% 70%;
+  --accent: 280 100% 60%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 100% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 5% 25%;
+  --input: 240 5% 25%;
+  --ring: 340 100% 50%;
+}
+
+/* ================================
+   SUNSET THEME - Оранжево-розовый закат
+   ================================ */
+.sunset {
+  --background: 20 50% 10%;
+  --foreground: 30 50% 90%;
+  --card: 20 50% 12%;
+  --card-foreground: 30 50% 90%;
+  --popover: 20 50% 12%;
+  --popover-foreground: 30 50% 90%;
+  --primary: 35 100% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 330 80% 60%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 20 30% 20%;
+  --muted-foreground: 30 30% 70%;
+  --accent: 25 100% 65%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 100% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 20 30% 25%;
+  --input: 20 30% 25%;
+  --ring: 35 100% 60%;
+}
+
+/* ================================
+   OCEAN THEME - Сине-зеленый океан
+   ================================ */
+.ocean {
+  --background: 200 50% 8%;
+  --foreground: 200 30% 90%;
+  --card: 200 50% 10%;
+  --card-foreground: 200 30% 90%;
+  --popover: 200 50% 10%;
+  --popover-foreground: 200 30% 90%;
+  --primary: 190 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 170 80% 50%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 200 30% 15%;
+  --muted-foreground: 200 30% 70%;
+  --accent: 195 100% 55%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 100% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 200 30% 20%;
+  --input: 200 30% 20%;
+  --ring: 190 100% 50%;
+}
+
+/* ================================
+   FOREST THEME - Зелено-изумрудный лес
+   ================================ */
+.forest {
+  --background: 120 30% 8%;
+  --foreground: 120 20% 90%;
+  --card: 120 30% 10%;
+  --card-foreground: 120 20% 90%;
+  --popover: 120 30% 10%;
+  --popover-foreground: 120 20% 90%;
+  --primary: 130 70% 45%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 150 60% 50%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 120 20% 15%;
+  --muted-foreground: 120 20% 70%;
+  --accent: 140 70% 50%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 100% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 120 20% 20%;
+  --input: 120 20% 20%;
+  --ring: 130 70% 45%;
+}
+
+/* ================================
+   CANDY THEME - Розово-фиолетовые конфеты
+   ================================ */
+.candy {
+  --background: 320 50% 12%;
+  --foreground: 320 30% 90%;
+  --card: 320 50% 14%;
+  --card-foreground: 320 30% 90%;
+  --popover: 320 50% 14%;
+  --popover-foreground: 320 30% 90%;
+  --primary: 340 100% 65%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 280 80% 65%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 320 30% 20%;
+  --muted-foreground: 320 30% 75%;
+  --accent: 330 100% 70%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 100% 65%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 320 30% 25%;
+  --input: 320 30% 25%;
+  --ring: 340 100% 65%;
+}
+
+/* ================================
+   MIDNIGHT THEME - Темно-фиолетовая полночь
+   ================================ */
+.midnight {
+  --background: 240 20% 6%;
+  --foreground: 240 10% 90%;
+  --card: 240 20% 8%;
+  --card-foreground: 240 10% 90%;
+  --popover: 240 20% 8%;
+  --popover-foreground: 240 10% 90%;
+  --primary: 250 60% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 270 50% 45%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 240 10% 15%;
+  --muted-foreground: 240 10% 70%;
+  --accent: 260 60% 55%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 100% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 10% 20%;
+  --input: 240 10% 20%;
+  --ring: 250 60% 50%;
+}
