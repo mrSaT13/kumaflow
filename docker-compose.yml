@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  kumaflow:
+    container_name: kumaflow
+    image: ghcr.io/victoralvesf/kumaflow:latest
+    restart: unless-stopped
+    ports:
+      - 8080:8080
+    environment:
+      - APP_USER=${APP_USER}
+      - APP_PASSWORD=${APP_PASSWORD}
+      - APP_AUTH_TYPE=${APP_AUTH_TYPE}
+      - SERVER_URL=${SERVER_URL}
+      - HIDE_SERVER=${HIDE_SERVER}
