@@ -1,0 +1,14 @@
+version: 1.5.1
+files:
+  - url: KumaFlow-v1.5.1-win-x64.exe
+    sha512: WD0cqgV3RRz7GGvAiI84KzlF9DI7Z/fhRdSk/eMVNKMNrqnn4TN+r3wQ5loXd8uYZmrfGU6uZoXIHUrqro+aVw==
+    size: 102403095
+  - url: KumaFlow-v1.5.1-win-arm64.exe
+    sha512: CwOTH6K3cznQ7MCdPeVoAvvzJn5crYmVgXJzK9uj8fInMFvUO1wEWL/scEUy7a0YBRRIHwLdM+LUJSN3OJjFeQ==
+    size: 105087031
+  - url: KumaFlow-v1.5.1-win.exe
+    sha512: el/X6FHYKgKZNe/2N5aUzcDu6GYg0mNHoFWSWHwFe/nyXmjeBqeNGcvuoK7FtUw9bPMZPm68mxoYVKdUduTgwQ==
+    size: 206684969
+path: KumaFlow-v1.5.1-win-x64.exe
+sha512: WD0cqgV3RRz7GGvAiI84KzlF9DI7Z/fhRdSk/eMVNKMNrqnn4TN+r3wQ5loXd8uYZmrfGU6uZoXIHUrqro+aVw==
+releaseDate: '2026-03-11T10:24:22.844Z'
