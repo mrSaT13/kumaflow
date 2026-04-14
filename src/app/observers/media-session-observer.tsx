@@ -12,7 +12,7 @@ export function MediaSessionObserver() {
   const { t } = useTranslation()
   const isPlaying = usePlayerIsPlaying()
   const { isRadio, isSong, isPodcast } = usePlayerMediaType()
-  const { currentList, radioList, currentSongIndex, podcastList } =
+  const { currentList, radioList, currentSongIndex, podcastList, currentPlaylistName } =
     usePlayerSonglist()
   const radioLabel = t('radios.label')
 
@@ -51,7 +51,9 @@ export function MediaSessionObserver() {
       manageMediaSession.setRadioMediaSession(radioLabel, radio.name)
     }
     if (isSong && song) {
-      title = `${song.artist} - ${song.title}`
+      // Добавляем название плейлиста если есть
+      const playlistPrefix = currentPlaylistName ? `[${currentPlaylistName}] ` : ''
+      title = `${playlistPrefix}[${currentSongIndex + 1}/${currentList.length}] ${song.artist} - ${song.title}`
       manageMediaSession.setMediaSession(song)
     }
     if (isPodcast && episode) {
@@ -71,6 +73,9 @@ export function MediaSessionObserver() {
       resetAppTitle()  // Возвращаем KumaFlow
     }
   }, [
+    currentPlaylistName,
+    currentList,
+    currentSongIndex,
     episode,
     hasNothingPlaying,
     isPlaying,

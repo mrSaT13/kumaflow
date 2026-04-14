@@ -6,6 +6,7 @@ import {
   TopSongsResponse,
 } from '@/types/responses/song'
 import { search } from './search'
+import { getUrl } from '@/api/httpClient'
 
 interface GetRandomSongsParams {
   size?: number
@@ -75,10 +76,21 @@ async function getSong(id: string) {
   return response?.data.song
 }
 
+/**
+ * Получить URL для стриминга трека
+ */
+function getStreamUrl(id: string): string {
+  return getUrl('stream', {
+    id,
+    estimateContentLength: 'true',
+  })
+}
+
 export const songs = {
   getAllSongs,
   getFavoriteSongs,
   getRandomSongs,
   getTopSongs,
   getSong,
+  getStreamUrl,
 }

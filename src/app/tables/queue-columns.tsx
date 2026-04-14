@@ -116,9 +116,9 @@ export function queueColumns(): ColumnDefType<ISong>[] {
     {
       id: 'remove',
       style: {
-        width: 180,  // Увеличил ширину для 3 кнопок
-        maxWidth: 180,
-        minWidth: 180,
+        width: 220,  // Увеличил ширину для 4 кнопок (кеш + вверх + вниз + удалить)
+        maxWidth: 220,
+        minWidth: 220,
       },
       cell: ({ row }) => <QueueActions row={row} />,
     },

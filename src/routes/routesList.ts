@@ -66,6 +66,10 @@ const EPISODES = {
   LATEST: `${LIBRARY.EPISODES}/latest`,
 }
 
+const CACHE = {
+  PAGE: '/cache',
+}
+
 const SERVER_CONFIG = '/server-config'
 
 const SETTINGS = {
@@ -80,6 +84,9 @@ const SETTINGS = {
   LANGUAGE: '/settings/language',
 }
 
+const HISTORY = '/history'
+const SEARCH = '/search'
+
 export const ROUTES = {
   LIBRARY,
   ARTIST,
@@ -90,6 +97,9 @@ export const ROUTES = {
   PLAYLIST,
   PODCASTS,
   EPISODES,
+  CACHE,
+  HISTORY,
+  SEARCH,
   SERVER_CONFIG,
   SETTINGS,
 }

@@ -1,7 +1,8 @@
-import { ClockIcon, HeartIcon } from 'lucide-react'
+import { ClockIcon, DownloadIcon, HeartIcon } from 'lucide-react'
 import { memo } from 'react'
 import { Link } from 'react-router-dom'
 
+import { CacheTrackButton } from '@/app/components/song/cache-button'
 import { ArtistLink, ArtistsLinks } from '@/app/components/song/artist-link'
 import { LikeDislikeCompact } from '@/app/components/song/like-dislike-buttons'
 import { SongQualityBadge } from '@/app/components/song/quality-badge'
@@ -107,6 +108,27 @@ export function songsColumns(): ColumnDefType<ISong>[] {
         return (
           <div className="flex justify-center">
             <LikeDislikeCompact songId={song.id} song={song} />
+          </div>
+        )
+      },
+    },
+    {
+      id: 'cache',
+      accessorKey: 'cache',
+      style: {
+        width: 48,
+        maxWidth: 48,
+      },
+      header: () => (
+        <div className="w-full text-center">
+          <DownloadIcon className="w-4 h-4 text-muted-foreground" />
+        </div>
+      ),
+      cell: ({ row }) => {
+        const song = row.original
+        return (
+          <div className="flex justify-center">
+            <CacheTrackButton song={song} variant="ghost" size="icon" />
           </div>
         )
       },

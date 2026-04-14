@@ -6,6 +6,7 @@ import { usePlayerActions } from '@/store/player.store'
 import { generateSongAlchemy } from '@/service/ml-wave-service'
 import { toast } from 'react-toastify'
 import { trackEvent } from '@/service/ml-event-tracker'
+import { useMLPlaylists } from '@/store/ml-playlists.store'
 
 interface SongAlchemyModalProps {
   open: boolean
@@ -22,20 +23,28 @@ export function SongAlchemyModal({ open, onClose }: SongAlchemyModalProps) {
   const [isGenerating, setIsGenerating] = useState(false)
 
   const { setSongList } = usePlayerActions()
+  const { settings: mlSettings } = useMLPlaylists()
+
+  // Получаем количество треков для генерации
+  const getTrackCount = () => {
+    return Math.floor((mlSettings.minTracks + mlSettings.maxTracks) / 2)
+  }
 
   if (!open) return null
 
   const handleGenerate = async () => {
     setIsGenerating(true)
     try {
-      const alchemyPlaylist = await generateSongAlchemy(alchemyParams, 25)
-      
+      const trackCount = getTrackCount()
+      const alchemyPlaylist = await generateSongAlchemy(alchemyParams, trackCount)
+
       if (alchemyPlaylist.songs && alchemyPlaylist.songs.length > 0) {
         setSongList(alchemyPlaylist.songs, 0)
-        toast('🎵 Song Alchemy запущен!', { type: 'success' })
-        trackEvent('playlist_generated', { 
-          type: 'song-alchemy', 
-          params: alchemyParams 
+        toast(`🎵 Песенная Алхимия запущена! (${alchemyPlaylist.songs.length} треков)`, { type: 'success' })
+        trackEvent('playlist_generated', {
+          type: 'song-alchemy',
+          params: alchemyParams,
+          songCount: alchemyPlaylist.songs.length,
         })
         onClose()
       } else {
@@ -43,7 +52,8 @@ export function SongAlchemyModal({ open, onClose }: SongAlchemyModalProps) {
       }
     } catch (error) {
       console.error('Alchemy error:', error)
-      toast('Ошибка генерации', { type: 'error' })
+      const errorMessage = error instanceof Error ? error.message : 'Ошибка генерации'
+      toast(errorMessage, { type: 'error' })
     } finally {
       setIsGenerating(false)
     }
@@ -56,7 +66,7 @@ export function SongAlchemyModal({ open, onClose }: SongAlchemyModalProps) {
         <div className="border-b border-border p-4 flex items-center justify-between">
           <h2 className="text-xl font-bold flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-purple-500" />
-            Song Alchemy
+            Песенная Алхимия
           </h2>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />

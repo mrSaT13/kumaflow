@@ -13,22 +13,22 @@ import { immer } from 'zustand/middleware/immer'
 import { createWithEqualityFn } from 'zustand/traditional'
 import { persist } from 'zustand/middleware'
 
-export type ProgressType = 'slider' | 'bar' | 'waveform'
+export type ProgressType = 'slider'
 export type ProgressIcon = 'circle' | 'square' | 'diamond' | 'custom'
 
 export interface PlayerCustomization {
-  // Тип прогресс-бара
+  // Тип прогресс-бара (только slider)
   progressType: ProgressType
-  
+
   // Иконка маркера прогресса
   progressIcon: ProgressIcon
-  
+
   // Custom SVG иконка (base64 или URL)
   customIconSvg?: string
-  
+
   // Цвет прогресс-бара (hex)
   progressColor: string
-  
+
   // Высота прогресс-бара (px)
   progressHeight: number
   
@@ -71,7 +71,6 @@ interface PlayerCustomizationStore {
   settings: PlayerCustomization
   
   // Actions
-  setProgressType: (type: ProgressType) => void
   setProgressIcon: (icon: ProgressIcon) => void
   setCustomIconSvg: (svg: string) => void
   setProgressColor: (color: string) => void
@@ -106,12 +105,6 @@ export const usePlayerCustomizationStore = createWithEqualityFn<PlayerCustomizat
       devtools(
         immer((set) => ({
           settings: defaultSettings,
-
-          setProgressType: (type) => {
-            set((state) => {
-              state.settings.progressType = type
-            })
-          },
 
           setProgressIcon: (icon) => {
             set((state) => {

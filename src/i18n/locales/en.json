@@ -582,12 +582,15 @@
       "title": "New Version Available!",
       "remindLater": "Remind Me Later",
       "install": "Install and Restart",
-      "macOS": "Download on GitHub"
+      "macOS": "Download on GitHub",
+      "downloading": "Downloading update...",
+      "installing": "Installing..."
     },
     "toasts": {
       "started": "The update process has started.",
       "success": "The update has been installed! The app will now restart.",
-      "error": "Failed to install the update. Please try downloading it directly from GitHub."
+      "error": "Failed to install the update. Please try downloading it directly from GitHub.",
+      "downloading": "Downloading update:"
     }
   },
   "about": {
@@ -611,6 +614,8 @@
       "language": "Language & Region",
       "audio": "Player & Audio",
       "content": "Content",
+      "local-music": "Local Music",
+      "cache": "Cache",
       "accounts": "Accounts",
       "desktop": "Desktop Application",
       "privacy": "Privacy & Security"

@@ -47,7 +47,7 @@ export function AppleMusicSettings() {
   }
 
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader>
         <CardTitle>Apple Music (iTunes)</CardTitle>
         <CardDescription>
@@ -94,10 +94,10 @@ export function AppleMusicSettings() {
         </div>
 
         {/* Test Button */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={handleTestConnection}
-            className="px-4 py-2 text-sm bg-secondary hover:bg-secondary/80 rounded-md transition-colors"
+            className="px-4 py-2 text-sm bg-secondary hover:bg-secondary/80 rounded-md transition-colors whitespace-nowrap"
           >
             Проверить подключение
           </button>

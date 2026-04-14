@@ -29,6 +29,8 @@ export default function QuickAccess() {
       const { playlist } = await generateDailyMix(
         profile.likedSongIds || [],
         profile.preferredGenres,
+        profile.preferredArtists || {},
+        profile.ratings || {},
         25
       )
 

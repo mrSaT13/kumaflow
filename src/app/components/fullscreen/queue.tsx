@@ -87,7 +87,7 @@ export function FullscreenSongQueue() {
             const entry = currentList[virtualRow.index]
             return (
               <QueueItem
-                key={entry.id}
+                key={`${entry.id}-${virtualRow.index}`}  // 🆕 Уникальный ключ
                 data-row-index={virtualRow.index}
                 data-state={currentSong.id === entry.id ? 'active' : 'inactive'}
                 index={virtualRow.index}

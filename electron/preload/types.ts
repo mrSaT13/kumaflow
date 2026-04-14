@@ -115,4 +115,33 @@ export interface IKumaFlowAPI {
   yandexMusicApi: (payload: { endpoint: string; token: string; params?: Record<string, string> }) => Promise<any>
   // Last.fm Scrobble (через Electron для обхода CORS)
   lastFmScrobble: (url: string, method: string, body: string) => Promise<any>
+  // Local Music
+  selectFolderDialog: () => Promise<string | null>
+  scanLocalFolder: (folderPath: string) => Promise<{ tracks: string[]; errors: string[] }>
+  getAudioMetadata: (filePath: string) => Promise<any>
+  getLocalCoverBlob: (filePath: string) => Promise<{ data: string; format: string } | null>
+  streamLocalFile: (filePath: string) => Promise<string | null>
+  getLocalCoverArt: (filePath: string) => Promise<string | null>
+  // Remote Control
+  remoteControl: {
+    start: () => Promise<any>
+    stop: () => Promise<any>
+    getStatus: () => Promise<any>
+    getUrl: () => Promise<string>
+    getAllIps: () => Promise<{ ip: string; iface: string }[]>
+    setIp: (ip: string) => Promise<boolean>
+    setPort: (port: number) => Promise<boolean>
+    getPort: () => Promise<number>
+    setSubsonicUrl: (url: string, username: string, password: string, authType: 'token' | 'password') => Promise<boolean>
+    hasSavedCredentials: () => Promise<boolean>
+    loadSettings: () => Promise<{ enabled?: boolean; port?: number; ip?: string }>
+  }
+  // DLNA
+  dlna: {
+    start: (port?: number) => Promise<boolean>
+    stop: () => Promise<void>
+    scan: () => Promise<any[]>
+    cast: (device: any, songId: string) => Promise<boolean>
+    getCurrentDevice: () => any
+  }
 }

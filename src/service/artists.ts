@@ -68,14 +68,20 @@ async function getPaginated({
 }
 
 async function getOne(id: string) {
-  const response = await httpClient<ArtistResponse>('/getArtist', {
-    method: 'GET',
-    query: {
-      id,
-    },
-  })
-
-  return response?.data.artist
+  console.log('[artists.getOne] Requesting artist:', id)
+  try {
+    const response = await httpClient<ArtistResponse>('/getArtist', {
+      method: 'GET',
+      query: {
+        id,
+      },
+    })
+    console.log('[artists.getOne] Response:', response?.data?.artist?.album?.length || 0, 'albums')
+    return response?.data.artist
+  } catch (error) {
+    console.error('[artists.getOne] Error:', error)
+    return null
+  }
 }
 
 async function getInfo(id: string) {

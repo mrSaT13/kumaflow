@@ -59,33 +59,68 @@ export async function getGenres(): Promise<SubsonicGenre[]> {
 }
 
 /**
- * Получить всех артистов (с пагинацией)
+ * Получить всех артистов
  */
 export async function getArtists(): Promise<SubsonicArtist[]> {
   try {
-    const allArtists: SubsonicArtist[] = []
-    let offset = 0
-    const limit = 500
+    const response = await httpClient<{ artists?: { index: { artist: SubsonicArtist[] }[] } }>('getArtists')
 
-    while (true) {
-      const response = await httpClient<{ artists?: { index: { artist: SubsonicArtist[] }[] } }>('getArtists', {
-        query: { offset, limit },
-      })
+    const indexes = response?.data?.artists?.index || []
+    const artists = indexes.flatMap(index => index.artist || [])
 
-      const indexes = response?.data?.artists?.index || []
-      const artists = indexes.flatMap(index => index.artist || [])
-
-      allArtists.push(...artists)
-
-      // Если получили меньше чем лимит - значит это всё
-      if (artists.length < limit) break
-
-      offset += limit
-    }
-
-    return allArtists
+    console.log('[getArtists] Fetched', artists.length, 'artists')
+    return artists
   } catch (error) {
     console.error('Failed to fetch artists:', error)
+    return []
+  }
+}
+
+/**
+ * Получить лайкнутых артистов
+ */
+export async function getStarredArtists(): Promise<SubsonicArtist[]> {
+  try {
+    const response = await httpClient<{ starred2?: { artist: SubsonicArtist[] } }>('getStarred2', {})
+    const artists = response?.data?.starred2?.artist || []
+    console.log('[getStarredArtists] Fetched', artists.length, 'starred artists')
+    return artists
+  } catch (error) {
+    console.error('Failed to fetch starred artists:', error)
+    return []
+  }
+}
+
+/**
+ * Получить случайных артистов (быстрый способ)
+ */
+export async function getRandomArtists(count: number = 20): Promise<SubsonicArtist[]> {
+  try {
+    // Получаем случайные треки и извлекаем уникальных артистов
+    const songsResponse = await httpClient<{ randomSongs?: { song: SubsonicArtist[] } }>('getRandom', {
+      query: { size: count * 3 },
+    })
+
+    const songs = songsResponse?.data?.randomSongs?.song || []
+    
+    // Извлекаем уникальных артистов
+    const artistMap = new Map<string, SubsonicArtist>()
+    for (const song of songs) {
+      if (song.artistId && !artistMap.has(song.artistId)) {
+        artistMap.set(song.artistId, {
+          id: song.artistId,
+          name: song.artist || 'Unknown',
+          coverArt: song.coverArt,
+          artistImageUrl: undefined,
+        } as SubsonicArtist)
+      }
+    }
+
+    const artists = Array.from(artistMap.values()).slice(0, count)
+    console.log('[getRandomArtists] Fetched', artists.length, 'artists from random songs')
+    return artists
+  } catch (error) {
+    console.error('Failed to fetch random artists:', error)
     return []
   }
 }
@@ -130,6 +165,8 @@ export async function getArtistInfo(artistId: string): Promise<SubsonicArtistInf
 export async function getStarredSongs(): Promise<SubsonicSong[]> {
   try {
     const response = await httpClient<{ starred2?: { song: SubsonicSong[] } }>('getStarred2', {})
+    console.log('[getStarredSongs] Response:', response)
+    console.log('[getStarredSongs] Starred songs:', response?.data?.starred2?.song || [])
     return response?.data?.starred2?.song || []
   } catch (error) {
     console.error('Failed to fetch starred songs:', error)
@@ -398,8 +435,85 @@ export async function getTopSongs(artistName: string, size: number = 50): Promis
     })
     return response?.data?.topSongs?.song || []
   } catch (error) {
-    console.error('Failed to fetch top songs:', error)
+    console.error('Failed to get top songs:', error)
     return []
+  }
+}
+
+/**
+ * Поиск по серверу (artist, album, song)
+ */
+export interface Search3Result {
+  artists?: SubsonicArtist[]
+  albums?: any[]
+  songs?: SubsonicSong[]
+}
+
+export async function search3(
+  query: string,
+  options: {
+    artistCount?: number
+    artistOffset?: number
+    albumCount?: number
+    albumOffset?: number
+    songCount?: number
+    songOffset?: number
+  } = {}
+): Promise<Search3Result> {
+  try {
+    console.log('[search3] Searching for:', query, 'with options:', options)
+    const response = await httpClient<{ searchResult3?: {
+      artist?: SubsonicArtist[]
+      album?: any[]
+      song?: SubsonicSong[]
+    } }>('search3', {
+      query: {
+        query,
+        artistCount: options.artistCount || 20,
+        artistOffset: options.artistOffset || 0,
+        albumCount: options.albumCount || 0,
+        albumOffset: options.albumOffset || 0,
+        songCount: options.songCount || 0,
+        songOffset: options.songOffset || 0,
+      },
+    })
+    console.log('[search3] Response:', response?.data?.searchResult3)
+    const result = response?.data?.searchResult3
+    return {
+      artists: result?.artist || [],
+      albums: result?.album || [],
+      songs: result?.song || [],
+    }
+  } catch (error) {
+    console.error('Failed to search:', error)
+    return {}
+  }
+}
+
+/**
+ * Получить информацию об артисте (с похожими)
+ */
+export async function getArtistInfo2(
+  artistId: string,
+  count: number = 10
+): Promise<{ id: string; name: string; similarArtists?: SubsonicArtist[] } | null> {
+  try {
+    const response = await httpClient<{ artistInfo2?: {
+      id: string
+      name: string
+      similarArtist?: SubsonicArtist[]
+    } }>('getArtistInfo2', {
+      query: { id: artistId, count },
+    })
+    const info = response?.data?.artistInfo2
+    if (!info) return null
+    return {
+      ...info,
+      similarArtists: info.similarArtist || [],
+    }
+  } catch (error) {
+    console.error('Failed to get artist info:', error)
+    return null
   }
 }
 

@@ -35,6 +35,10 @@ export interface IAppData extends IServerConfig {
   hideServer: boolean
   lockUser: boolean
   songCount: number | null
+  remoteControl?: {
+    enabled: boolean
+    port: number
+  }
 }
 
 export interface IAppActions {
@@ -42,6 +46,8 @@ export interface IAppActions {
   setUrl: (value: string) => void
   setUsername: (value: string) => void
   setPassword: (value: string) => void
+  setRemoteEnabled: (value: boolean) => void
+  setRemotePort: (value: number) => void
   saveConfig: (data: IServerConfig) => Promise<boolean>
   removeConfig: () => void
   setLogoutDialogState: (value: boolean) => void
@@ -102,6 +108,10 @@ interface IDesktop {
 
 export interface IAppContext {
   data: IAppData
+  remoteControl: {
+    enabled: boolean
+    port: number
+  }
   accounts: IAccounts
   podcasts: IPodcasts
   pages: IAppPages

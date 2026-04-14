@@ -21,6 +21,7 @@ export default function MLPlaylistsSettings() {
     setAutoUpdateHours,
     setRemoveDuplicates,
     setScanLibrary,
+    setTimeAdaptivity,  // Добавлено
     startScan,
     stopScan,
     setScanProgress,
@@ -190,6 +191,20 @@ export default function MLPlaylistsSettings() {
             <Switch
               checked={settings.scanLibrary}
               onCheckedChange={setScanLibrary}
+            />
+          </div>
+
+          {/* Адаптивность по времени суток */}
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium">🕐 Адаптивность по времени суток</div>
+              <div className="text-sm text-muted-foreground">
+                Утром энергичнее, вечером спокойнее
+              </div>
+            </div>
+            <Switch
+              checked={settings.timeAdaptivity}
+              onCheckedChange={setTimeAdaptivity}
             />
           </div>
 

@@ -8,6 +8,8 @@ import PreviewList from '@/app/components/home/preview-list'
 import ArtistRadioCards from '@/app/components/home/artist-radio-cards'
 import { NewReleasesCard } from '@/app/components/home/new-releases-card'
 import { GlobalChartsCard } from '@/app/components/homepage/global-charts-card'
+import { AutoPlaylistCards } from '@/app/components/home/auto-playlist-cards'
+import { AIPlaylistGenerator } from '@/app/components/player/ai-playlist-generator'
 import {
   useGetMostPlayed,
   useGetRandomAlbums,
@@ -24,6 +26,7 @@ import { getGenres } from '@/service/subsonic-api'
 import { toast } from 'react-toastify'
 import { useQuery } from '@tanstack/react-query'
 import { useHomepageSettings } from '@/store/homepage.store'
+import NewHomepage from '@/app/pages/homepage-v2'  // 🆕 Новый дизайн
 
 // Градиенты для жанров
 const GENRE_GRADIENTS: Record<string, string> = {
@@ -68,11 +71,26 @@ const getGradient = (genreName: string): string => {
   return 'from-primary via-primary/80 to-primary/60'
 }
 
+// Обёртка: проверяет настройки ДИЗАЙНА ДО хуков
 export default function Home() {
+  return <HomeDesignRouter />
+}
+
+function HomeDesignRouter() {
+  const settings = useHomepageSettings()
+  if (settings.newDesignEnabled) {
+    return <NewHomepage />
+  }
+  return <OldHomepage />
+}
+
+// Старый дизайн — все хуки внутри
+function OldHomepage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [isPlayingMyWave, setIsPlayingMyWave] = useState(false)
-  const [isGenerating, setIsGenerating] = useState(false)
+  const [isGeneratingGenre, setIsGeneratingGenre] = useState<string | null>(null)
+  const [isGeneratingMyWave, setIsGeneratingMyWave] = useState(false)
   const { getProfile, ratings } = useML()
   const { setSongList } = usePlayerActions()
   const { settings: playlistSettings } = useMLPlaylists()
@@ -104,14 +122,14 @@ export default function Home() {
     .slice(0, 8)
 
   const handleGenreClick = async (genreName: string) => {
-    setIsGenerating(genreName)
+    setIsGeneratingGenre(genreName)
     try {
       const { getSongsByGenre } = await import('@/service/subsonic-api')
       const songs = await getSongsByGenre(genreName, 50)
-      
+
       if (songs.length === 0) {
         toast.error(`Нет треков в жанре "${genreName}"`)
-        setIsGenerating(null)
+        setIsGeneratingGenre(null)
         return
       }
 
@@ -131,7 +149,7 @@ export default function Home() {
       console.error('Failed to generate genre playlist:', error)
       toast.error(`Ошибка генерации плейлиста "${genreName}"`)
     } finally {
-      setIsGenerating(null)
+      setIsGeneratingGenre(null)
     }
   }
 
@@ -144,10 +162,10 @@ export default function Home() {
   const randomAlbums = useGetRandomAlbums()
 
   const handleMyWavePlay = async () => {
-    if (isGenerating) return
+    if (isGeneratingMyWave) return
 
     setIsPlayingMyWave(!isPlayingMyWave)
-    setIsGenerating(true)
+    setIsGeneratingMyWave(true)
 
     try {
       // Генерация плейлиста на основе ML
@@ -176,7 +194,7 @@ export default function Home() {
       console.error('Ошибка генерации "Моя волна":', error)
       alert('Ошибка при генерации плейлиста. Попробуйте позже.')
     } finally {
-      setIsGenerating(false)
+      setIsGeneratingMyWave(false)
     }
   }
 
@@ -281,18 +299,18 @@ export default function Home() {
         <div className="relative z-10 flex flex-col items-center justify-center h-full gap-4 px-4">
           <button
             onClick={handleMyWavePlay}
-            disabled={isGenerating}
+            disabled={isGeneratingMyWave}
             className={`
               px-10 py-5 rounded-xl text-xl font-bold
               bg-white/95 hover:bg-white
               text-transparent bg-clip-text bg-gradient-to-r from-yellow-600 via-orange-600 to-pink-600
               shadow-xl transition-all duration-300
-              ${isGenerating ? 'opacity-75 cursor-not-allowed' : ''}
-              ${isPlayingMyWave && !isGenerating ? 'scale-105 ring-4 ring-white/50' : 'hover:scale-105'}
+              ${isGeneratingMyWave ? 'opacity-75 cursor-not-allowed' : ''}
+              ${isPlayingMyWave && !isGeneratingMyWave ? 'scale-105 ring-4 ring-white/50' : 'hover:scale-105'}
             `}
           >
             <span className="flex items-center gap-3">
-              {isGenerating ? (
+              {isGeneratingMyWave ? (
                 <>
                   <span className="text-2xl animate-spin">⏳</span>
                   Генерация...
@@ -321,6 +339,9 @@ export default function Home() {
         </div>
       </div>
 
+      {/* 🆕 ML Рекомендации - Auto Playlist Cards */}
+      <AutoPlaylistCards />
+
       {/* Динамическая отрисовка секций из настроек */}
       {sections.map((section) => {
         // Жанры
@@ -347,7 +368,7 @@ export default function Home() {
                       <button
                         key={genre.value}
                         onClick={() => handleGenreClick(genre.value)}
-                        disabled={isGenerating === genre.value}
+                        disabled={isGeneratingGenre === genre.value}
                         className="relative overflow-hidden rounded-lg shadow-md transition-all duration-300 hover:scale-105 hover:shadow-lg disabled:opacity-50"
                       >
                         <div className={`absolute inset-0 bg-gradient-to-br ${getGradient(genre.value)} opacity-90`} />

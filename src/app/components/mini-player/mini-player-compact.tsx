@@ -91,7 +91,7 @@ export function MiniPlayerCompact({ className }: MiniPlayerCompactProps) {
     >
       {/* ФОНОВАЯ ОБЛОЖКА С РАЗМЫТИЕМ */}
       <div className="absolute inset-0 overflow-hidden">
-        {currentSong.coverUrl ? (
+        {currentSong?.coverUrl ? (
           <>
             {/* Основная обложка с размытием */}
             <img
@@ -107,6 +107,10 @@ export function MiniPlayerCompact({ className }: MiniPlayerCompactProps) {
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-primary/20 via-background to-secondary/20" />
         )}
+        {/* Затемнение */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
+        {/* Виньетка */}
+        <div className="absolute inset-0 bg-radial-gradient from-transparent to-black/50" />
       </div>
 
       {/* КОНТЕНТ */}

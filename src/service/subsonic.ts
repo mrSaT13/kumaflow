@@ -10,6 +10,7 @@ import { scrobble } from './scrobble'
 import { search } from './search'
 import { songs } from './songs'
 import { star } from './star'
+import { rating } from './rating'  // 🆕 Оценка треков/альбомов/артистов
 
 export const subsonic = {
   albums,
@@ -23,5 +24,6 @@ export const subsonic = {
   search,
   songs,
   star,
+  rating,  // 🆕
   lyrics,
 }

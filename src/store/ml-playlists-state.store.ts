@@ -11,8 +11,11 @@ export interface MLGeneratedPlaylist {
   description: string
   songs: ISong[]
   createdAt: string
+  lastUpdated: string  // Дата последнего обновления
   expiresAt?: string
   autoUpdateHours?: number
+  llmComment?: string  // Короткий комментарий от LLM о плейлисте
+  sharedTracksInfo?: Record<string, { accounts: string[]; totalPlays: number; songKey?: string }>  // Информация о shared listens
 }
 
 interface MLPlaylistsState {
@@ -20,10 +23,11 @@ interface MLPlaylistsState {
   lastGenerated: Record<string, string>
   autoUpdateEnabled: boolean
   updateIntervalHours: number
-  
+
   // Actions
   addPlaylist: (playlist: MLGeneratedPlaylist) => void
   removePlaylist: (id: string) => void
+  updatePlaylist: (id: string, updates: Partial<MLGeneratedPlaylist>) => void
   getPlaylist: (type: string) => MLGeneratedPlaylist | undefined
   clearExpiredPlaylists: () => void
   setAutoUpdateEnabled: (enabled: boolean) => void
@@ -48,9 +52,27 @@ export const useMLPlaylistsState = createWithEqualityFn<MLPlaylistsState>()(
 
           addPlaylist: (playlist) => {
             set((state) => {
-              // Удаляем старую версию такого же плейлиста
-              state.playlists = state.playlists.filter(p => p.type !== playlist.type)
-              state.playlists.push(playlist)
+              // Ищем существующий плейлист по ID (не по типу!)
+              const existingIndex = state.playlists.findIndex(p => p.id === playlist.id)
+
+              if (existingIndex !== -1) {
+                // Обновляем существующий — сохраняем СТАРЫЙ ID и дату создания
+                const existingPlaylist = state.playlists[existingIndex]
+                state.playlists[existingIndex] = {
+                  ...existingPlaylist,  // Сохраняем id и createdAt из существующего
+                  ...playlist,  // Применяем новые данные
+                  id: existingPlaylist.id,  // ← Сохраняем старый ID
+                  createdAt: existingPlaylist.createdAt,  // ← Сохраняем дату создания
+                }
+              } else {
+                // Добавляем новый - используем ID из плейлиста или генерируем
+                const fixedId = playlist.id || `ml_${playlist.type}`
+                state.playlists.push({
+                  ...playlist,
+                  id: fixedId,  // ← Используем ID из плейлиста
+                })
+              }
+
               state.lastGenerated[playlist.type] = playlist.createdAt
             })
           },
@@ -61,9 +83,39 @@ export const useMLPlaylistsState = createWithEqualityFn<MLPlaylistsState>()(
             })
           },
 
-          getPlaylist: (type) => {
+          updatePlaylist: (id, updates) => {
+            set((state) => {
+              const playlistIndex = state.playlists.findIndex(p => p.id === id)
+              if (playlistIndex !== -1) {
+                state.playlists[playlistIndex] = {
+                  ...state.playlists[playlistIndex],
+                  ...updates,
+                }
+              }
+            })
+          },
+
+          getPlaylist: (id) => {
             const state = get()
-            return state.playlists.find(p => p.type === type)
+            console.log('[ml-playlists-state] getPlaylist called with id:', id)
+            console.log('[ml-playlists-state] Available playlists:', state.playlists.map(p => ({ id: p.id, type: p.type, name: p.name })))
+            
+            // Ищем по ID (полное совпадение)
+            const byId = state.playlists.find(p => p.id === id)
+            if (byId) {
+              console.log('[ml-playlists-state] Found by ID:', byId)
+              return byId
+            }
+
+            // Если не найдено по ID, ищем по type (для обратной совместимости)
+            const byType = state.playlists.find(p => p.type === id)
+            if (byType) {
+              console.log('[ml-playlists-state] Found by type:', byType)
+              return byType
+            }
+            
+            console.log('[ml-playlists-state] Playlist not found!')
+            return undefined
           },
 
           clearExpiredPlaylists: () => {

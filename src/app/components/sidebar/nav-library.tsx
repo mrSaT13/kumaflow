@@ -7,7 +7,7 @@ import {
   MainSidebarMenu,
   MainSidebarMenuItem,
 } from '@/app/components/ui/main-sidebar'
-import { libraryItems, SidebarItems, mlItems } from '@/app/layout/sidebar'
+import { libraryItems, SidebarItems, mlItems, cacheItem } from '@/app/layout/sidebar'
 import { useAppStore } from '@/store/app.store'
 import { SidebarMainItem } from './main-item'
 import { SidebarPodcastItem } from './podcast-item'
@@ -15,6 +15,17 @@ import { SidebarPodcastItem } from './podcast-item'
 export function NavLibrary() {
   const { t } = useTranslation()
   const hideRadiosSection = useAppStore().pages.hideRadiosSection
+  const hideAudiobooksSection = useAppStore().pages.hideAudiobooksSection
+  const hidePlaylistsSection = useAppStore().pages.hidePlaylistsSection
+  const hideArtistsSection = useAppStore().pages.hideArtistsSection
+  const hideTracksSection = useAppStore().pages.hideTracksSection
+  const hideAlbumsSection = useAppStore().pages.hideAlbumsSection
+  const hideFavoritesSection = useAppStore().pages.hideFavoritesSection
+  const hideGenresSection = useAppStore().pages.hideGenresSection
+  const hidePodcastsSection = useAppStore().pages.hidePodcastsSection
+  const hideLocalSection = useAppStore().pages.hideLocalSection
+  const showCachePage = useAppStore().pages.showCachePage
+  const sidebarSectionOrder = useAppStore().pages.sidebarSectionOrder
   const isPodcastsActive = useAppStore().podcasts.active
   
   // Сворачивание секций
@@ -37,9 +48,33 @@ export function NavLibrary() {
         </button>
         {isLibraryOpen && (
           <MainSidebarMenu>
-            {libraryItems.map((item) => {
+            {sidebarSectionOrder.map((itemId) => {
+              // Кеш - отдельная кнопка вне библиотеки
+              if (itemId === 'cache') return null
+              
+              const item = libraryItems.find((i) => i.id === itemId)
+              if (!item) return null
+
+              // Скрыть Исполнителей если настроено
+              if (hideArtistsSection && item.id === SidebarItems.Artists) return null
+              // Скрыть Треки если настроено
+              if (hideTracksSection && item.id === SidebarItems.Songs) return null
+              // Скрыть Альбомы если настроено
+              if (hideAlbumsSection && item.id === SidebarItems.Albums) return null
+              // Скрыть Избранное если настроено
+              if (hideFavoritesSection && item.id === SidebarItems.Favorites) return null
+              // Скрыть Радио если настроено
               if (hideRadiosSection && item.id === SidebarItems.Radios) return null
-              if (!isPodcastsActive && item.id === SidebarItems.Podcasts)
+              // Скрыть Аудиокниги если настроено
+              if (hideAudiobooksSection && item.id === SidebarItems.Audiobooks) return null
+              // Скрыть Локальную библиотеку если настроено
+              if (hideLocalSection && item.id === SidebarItems.Local) return null
+              // Скрыть Плейлисты если настроено
+              if (hidePlaylistsSection && item.id === SidebarItems.Playlists) return null
+              // Скрыть Жанры если настроено
+              if (hideGenresSection && item.id === 'genres') return null
+              // Скрыть Подкасты если настроено или не активны
+              if ((hidePodcastsSection || !isPodcastsActive) && item.id === SidebarItems.Podcasts)
                 return null
 
               if (item.id === SidebarItems.Podcasts) {
@@ -55,6 +90,17 @@ export function NavLibrary() {
           </MainSidebarMenu>
         )}
       </MainSidebarGroup>
+
+      {/* Кеш - отдельная кнопка после библиотеки */}
+      {showCachePage && (
+        <MainSidebarGroup className="px-4 py-0 mt-4">
+          <MainSidebarMenu>
+            <MainSidebarMenuItem>
+              <SidebarMainItem item={cacheItem} />
+            </MainSidebarMenuItem>
+          </MainSidebarMenu>
+        </MainSidebarGroup>
+      )}
 
       {/* ML Рекомендации - раздел "Для вас" */}
       <MainSidebarGroup className="px-4 py-0 mt-4">

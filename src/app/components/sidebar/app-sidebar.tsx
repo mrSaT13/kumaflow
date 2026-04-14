@@ -24,7 +24,7 @@ export function AppSidebar({
       <MiniSidebarSearch />
       <NavMain />
       <SidebarMiniSeparator />
-      <MainSidebarContent className="max-h-fit flex-none overflow-x-clip">
+      <MainSidebarContent className="flex-1 overflow-y-auto">
         <NavLibrary />
       </MainSidebarContent>
       <NavPlaylists />

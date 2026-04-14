@@ -1,7 +1,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 import debounce from 'lodash/debounce'
 import { useEffect, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useLocation } from 'react-router-dom'
 import {
   albumSearch,
   getAlbumList,
@@ -20,12 +20,22 @@ import { SearchParamsHandler } from '@/utils/searchParamsHandler'
 
 export function useAlbumsListModel() {
   const [searchParams] = useSearchParams()
+  const location = useLocation()
   const { getSearchParam } = new SearchParamsHandler(searchParams)
   const defaultOffset = 128
   const oldestYear = '0001'
   const currentYear = new Date().getFullYear().toString()
 
   const scrollDivRef = useRef<HTMLDivElement | null>(null)
+
+  // HashRouter кладёт параметры в location.search — парсим их напрямую
+  const locationSearchParams = new URLSearchParams(location.search)
+  const locationGetSearchParam = <T,>(param: string, fallback: T): T => {
+    const value = locationSearchParams.get(param) as T
+    if (typeof value !== 'undefined' && value !== null) return value
+    if (typeof fallback !== 'undefined') return fallback
+    throw new Error(`Parameter '${param}' not found and no fallback provided.`)
+  }
 
   const currentFilter = getSearchParam<AlbumListType>(
     AlbumsSearchParams.MainFilter,
@@ -36,8 +46,11 @@ export function useAlbumsListModel() {
     YearSortOptions.Oldest,
   )
   const genre = getSearchParam<string>(AlbumsSearchParams.Genre, '')
-  const artistId = getSearchParam<string>(AlbumsSearchParams.ArtistId, '')
+  const artistId = locationGetSearchParam<string>(AlbumsSearchParams.ArtistId, '')
+  const artistName = locationGetSearchParam<string>(AlbumsSearchParams.ArtistName, '')
   const query = getSearchParam<string>(AlbumsSearchParams.Query, '')
+
+  const finalArtistId = artistId
 
   useEffect(() => {
     scrollDivRef.current = getMainScrollElement()
@@ -54,8 +67,12 @@ export function useAlbumsListModel() {
   const [fromYear, toYear] = getYearRange()
 
   const fetchAlbums = async ({ pageParam = 0 }) => {
-    if (artistId !== '') {
-      return getArtistDiscography(artistId)
+    console.log('[AlbumsListModel] fetchAlbums, artistId:', finalArtistId, 'currentFilter:', currentFilter, 'page:', pageParam)
+    if (finalArtistId !== '') {
+      console.log('[AlbumsListModel] Calling getArtistDiscography for:', finalArtistId)
+      const result = await getArtistDiscography(finalArtistId)
+      console.log('[AlbumsListModel] getArtistDiscography result:', result.albums?.length || 0, 'albums')
+      return result
     }
 
     if (currentFilter === AlbumsFilters.Search && query !== '') {
@@ -83,7 +100,7 @@ export function useAlbumsListModel() {
   }
 
   const { data, fetchNextPage, hasNextPage, isLoading } = useInfiniteQuery({
-    queryKey: [queryKeys.album.all, currentFilter, yearFilter, genre, query],
+    queryKey: [queryKeys.album.all, currentFilter, yearFilter, genre, query, finalArtistId],
     queryFn: fetchAlbums,
     initialPageParam: 0,
     getNextPageParam: (lastPage) => lastPage.nextOffset,

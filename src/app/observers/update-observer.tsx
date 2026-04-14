@@ -16,6 +16,7 @@ import {
 } from '@/app/components/ui/alert-dialog'
 import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
+import { Progress } from '@/app/components/ui/progress'
 import { useAppUpdate } from '@/store/app.store'
 import { getAppInfo } from '@/utils/appName'
 import { isMacOS } from '@/utils/desktop'
@@ -27,6 +28,8 @@ export function UpdateObserver() {
   const { openDialog, setOpenDialog, remindOnNextBoot, setRemindOnNextBoot } =
     useAppUpdate()
   const [updateHasStarted, setUpdateHasStarted] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState<number>(0)
+  const [isDownloading, setIsDownloading] = useState(false)
 
   const { data: updateCheckResult } = useQuery({
     queryKey: [queryKeys.update.check],
@@ -45,22 +48,40 @@ export function UpdateObserver() {
   }, [setOpenDialog, updateCheckResult])
 
   useEffect(() => {
-    window.api.onUpdateDownloaded(() => {
+    // Подписка на прогресс загрузки
+    window.api.onDownloadProgress((progress) => {
+      setDownloadProgress(progress.percent)
+      setIsDownloading(true)
+      
+      // Обновляем toast с прогрессом
       toast.update('update', {
-        render: t('update.toasts.success'),
-        type: 'success',
-        autoClose: 5000,
-        isLoading: false,
+        render: `${t('update.toasts.downloading')} ${Math.round(progress.percent)}%`,
+        type: 'default',
+        autoClose: false,
+        isLoading: true,
       })
-      window.api.quitAndInstall()
     })
 
-    window.api.onUpdateError(() => {
+    window.api.onUpdateDownloaded(() => {
+      setIsDownloading(false)
+      setDownloadProgress(100)
+      
+      // Закрываем toast загрузки
+      toast.dismiss('update')
+      
+      // Показываем уведомление что обновление готово
+      toast.success(t('update.toasts.success'), {
+        autoClose: 5000,
+      })
+    })
+
+    window.api.onUpdateError((error) => {
       setUpdateHasStarted(false)
+      setIsDownloading(false)
       setRemindOnNextBoot(true)
 
       toast.update('update', {
-        render: t('update.toasts.error'),
+        render: `${t('update.toasts.error')}: ${error?.message || 'Unknown error'}`,
         type: 'error',
         autoClose: 5000,
         isLoading: false,
@@ -81,6 +102,8 @@ export function UpdateObserver() {
     })
 
     setUpdateHasStarted(true)
+    setIsDownloading(true)
+    setDownloadProgress(0)
     window.api.downloadUpdate()
   }
 
@@ -121,11 +144,22 @@ export function UpdateObserver() {
           </div>
         </div>
 
+        {/* Прогресс бар загрузки */}
+        {isDownloading && (
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>{t('update.dialog.downloading')}</span>
+              <span>{Math.round(downloadProgress)}%</span>
+            </div>
+            <Progress value={downloadProgress} className="w-full" />
+          </div>
+        )}
+
         <AlertDialogFooter>
           <form onSubmit={handleUpdate} className="flex gap-2">
             <Button
               variant="outline"
-              disabled={updateHasStarted}
+              disabled={updateHasStarted || isDownloading}
               onClick={() => {
                 setOpenDialog(false)
                 setRemindOnNextBoot(true)
@@ -137,11 +171,16 @@ export function UpdateObserver() {
             {!isMacOS ? (
               <Button
                 variant="default"
-                disabled={updateHasStarted}
+                disabled={updateHasStarted || isDownloading}
                 type="submit"
               >
-                {updateHasStarted ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                {isDownloading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    {t('update.dialog.downloading')}
+                  </>
+                ) : updateHasStarted ? (
+                  t('update.dialog.installing')
                 ) : (
                   t('update.dialog.install')
                 )}

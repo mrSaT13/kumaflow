@@ -169,18 +169,20 @@ export default function ArtistRadioCards() {
         setApi={setApi}
         opts={{
           align: 'start',
-          slidesToScroll: 8,
+          slidesToScroll: 6,
           containScroll: 'trimSnaps',
         }}
         className="w-full"
       >
         <CarouselContent className="-ml-4">
           {topArtists.map((artist) => (
-            <CarouselItem key={artist.id} className="pl-4 basis-1/8 sm:basis-1/6 md:basis-1/5 lg:basis-1/6 xl:basis-1/8">
-              <ArtistCollageCard
-                artistId={artist.id}
-                artistName={artist.name}
-              />
+            <CarouselItem key={artist.id} className="pl-4 basis-1/6 sm:basis-1/5 md:basis-1/4 lg:basis-1/5 xl:basis-1/6">
+              <div className="h-48">
+                <ArtistCollageCard
+                  artistId={artist.id}
+                  artistName={artist.name}
+                />
+              </div>
             </CarouselItem>
           ))}
         </CarouselContent>

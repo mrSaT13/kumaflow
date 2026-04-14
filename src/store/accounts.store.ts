@@ -27,22 +27,29 @@ export type ServerType = 'navidrome' | 'subsonic' | 'jellyfin' | 'lms'
 export interface Account {
   // Уникальный идентификатор (генерируется при создании)
   id: string
-  
+
   // Отображаемое имя (заполняется пользователем или автоматически)
   name: string
-  
+
   // Данные сервера
   serverUrl: string
   username: string
   password?: string  // Зашифрованный пароль (TODO: шифрование)
   serverType: ServerType
-  
+
   // Версия сервера (заполняется при подключении)
   serverVersion?: string
-  
+
   // Аватарка аккаунта (base64)
   avatarData?: string
-  
+
+  // 🔔 РЕЗЕРВНЫЕ URL (Dual URL)
+  primaryUrl: string         // Приоритетный (основной) URL
+  backupUrl?: string         // Резервный (дополнительный) URL
+  isBackupEnabled: boolean   // Включено ли авто-переключение
+  isPrimaryAvailable: boolean  // Доступен ли основной URL (мониторинг)
+  lastHealthCheck?: number   // Timestamp последней проверки
+
   // Ключи для изолированного хранения данных
   // Формируются как: `${keyPrefix}_${accountId}`
   storageKeys: {
@@ -53,7 +60,7 @@ export interface Account {
     playlists: string      // 'playlists_${id}'
     subscriptions: string  // 'subscriptions_${id}'
   }
-  
+
   // Метаданные
   createdAt: number        // Timestamp создания
   lastUsedAt: number       // Timestamp последнего использования
@@ -120,14 +127,12 @@ function createStorageKeys(accountId: string): Account['storageKeys'] {
   }
 }
 
-/**
- * Определение типа сервера по URL (заглушка, будет реализовано позже)
- */
-async function detectServerType(url: string): Promise<ServerType> {
-  // Пока возвращаем navidrome по умолчанию
-  // В будущем будет реальное определение по API
+/* // TODO: Jellyfin/MusicAssistant server detection
+export async function detectServerType(url: string): Promise<ServerType> {
+  // ... commented out
   return 'navidrome'
 }
+*/
 
 /**
  * Значения по умолчанию

@@ -138,6 +138,24 @@
   font-size: 1.125rem;
   margin: 0;
   color: var(--theme-colors-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.authorButton {
+  background: var(--theme-colors-background-secondary);
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.authorButton:hover {
+  background: var(--theme-colors-primary);
+  transform: scale(1.1);
 }
 
 .meta {

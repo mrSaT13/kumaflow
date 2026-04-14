@@ -5,9 +5,11 @@
  * - Кэширование на 24 часа
  * - Исключение треков из последних 5 плейлистов
  * - Автоматическая очистка устаревших записей
+ * - Сохранение в localStorage для работы между перезапусками
  */
 
 import type { ISong } from '@/types/responses/song'
+import { playlistCacheStorage } from '@/service/playlist-cache-storage'
 
 export interface PlaylistCacheEntry {
   type: string
@@ -30,7 +32,7 @@ export interface RecentUsedSongs {
 class PlaylistCacheService {
   private cache = new Map<string, PlaylistCacheEntry>()
   private readonly TTL = 24 * 60 * 60 * 1000 // 24 часа
-  private readonly MAX_RECENT_PLAYLISTS = 5
+  private readonly MAX_RECENT_PLAYLISTS = 2  // Уменьшили с 3 до 2 чтобы ещё меньше треков исключалось
   private readonly RECENT_TYPES = [
     'my-wave',
     'daily-mix',
@@ -44,6 +46,56 @@ class PlaylistCacheService {
     'focus',
     'chill',
   ]
+
+  constructor() {
+    // Загружаем кэш из localStorage при инициализации
+    this.loadFromStorage()
+  }
+
+  /**
+   * Загрузить кэш из localStorage
+   */
+  private loadFromStorage() {
+    try {
+      const data = localStorage.getItem('ml-playlist-cache')
+      if (!data) {
+        console.log('[PlaylistCache] No cached data in localStorage')
+        return
+      }
+
+      const parsed = JSON.parse(data) as { playlists: Array<{ type: string; songIds: string[]; createdAt: number }> }
+      
+      if (!parsed.playlists || parsed.playlists.length === 0) {
+        console.log('[PlaylistCache] No playlists in cached data')
+        return
+      }
+
+      // Восстанавливаем кэш (но без usedSongIds так как их нет в localStorage)
+      let loaded = 0
+      parsed.playlists.forEach(playlist => {
+        const now = Date.now()
+        const age = now - playlist.createdAt
+        
+        // Пропускаем старые плейлисты (> 24 часов)
+        if (age > this.TTL) {
+          return
+        }
+
+        this.cache.set(`stored_${playlist.type}`, {
+          type: playlist.type,
+          songs: [],  // Пустые, так как не можем восстановить без ID
+          usedSongIds: new Set(playlist.songIds),  // Но сохраняем ID для исключения повторов
+          createdAt: new Date(playlist.createdAt),
+          expiresAt: new Date(playlist.createdAt + this.TTL),
+        })
+        loaded++
+      })
+
+      console.log(`[PlaylistCache] Loaded ${loaded} playlists from localStorage`)
+    } catch (error) {
+      console.error('[PlaylistCache] Failed to load from localStorage:', error)
+    }
+  }
 
   /**
    * Получить кэшированный плейлист
@@ -78,8 +130,12 @@ class PlaylistCacheService {
       expiresAt: new Date(Date.now() + this.TTL),
       metadata,
     }
-    
+
     this.cache.set(type, entry)
+    
+    // Сохраняем в localStorage для работы между перезапусками
+    playlistCacheStorage.savePlaylist(type, songs)
+    
     console.log(`[PlaylistCache] SET: ${type} (${songs.length} tracks, expires in 24h)`)
   }
 
@@ -88,18 +144,27 @@ class PlaylistCacheService {
    */
   getRecentUsedSongIds(count: number = this.MAX_RECENT_PLAYLISTS): Set<string> {
     this.cleanupExpired()
+
+    // Получаем из localStorage (работает между перезапусками)
+    const storedIds = playlistCacheStorage.getRecentSongIds(count)
     
-    // Получаем последние N плейлистов
+    // Если есть в localStorage - используем их
+    if (storedIds.size > 0) {
+      console.log(`[PlaylistCache] Got ${storedIds.size} recent track IDs from localStorage`)
+      return storedIds
+    }
+
+    // Fallback: получаем из оперативного кэша
     const recent = Array.from(this.cache.values())
       .filter(entry => this.RECENT_TYPES.includes(entry.type))
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, count)
-    
+
     const usedIds = new Set<string>()
     recent.forEach(entry => {
       entry.usedSongIds.forEach(id => usedIds.add(id))
     })
-    
+
     console.log(`[PlaylistCache] Recent used: ${usedIds.size} tracks from ${recent.length} playlists`)
     return usedIds
   }

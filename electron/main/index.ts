@@ -1,13 +1,71 @@
 import { electronApp, optimizer, platform } from '@electron-toolkit/utils'
-import { app, ipcMain } from 'electron'
+import { app, ipcMain, protocol } from 'electron'
 import { createAppMenu } from './core/menu'
 import { initAutoUpdater } from './core/updater'
 import { createWindow, mainWindow, sendToRenderer } from './window'
 import { initAudiobookshelfIPC } from './core/audiobookshelf'
+import { setupLocalMusicHandlers } from './core/local-music-handler'
+import { startRemoteServer, stopRemoteServer, updateRemoteState, setRemoteMainWindow, getRemoteStatus, setRemotePort, setRemoteBaseAppUrl, setupRemoteQueueHandler, getConnectedClients } from '../../src/service/remote-server'
+// 🆕 DLNA - dynamic import чтобы не тянуть localStorage в main process
+// 🆕 DLNA - lazy getter чтобы не тянуть localStorage при старте
+let _dlnaService: any = null
+async function getDlnaService() {
+  if (!_dlnaService) {
+    const { dlnaService } = await import('../../src/service/dlna-service')
+    _dlnaService = dlnaService
+  }
+  return _dlnaService
+}
 import { spawn } from 'child_process'
 import { join } from 'path'
+import * as fs from 'fs'
+
+/* // TODO: Jellyfin/MusicAssistant integration
+ipcMain.handle('server:detect-type', async (_event, url: string) => {
+...
+*/
 
 export let isQuitting = false
+
+// Храним выбранный IP для Remote Control
+let selectedRemoteIp: string | null = null
+
+// Helper: получить первый доступный локальный IP
+function getFirstLocalIp(): string | null {
+  try {
+    const os = require('os')
+    const interfaces = os.networkInterfaces()
+    for (const name of Object.keys(interfaces)) {
+      const iface = interfaces[name]
+      if (!iface) continue
+      for (const ip of iface) {
+        if (ip.family === 'IPv4' && !ip.internal) {
+          return ip.address
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[Main] Error getting local IP:', error)
+  }
+  return null
+}
+
+// Логирование в файл для production
+const logPath = join(app.getPath('userData'), 'kumaflow-debug.log')
+function logToFile(message: string) {
+  const timestamp = new Date().toISOString()
+  const logMessage = `[${timestamp}] ${message}\n`
+  fs.appendFile(logPath, logMessage, (err) => {
+    if (err) console.error('Failed to write to log file:', err)
+  })
+}
+
+// Перехватываем console.log для логирования
+const originalConsoleLog = console.log
+console.log = (...args) => {
+  logToFile(args.join(' '))
+  originalConsoleLog(...args)
+}
 
 const currentDesktop = process.env.XDG_CURRENT_DESKTOP ?? ''
 
@@ -20,6 +78,10 @@ const instanceLock = app.requestSingleInstanceLock()
 if (!instanceLock) {
   app.quit()
 } else {
+  // Отключаем CORS для Electron (только для разработки!)
+  app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors')
+  app.commandLine.appendSwitch('disable-web-security')
+  
   createAppMenu()
 
   app.on('second-instance', () => {
@@ -36,10 +98,209 @@ if (!instanceLock) {
 
   app.whenReady().then(() => {
     electronApp.setAppUserModelId('com.kumaflow.app')
+    
+    // Сначала создаём окно
+    createWindow()
+    
+    // Устанавливаем главное окно для remote
+    setRemoteMainWindow(mainWindow)
+
+    // Настраиваем обработчик очереди для remote
+    setupRemoteQueueHandler()
+
+    // Инициализация Remote Control
+    console.log('[Main] Initializing Remote Control...')
+    
+    // Регистрируем протокол для локальных файлов
+    // Это позволяет загружать локальные аудиофайлы с кириллицей в пути
+    protocol.registerFileProtocol('kumaflow-local', (request, callback) => {
+      // Извлекаем путь из URL
+      const url = request.url.replace('kumaflow-local://', '')
+      const filePath = decodeURIComponent(url)
+      
+      console.log('[Protocol] kumaflow-local request:', filePath)
+      
+      // Проверяем существование файла
+      import('fs').then(({ promises: fs }) => {
+        fs.access(filePath).then(() => {
+          callback({ path: filePath })
+        }).catch((err) => {
+          console.error('[Protocol] File access error:', err.message)
+          callback({ error: -6 }) // ERR_FILE_NOT_FOUND
+        })
+      })
+    })
 
     initAutoUpdater()
     initAudiobookshelfIPC()
+    setupLocalMusicHandlers()
     
+    // Remote Control IPC handlers
+    ipcMain.handle('remote-control:start', async (event, port?: number) => {
+      if (port) {
+        setRemotePort(port)
+      }
+      await startRemoteServer({ enabled: true, port: port || 4333 })
+      return getRemoteStatus()
+    })
+
+    ipcMain.handle('remote-control:stop', async () => {
+      await stopRemoteServer()
+      return getRemoteStatus()
+    })
+
+    ipcMain.handle('remote-control:get-status', () => {
+      return getRemoteStatus()
+    })
+
+    ipcMain.handle('remote-control:get-url', () => {
+      const status = getRemoteStatus()
+      const ip = selectedRemoteIp || getFirstLocalIp() || 'localhost'
+      return `http://${ip}:${status.port}`
+    })
+
+    ipcMain.handle('remote-control:get-all-ips', () => {
+      const os = require('os')
+      const interfaces = os.networkInterfaces()
+      const ips: { ip: string; iface: string }[] = []
+
+      for (const name of Object.keys(interfaces)) {
+        const iface = interfaces[name]
+        if (!iface) continue
+        for (const ip of iface) {
+          if (ip.family === 'IPv4' && !ip.internal) {
+            ips.push({ ip: ip.address, iface: name })
+          }
+        }
+      }
+      return ips
+    })
+
+    ipcMain.handle('remote-control:set-ip', (event, ip: string) => {
+      selectedRemoteIp = ip
+      console.log(`[Remote] IP set to: ${ip}`)
+      return true
+    })
+
+    ipcMain.handle('remote-control:get-port', () => {
+      return getRemoteStatus().port
+    })
+
+    ipcMain.handle('remote-control:set-port', (event, port: number) => {
+      return setRemotePort(port)
+    })
+
+    // Установка Subsonic сервера для remote проксирования
+    ipcMain.handle('remote-control:set-subsonic-url', async (event, url: string, username: string, password: string, authType: 'token' | 'password') => {
+      await setRemoteBaseAppUrl(url, username, password, authType)
+      return true
+    })
+
+    // Проверка есть ли сохранённые учётные данные
+    ipcMain.handle('remote-control:hasSavedCredentials', async () => {
+      const { loadRemoteControlSettings, loadSubsonicCredentials } = await import('../../src/service/remote-server')
+      const creds = await loadSubsonicCredentials()
+      return creds !== null
+    })
+
+    // Загрузить сохранённые настройки remote control
+    ipcMain.handle('remote-control:loadSettings', async () => {
+      const { loadRemoteControlSettings } = await import('../../src/service/remote-server')
+      return loadRemoteControlSettings()
+    })
+
+    // Получить список подключённых клиентов
+    ipcMain.handle('remote-control:get-connected-clients', () => {
+      return getConnectedClients()
+    })
+    
+    // DLNA IPC handlers
+    ipcMain.handle('dlna:start', async (event, port?: number) => {
+      console.log('[DLNA IPC] Start requested, port:', port || 8080)
+      const dlnaService = await getDlnaService()
+      const result = await dlnaService.start(port || 8080)
+      console.log('[DLNA IPC] Start result:', result)
+      return result
+    })
+    
+    ipcMain.handle('dlna:stop', async () => {
+      console.log('[DLNA IPC] Stop requested')
+      const dlnaService = await getDlnaService()
+      await dlnaService.stopServer()
+      return true
+    })
+    
+    ipcMain.handle('dlna:scan', async () => {
+      console.log('[DLNA IPC] Scan requested')
+      const dlnaService = await getDlnaService()
+      const devices = await dlnaService.scanDevices(3000)
+      console.log('[DLNA IPC] Scan result:', devices.length, 'devices')
+      return devices
+    })
+    
+    ipcMain.handle('dlna:cast', async (event, device: any, trackId: string) => {
+      console.log('[DLNA IPC] Cast requested:', device.name, trackId)
+      
+      try {
+        // Получаем информацию о треке из Subsonic
+        const { subsonic } = await import('../../src/service/subsonic')
+        const song = await subsonic.songs.getSong(trackId)
+        
+        if (!song) {
+          console.error('[DLNA IPC] Track not found:', trackId)
+          return false
+        }
+        
+        // Формируем TrackInfo
+        const trackInfo = {
+          id: song.id,
+          title: song.title || 'Unknown',
+          artist: song.artist || 'Unknown',
+          album: song.album,
+          duration: song.duration,
+          // Формируем полный URL обложки
+          coverUrl: song.coverArt 
+            ? `${subsonic.baseUrl}/rest/getCoverArt?id=${song.coverArt}&f=json`
+            : undefined,
+          streamUrl: `${subsonic.baseUrl}/rest/stream?id=${trackId}&f=json`,
+        }
+        
+        console.log('[DLNA IPC] Track info:', trackInfo.title, 'by', trackInfo.artist)
+        
+        const dlnaService = await getDlnaService()
+        const result = await dlnaService.castToDevice(device, trackInfo)
+        console.log('[DLNA IPC] Cast result:', result)
+        return result
+      } catch (error) {
+        console.error('[DLNA IPC] Cast error:', error)
+        return false
+      }
+    })
+
+    ipcMain.handle('dlna:getCurrentDevice', async () => {
+      const dlnaService = await getDlnaService()
+      const device = dlnaService.getCurrentDevice()
+      return device
+    })
+
+    // Обработчик состояния плеера для remote clients
+    ipcMain.on('player-state-update', (event, state) => {
+      console.log('[Remote] ✅ Получено состояние от плеера:', {
+        title: state?.title,
+        artist: state?.artist,
+        isPlaying: state?.isPlaying,
+        duration: state?.duration,
+        progress: state?.progress,
+      })
+      updateRemoteState(state)
+    })
+
+    // Остановка remote сервера при перезапуске приложения
+    app.on('before-quit', async () => {
+      console.log('[Remote] Shutting down remote server on app quit...')
+      await stopRemoteServer()
+    })
+
     // Yandex Music Auth IPC
     ipcMain.handle('yandex-music:auth', async (_, { login, password }) => {
       console.log('[YandexAuth] Starting auth for:', login)
@@ -281,8 +542,6 @@ if (!instanceLock) {
         req.end()
       })
     })
-
-    createWindow()
   })
 
   app.on('activate', function () {
@@ -307,11 +566,65 @@ if (!instanceLock) {
       if (input.key === 'F11') {
         event.preventDefault()
       }
+      
+      // Ctrl+Shift+I для открытия DevTools в production
+      if (input.control && input.shift && input.key === 'I') {
+        window.webContents.openDevTools()
+      }
     })
   })
 
-  app.on('before-quit', () => {
+  let isSaving = false
+
+  app.on('before-quit', async (e) => {
+    // Если уже сохраняем — выходим
+    if (isSaving) {
+      console.log('[App] Save complete, quitting...')
+      isQuitting = true
+      return
+    }
+
+    e.preventDefault()
+    console.log('[App] before-quit triggered — saving all data...')
+
+    // Принудительно сохраняем все данные перед выходом
+    isSaving = true
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        await mainWindow.webContents.executeJavaScript(`
+          (async () => {
+            try {
+              const stores = ['ml_profile', 'ratings', 'settings', 'accounts-persistence', 
+                             'homepage-settings', 'page-design-settings', 'theme-store',
+                             'ml-playlists', 'ml-playlists-state', 'generated-playlists',
+                             'app-persistence', 'auth-persistence', 'shared-accounts'];
+              
+              for (const key of stores) {
+                const data = localStorage.getItem(key);
+                if (data) {
+                  console.log('[Save] ✓', key, '(' + data.length + ' bytes)');
+                } else {
+                  console.log('[Save] -', key, '(empty)');
+                }
+              }
+              
+              // Форсируем запись localStorage
+              window.dispatchEvent(new Event('beforeunload'));
+              await new Promise(r => setTimeout(r, 500));
+            } catch (e) {
+              console.error('[Save] Error:', e);
+            }
+          })();
+        `)
+        console.log('[App] Data save complete')
+      } catch (err) {
+        console.error('[App] Error saving data:', err)
+      }
+    }
+
     isQuitting = true
+    isSaving = false
+    app.quit()
   })
 
   app.on('window-all-closed', () => {

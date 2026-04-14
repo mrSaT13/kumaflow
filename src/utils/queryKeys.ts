@@ -58,6 +58,10 @@ const episode = {
   latest: 'get-latest-episodes',
 }
 
+const star = {
+  all: 'get-starred',
+}
+
 export const queryKeys = {
   album,
   artist,
@@ -70,4 +74,5 @@ export const queryKeys = {
   update,
   podcast,
   episode,
+  star,
 }

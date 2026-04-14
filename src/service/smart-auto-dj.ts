@@ -112,6 +112,17 @@ export async function generateSmartAutoDJ(
 
   const { ratings, profile } = useMLStore.getState()
   const bannedArtists = profile.bannedArtists || []
+  
+  // ВАЖНО: Получаем настройку новизны для AutoDJ!
+  const { useMLPlaylistsStore } = await import('@/store/ml-playlists.store')
+  const mlPlaylistsState = useMLPlaylistsStore.getState()
+  const noveltyFactor = mlPlaylistsState.settings.noveltyFactor ?? 0.2
+  const onlyPreferences = noveltyFactor === 0
+  
+  console.log('[SmartAutoDJ] Novelty factor:', noveltyFactor, 'Only preferences:', onlyPreferences)
+  if (onlyPreferences) {
+    console.log('[SmartAutoDJ] ⚠️ ONLY PREFERENCES MODE - adding tracks from preferred artists/genres only!')
+  }
 
   // Генерируем кандидатов через ML Recommendations
   const mlPlaylist = await generateMLRecommendations(
@@ -119,7 +130,8 @@ export async function generateSmartAutoDJ(
     ratings,
     profile.preferredGenres,
     profile.preferredArtists,
-    candidateCount
+    candidateCount,
+    noveltyFactor  // Передаем настройку новизны!
   )
 
   // Исключаем уже сыгранные и заблокированных артистов

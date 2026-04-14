@@ -4,11 +4,14 @@ import { ContextMenuSeparator } from '@/app/components/ui/context-menu'
 import { useOptions } from '@/app/hooks/use-options'
 import { ISong } from '@/types/responses/song'
 import { AddToPlaylistSubMenu } from './add-to-playlist'
+import { CacheTrackButton } from './cache-button'
 import { usePlayerActions } from '@/store/player.store'
-import { generateTrackRadio, generateVibeMix } from '@/service/ml-wave-service'
+import { generateTrackRadio, generateVibeMix, generateArtistRadio } from '@/service/ml-wave-service'
 import { getRandomSongs } from '@/service/subsonic-api'
 import { toast } from 'react-toastify'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ROUTES } from '@/routes/routesList'
 
 interface SongMenuOptionsProps {
   variant: 'context' | 'dropdown'
@@ -24,7 +27,9 @@ export function SongMenuOptions({
   const { setSongList } = usePlayerActions()
   const [isRadioGenerating, setIsRadioGenerating] = useState(false)
   const [isVibeGenerating, setIsVibeGenerating] = useState(false)
-  
+  const [isArtistRadioGenerating, setIsArtistRadioGenerating] = useState(false)
+  const navigate = useNavigate()
+
   const {
     playNext,
     playLast,
@@ -52,6 +57,29 @@ export function SongMenuOptions({
       toast('Ошибка при генерации радио', { type: 'error' })
     } finally {
       setIsRadioGenerating(false)
+    }
+  }
+
+  const handlePlayArtistRadio = async () => {
+    if (!song.artistId) {
+      toast('ID артиста не найден', { type: 'warning' })
+      return
+    }
+
+    setIsArtistRadioGenerating(true)
+    try {
+      const playlist = await generateArtistRadio(song.artistId, 50)
+      if (playlist.songs.length > 0) {
+        setSongList(playlist.songs, 0)
+        toast(`▶️ Запущено радио артиста: ${song.artist}`, { type: 'success' })
+      } else {
+        toast('Не удалось сгенерировать радио', { type: 'error' })
+      }
+    } catch (error) {
+      console.error('Failed to generate artist radio:', error)
+      toast('Ошибка при генерации радио', { type: 'error' })
+    } finally {
+      setIsArtistRadioGenerating(false)
     }
   }
 
@@ -94,6 +122,21 @@ export function SongMenuOptions({
           playLast([song])
         }}
       />
+      
+      {/* Сохранить в кеш */}
+      {variant === 'context' ? (
+        <button
+          className="w-full px-2 py-1.5 text-left text-sm hover:bg-accent rounded disabled:opacity-50 flex items-center gap-2"
+          onClick={(e) => {
+            e.stopPropagation()
+          }}
+        >
+          <CacheTrackButton song={song} variant="ghost" size="sm" showLabel />
+        </button>
+      ) : (
+        <CacheTrackButton song={song} variant="ghost" size="sm" />
+      )}
+      
       <ContextMenuSeparator />
       <button
         className="w-full px-2 py-1.5 text-left text-sm hover:bg-accent rounded disabled:opacity-50"
@@ -105,6 +148,49 @@ export function SongMenuOptions({
       >
         {isRadioGenerating ? '⏳ Генерация...' : '📻 Радио трека'}
       </button>
+      <button
+        className="w-full px-2 py-1.5 text-left text-sm hover:bg-accent rounded disabled:opacity-50"
+        onClick={(e) => {
+          e.stopPropagation()
+          handlePlayArtistRadio()
+        }}
+        disabled={isArtistRadioGenerating || !song.artistId}
+      >
+        {isArtistRadioGenerating ? '⏳ Генерация...' : '📻 Радио артиста'}
+      </button>
+
+      {/* Пункты меню для перехода к артистам */}
+      {song.artists && song.artists.length > 1 ? (
+        // Если несколько артистов - показываем всех
+        <>
+          <ContextMenuSeparator />
+          <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">🎤 Перейти к артисту:</div>
+          {song.artists.map((artist) => (
+            <button
+              key={artist.id}
+              className="w-full px-2 py-1.5 text-left text-sm hover:bg-accent rounded pl-4"
+              onClick={(e) => {
+                e.stopPropagation()
+                navigate(ROUTES.ARTIST.PAGE(artist.id))
+              }}
+            >
+              {artist.name}
+            </button>
+          ))}
+        </>
+      ) : song.artistId ? (
+        // Если один артист
+        <button
+          className="w-full px-2 py-1.5 text-left text-sm hover:bg-accent rounded"
+          onClick={(e) => {
+            e.stopPropagation()
+            navigate(ROUTES.ARTIST.PAGE(song.artistId))
+          }}
+        >
+          🎤 Перейти к {song.artist}
+        </button>
+      ) : null}
+
       <button
         className="w-full px-2 py-1.5 text-left text-sm hover:bg-accent rounded disabled:opacity-50"
         onClick={(e) => {

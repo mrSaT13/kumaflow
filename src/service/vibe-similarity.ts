@@ -149,7 +149,7 @@ export function analyzeTrack(track: any): VibeFeatures {
   const playCountFactor = Math.min(1, (track.playCount || 0) / 100)
 
   // ============================================
-  // 1. ПРОВЕРЯЕМ MUSICBRAINZ / ACOUSTICBRAZIN ТЕГИ (приоритет)
+  // 1. ПРОВЕРЯЕМ MUSICBRAINZ / ACOUSTICBRAINZ ТЕГИ (приоритет)
   // ============================================
   // MusicBrainz Picard добавляет расширенные теги через AcousticBrainz:
   // - acousticness: 0-1
@@ -292,7 +292,228 @@ export function vibeSimilarity(a: VibeFeatures, b: VibeFeatures): number {
 }
 
 /**
- * Найти похожие треки по признакам
+ * КВАРТО-КВИНТОВЫЙ КРУГ (Circle of Fifths)
+ * Определяет совместимые тональности
+ */
+const CIRCLE_OF_FIFTHS: Record<string, string[]> = {
+  'C': ['C', 'G', 'F', 'Am', 'Em', 'Dm'],
+  'C#': ['C#', 'G#', 'F#', 'A#m', 'E#m', 'D#m'],
+  'Db': ['Db', 'Ab', 'Gb', 'Bbm', 'Fm', 'Gbm'],
+  'D': ['D', 'A', 'G', 'Bm', 'F#m', 'Em'],
+  'D#': ['D#', 'A#', 'G#', 'Cm', 'Gm', 'Fm'],
+  'Eb': ['Eb', 'Bb', 'Ab', 'Cm', 'Gm', 'Fm'],
+  'E': ['E', 'B', 'A', 'C#m', 'G#m', 'F#m'],
+  'F': ['F', 'C', 'Bb', 'Dm', 'Am', 'Gm'],
+  'F#': ['F#', 'C#', 'B', 'D#m', 'A#m', 'G#m'],
+  'Gb': ['Gb', 'Db', 'Cb', 'Ebm', 'Bbm', 'Abm'],
+  'G': ['G', 'D', 'C', 'Em', 'Bm', 'Am'],
+  'G#': ['G#', 'D#', 'C#', 'Fm', 'Cm', 'Bbm'],
+  'Ab': ['Ab', 'Eb', 'Db', 'Fm', 'Cm', 'Bbm'],
+  'A': ['A', 'E', 'D', 'F#m', 'C#m', 'Bm'],
+  'A#': ['A#', 'F', 'D#', 'Gm', 'Dm', 'Cm'],
+  'Bb': ['Bb', 'F', 'Eb', 'Gm', 'Dm', 'Cm'],
+  'B': ['B', 'F#', 'E', 'G#m', 'D#m', 'C#m'],
+}
+
+/**
+ * Проверить совместимость ключей (тональностей)
+ * Возвращает true если ключи в пределах кварто-квинтового круга
+ */
+export function isKeyCompatible(key1?: number, scale1?: string, key2?: number, scale2?: string): boolean {
+  if (key1 === undefined || key2 === undefined) return true  // Если нет данных - пропускаем
+
+  const keyNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+  
+  const name1 = keyNames[key1 % 12] || 'C'
+  const name2 = keyNames[key2 % 12] || 'C'
+  
+  // Добавляем мажор/минор
+  const fullKey1 = scale1?.toLowerCase() === 'minor' ? `${name1}m` : name1
+  const fullKey2 = scale2?.toLowerCase() === 'minor' ? `${name2}m` : name2
+  
+  const compatible = CIRCLE_OF_FIFTHS[name1] || []
+  return compatible.includes(fullKey2)
+}
+
+/**
+ * АДАПТИВНЫЕ ПОРОГИ CONFIDENCE по типам MOOD
+ */
+const MOOD_CONFIDENCE_THRESHOLDS: Record<string, number> = {
+  // Базовые (низкий порог)
+  'angry': 0.3,
+  'calm': 0.3,
+  'sad': 0.3,
+  
+  // Универсальные (средний порог)
+  'energetic': 0.4,
+  'relaxed': 0.4,
+  'happy': 0.4,
+  'focused': 0.4,
+  
+  // Тонкие (высокий порог)
+  'romantic': 0.5,
+  'melancholic': 0.5,
+  'dramatic': 0.5,
+}
+
+/**
+ * Получить порог confidence для настроения
+ */
+function getMoodConfidenceThreshold(mood: MoodType): number {
+  return MOOD_CONFIDENCE_THRESHOLDS[mood] || 0.4
+}
+
+/**
+ * Рассчитать максимальное отклонение BPM (пропорциональное)
+ */
+function getMaxBpmDeviation(targetBpm: number): number {
+  if (targetBpm < 80) return targetBpm * 0.15  // ±15%
+  if (targetBpm <= 120) return targetBpm * 0.12  // ±12%
+  return targetBpm * 0.10  // ±10%
+}
+
+/**
+ * Найти похожие треки с ВЗВЕШЕННЫМ СКОРИНГОМ (Vibe Similarity v2)
+ * 
+ * Вместо жестких фильтров AND используется взвешенная сумма:
+ * vibeScore = 0.3 * keyCompat + 0.3 * moodScore + 0.2 * bpmScore + 0.2 * vibeSimilarity
+ * 
+ * Порог: vibeScore >= 0.65
+ */
+export function findSimilarTracksWithVibe(
+  targetTrack: any,
+  allTracks: any[],
+  limit: number = 10,
+  minSimilarity: number = 0.7,
+  options: {
+    enableMoodFilter?: boolean
+    enableBpmFilter?: boolean
+    enableKeyFilter?: boolean
+    minMoodConfidence?: number
+    vibeScoreThreshold?: number
+  } = {}
+): any[] {
+  const {
+    enableMoodFilter = true,
+    enableBpmFilter = true,
+    enableKeyFilter = true,
+    minMoodConfidence,
+    vibeScoreThreshold = 0.65
+  } = options
+
+  // Веса для формулы
+  const weights = {
+    key: 0.3,
+    mood: 0.3,
+    bpm: 0.2,
+    similarity: 0.2
+  }
+
+  const targetFeatures = analyzeTrack(targetTrack)
+  const targetMood = detectMood(targetFeatures)
+  const maxBpmDeviation = getMaxBpmDeviation(targetFeatures.bpm)
+  const adaptiveConfidence = minMoodConfidence || getMoodConfidenceThreshold(targetMood.mood)
+
+  const scoredTracks = allTracks
+    .filter(track => {
+      // Базовый фильтр
+      if (track.id === targetTrack.id || !track.genre) return false
+      return true
+    })
+    .map(track => {
+      const trackFeatures = analyzeTrack(track)
+      const trackMood = detectMood(trackFeatures)
+
+      // 1. Key Compatibility (0.0 или 1.0)
+      let keyScore = 1.0
+      if (enableKeyFilter) {
+        keyScore = isKeyCompatible(targetTrack.key, targetTrack.keyScale, track.key, track.keyScale) ? 1.0 : 0.0
+      }
+
+      // 2. MOOD Score (confidence × compatibility)
+      let moodScore = 0.0
+      if (enableMoodFilter) {
+        const meetsThreshold = trackMood.confidence >= adaptiveConfidence
+        const moodsCompatible = targetMood.mood === trackMood.mood || 
+          areMoodsCompatible(targetMood.mood, trackMood.mood)
+        
+        if (meetsThreshold && moodsCompatible) {
+          moodScore = trackMood.confidence
+        }
+      } else {
+        moodScore = 0.5  // Neutral если фильтр отключен
+      }
+
+      // 3. BPM Score (1 - normalized deviation)
+      let bpmScore = 1.0
+      if (enableBpmFilter && targetFeatures.bpm > 0 && track.bpm > 0) {
+        const bpmDiff = Math.abs(track.bpm - targetFeatures.bpm)
+        bpmScore = Math.max(0, 1 - (bpmDiff / maxBpmDeviation))
+      }
+
+      // 4. Vibe Similarity
+      const vibeSim = vibeSimilarity(targetFeatures, trackFeatures)
+
+      // Итоговый Vibe Score
+      const vibeScore = 
+        weights.key * keyScore +
+        weights.mood * moodScore +
+        weights.bpm * bpmScore +
+        weights.similarity * vibeSim
+
+      return {
+        track,
+        vibeScore,
+        breakdown: {
+          keyScore,
+          moodScore,
+          bpmScore,
+          vibeSimilarity: vibeSim,
+          mood: trackMood,
+        }
+      }
+    })
+    .filter(({ vibeScore }) => vibeScore >= vibeScoreThreshold)
+    .sort((a, b) => b.vibeScore - a.vibeScore)
+    .slice(0, limit)
+
+  console.log(`[Vibe Similarity v2] 🎵 Found ${scoredTracks.length} tracks (threshold: ${vibeScoreThreshold})`)
+  console.log(`[Vibe Similarity v2] 🎵 Target: MOOD=${targetMood.mood} (${targetMood.confidence}), BPM=${targetFeatures.bpm.toFixed(0)}, Key=${targetTrack.key}`)
+  
+  if (scoredTracks.length > 0) {
+    const top = scoredTracks[0].breakdown
+    console.log(`[Vibe Similarity v2] 🏆 Top track: vibeScore=${scoredTracks[0].vibeScore.toFixed(2)}, key=${top.keyScore.toFixed(1)}, mood=${top.moodScore.toFixed(2)}, bpm=${top.bpmScore.toFixed(2)}, sim=${top.vibeSimilarity.toFixed(2)}`)
+  }
+
+  return scoredTracks.map(({ track }) => track)
+}
+
+/**
+ * Проверить совместимость настроений
+ * Разрешает переходы между соседними настроениями
+ */
+function areMoodsCompatible(mood1: MoodType, mood2: MoodType): boolean {
+  if (mood1 === mood2) return true
+
+  const compatibleMoods: Record<MoodType, MoodType[]> = {
+    'energetic': ['happy', 'dramatic', 'angry'],
+    'happy': ['energetic', 'calm', 'romantic'],
+    'calm': ['happy', 'relaxed', 'focused', 'romantic'],
+    'sad': ['melancholic', 'relaxed'],
+    'angry': ['energetic', 'dramatic'],
+    'melancholic': ['sad', 'focused', 'relaxed'],
+    'relaxed': ['calm', 'sad', 'focused'],
+    'focused': ['calm', 'melancholic', 'relaxed'],
+    'romantic': ['calm', 'happy'],
+    'dramatic': ['energetic', 'angry'],
+  }
+
+  return compatibleMoods[mood1]?.includes(mood2) || false
+}
+
+/**
+ * Найти похожие треки по признакам (обратная совместимость)
+ * Теперь использует VibeScore v2 по умолчанию
  */
 export function findSimilarTracks(
   targetTrack: any,
@@ -300,19 +521,12 @@ export function findSimilarTracks(
   limit: number = 10,
   minSimilarity: number = 0.7
 ): any[] {
-  const targetFeatures = analyzeTrack(targetTrack)
-
-  const tracksWithSimilarity = allTracks
-    .filter(track => track.id !== targetTrack.id && track.genre) // Фильтруем треки без жанра
-    .map(track => ({
-      track,
-      similarity: vibeSimilarity(targetFeatures, analyzeTrack(track)),
-    }))
-    .filter(({ similarity }) => similarity >= minSimilarity)
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, limit)
-
-  return tracksWithSimilarity.map(({ track }) => track)
+  return findSimilarTracksWithVibe(targetTrack, allTracks, limit, minSimilarity, {
+    enableMoodFilter: true,
+    enableBpmFilter: true,
+    enableKeyFilter: true,
+    vibeScoreThreshold: 0.65
+  })
 }
 
 /**
@@ -457,4 +671,131 @@ export function getTracksByMood(
     .slice(0, limit)
 
   return tracksWithMood.map(({ track }) => track)
+}
+
+/**
+ * SEQUENCE OPTIMIZATION v2: С нормализацией BPM и глобальной оптимизацией
+ * 
+ * Формула: sequenceScore = 0.6 * ΔE + 0.4 * ΔBPM_norm
+ * где ΔBPM_norm = |BPM_i - BPM_i+1| / avgBPM
+ * 
+ * Глобальная оптимизация:
+ * - Разбиваем на сегменты по 5 треков
+ * - Минимизируем локальные скачки внутри сегмента
+ * - Между сегментами допускаем плавные изменения энергии (-0.1 до -0.2 за сегмент)
+ */
+export function optimizeTrackSequence(
+  tracks: any[],
+  seedTrack?: any,
+  options: {
+    energyWeight?: number
+    bpmWeight?: number
+    segmentSize?: number
+    energyTrendPerSegment?: number  // Ожидаемое изменение энергии между сегментами
+  } = {}
+): any[] {
+  const {
+    energyWeight = 0.6,
+    bpmWeight = 0.4,
+    segmentSize = 5,
+    energyTrendPerSegment = -0.1  // Плавное снижение (для вечера/ночи)
+  } = options
+
+  if (tracks.length <= 1) return [...tracks]
+
+  const remaining = [...tracks]
+  const sequence: any[] = []
+
+  // Начинаем с seed или первого трека
+  let currentTrack = seedTrack || remaining.shift()!
+  sequence.push(currentTrack)
+
+  const currentFeatures = analyzeTrack(currentTrack)
+
+  while (remaining.length > 0) {
+    let bestTrackIndex = 0
+    let bestScore = Infinity
+
+    // Рассчитываем средний BPM для нормализации
+    const allBpms = [currentFeatures.bpm, ...remaining.map(t => analyzeTrack(t).bpm)].filter(b => b > 0)
+    const avgBPM = allBpms.length > 0 ? allBpms.reduce((a, b) => a + b, 0) / allBpms.length : 100
+
+    for (let i = 0; i < remaining.length; i++) {
+      const track = remaining[i]
+      const features = analyzeTrack(track)
+
+      // Считаем "стоимость" перехода с нормализацией
+      const energyDiff = Math.abs(features.energy - currentFeatures.energy)
+      const bpmDiff = Math.abs(features.bpm - currentFeatures.bpm)
+      const bpmDiffNorm = avgBPM > 0 ? bpmDiff / avgBPM : 0.5
+
+      const transitionCost = energyWeight * energyDiff + bpmWeight * bpmDiffNorm
+
+      if (transitionCost < bestScore) {
+        bestScore = transitionCost
+        bestTrackIndex = i
+      }
+    }
+
+    // Добавляем лучший трек в последовательность
+    currentTrack = remaining.splice(bestTrackIndex, 1)[0]
+    sequence.push(currentTrack)
+    Object.assign(currentFeatures, analyzeTrack(currentTrack))
+  }
+
+  // ============================================
+  // ГЛОБАЛЬНАЯ ОПТИМИЗАЦИЯ: Сегменты
+  // ============================================
+  if (sequence.length > segmentSize) {
+    const segments: any[][] = []
+    for (let i = 0; i < sequence.length; i += segmentSize) {
+      segments.push(sequence.slice(i, i + segmentSize))
+    }
+
+    // Оптимизируем каждый сегмент
+    const optimizedSegments = segments.map((segment, idx) => {
+      if (segment.length <= 1) return segment
+
+      // Ожидаемый диапазон энергии для этого сегмента
+      const expectedEnergyStart = sequence[0] ? analyzeTrack(sequence[0]).energy : 0.5
+      const expectedEnergyEnd = expectedEnergyStart + (idx * energyTrendPerSegment)
+      
+      // Сортируем внутри сегмента по expected energy trend
+      return segment.sort((a, b) => {
+        const eA = analyzeTrack(a).energy
+        const eB = analyzeTrack(b).energy
+        
+        // Если ожидаем снижение - сортируем по убыванию
+        if (energyTrendPerSegment < 0) {
+          return eB - eA
+        }
+        // Иначе по возрастанию
+        return eA - eB
+      })
+    })
+
+    // Собираем обратно
+    sequence.length = 0
+    optimizedSegments.forEach(seg => sequence.push(...seg))
+
+    console.log(`[Sequence Opt v2] 🌍 Global optimization: ${segments.length} segments, trend=${energyTrendPerSegment.toFixed(2)} per segment`)
+  }
+
+  console.log(`[Sequence Opt v2] ✅ Optimized ${sequence.length} tracks for smooth transitions`)
+  
+  // Логируем первые переходы
+  if (sequence.length > 1) {
+    const allBpms = sequence.map(t => analyzeTrack(t).bpm).filter(b => b > 0)
+    const avgBPM = allBpms.length > 0 ? allBpms.reduce((a, b) => a + b, 0) / allBpms.length : 100
+
+    for (let i = 0; i < Math.min(3, sequence.length - 1); i++) {
+      const f1 = analyzeTrack(sequence[i])
+      const f2 = analyzeTrack(sequence[i + 1])
+      const energyDiff = Math.abs(f2.energy - f1.energy).toFixed(2)
+      const bpmDiffNorm = avgBPM > 0 ? (Math.abs(f2.bpm - f1.bpm) / avgBPM).toFixed(2) : 'N/A'
+      console.log(`[Sequence Opt v2] Transition ${i+1}: ΔE=${energyDiff}, ΔBPM_norm=${bpmDiffNorm}`)
+    }
+  }
+
+  return sequence
 }

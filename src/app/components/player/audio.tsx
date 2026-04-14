@@ -20,8 +20,12 @@ import {
 } from '@/store/player.store'
 import { usePlaybackSettings } from '@/store/playback.store'
 import { crossfadeService } from '@/service/crossfade-service'
+import { offlineService } from '@/service/offline-service'
+import { dualUrlBackgroundService } from '@/service/dual-url-background-service'
+import { cacheService } from '@/service/cache-service'
 import { logger } from '@/utils/logger'
 import { calculateReplayGain, ReplayGainParams } from '@/utils/replayGain'
+import { getSongStreamUrl } from '@/api/httpClient'
 
 type AudioPlayerProps = ComponentPropsWithoutRef<'audio'> & {
   audioRef: RefObject<HTMLAudioElement>
@@ -78,6 +82,34 @@ export function AudioPlayer({
     }
   }, [audioRef, playbackSettings.crossfadeSeconds])
 
+  // Проверка офлайн-режима и переключение на закешированный URL
+  useEffect(() => {
+    if (!isSong || !audioRef.current || !props.src) return
+
+    const currentSrc = props.src as string
+    
+    // Если это серверный URL (не local и не data:)
+    if (currentSrc.includes('/rest/stream')) {
+      const trackId = new URL(currentSrc, window.location.origin).searchParams.get('id')
+      
+      if (trackId) {
+        // Проверяем наличие в кеше
+        offlineService.isTrackCached(trackId).then((cached) => {
+          if (cached && !offlineService.isOnlineNow()) {
+            console.log('[Audio] Offline mode detected, loading cached audio...')
+            offlineService.getCachedAudioUrl(trackId).then((cachedUrl) => {
+              if (cachedUrl && audioRef.current) {
+                console.log('[Audio] Using cached audio URL')
+                audioRef.current.src = cachedUrl
+                audioRef.current.load()
+              }
+            })
+          }
+        })
+      }
+    }
+  }, [props.src, isSong])
+
   useEffect(() => {
     if (ignoreGain || !audioRef.current) return
 
@@ -91,13 +123,27 @@ export function AudioPlayer({
     const audio = audioRef.current
     if (!audio) return
 
+    const error = audio.error
+    const networkState = audio.networkState
+
     logger.error('Audio load error', {
       src: audio.src,
-      networkState: audio.networkState,
+      networkState,
       readyState: audio.readyState,
-      error: audio.error,
+      error: error,
     })
 
+    // Проверяем тип ошибки - сеть или кеш
+    const isNetworkError = error?.code === MediaError.MEDIA_ERR_NETWORK || 
+                           networkState === 3 // NETWORK_STATE = 3 (NETWORK_NO_SOURCE)
+
+    if (isNetworkError) {
+      console.log('[Audio] Network error detected, attempting seamless URL switch...')
+      handleNetworkError()
+      return
+    }
+
+    // Другие ошибки - старое поведение
     toast.error(t('warnings.songError'))
 
     if (replayGainEnabled || !replayGainError) {
@@ -113,6 +159,33 @@ export function AudioPlayer({
     setReplayGainError,
     t,
   ])
+
+  // Обработчик ошибок сети - бесшовное переключение URL
+  const handleNetworkError = useCallback(async () => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    console.log('[Audio] Handling network error...')
+
+    // 1. НЕ останавливаем воспроизведение - трек доиграется из буфера
+    // audio.pause() - НЕ вызываем!
+
+    // 2. Пытаемся переключить URL для СЛЕДУЮЩИХ треков
+    const switched = await dualUrlBackgroundService.forceSwitch('error')
+
+    if (switched) {
+      console.log('[Audio] URL switched successfully. Current track will continue, next track will use new URL')
+      // Текущий трек продолжает играть из буфера
+      // Следующий трек (через crossfade или playNextSong) возьмёт новый URL
+      
+      toast.info('Соединение с сервером потеряно. Переключение на резервный сервер...', {
+        autoClose: 3000,
+      })
+    } else {
+      console.log('[Audio] URL switch failed or disabled')
+      toast.error(t('warnings.songError'))
+    }
+  }, [audioRef, t])
 
   const handleRadioError = useCallback(() => {
     const audio = audioRef.current
@@ -132,8 +205,16 @@ export function AudioPlayer({
           if (isSong) await resumeContext()
           await audio.play()
 
-          // Отправляем Now Playing в Navidrome и Last.fm
+          // Кэшируем текущий трек пока он играет (для бесшовного переключения)
           const { currentSong } = usePlayerStore.getState().songlist
+          if (currentSong?.id && !currentSong.isLocal) {
+            // Кэшируем в фоне без ожидания
+            cacheService.cacheAudioFile(currentSong.id).catch((err) => {
+              console.warn('[Audio] Failed to cache current track:', err)
+            })
+          }
+
+          // Отправляем Now Playing в Navidrome и Last.fm
           console.log('[Audio] Current song:', currentSong)
           console.log('[Audio] Artist:', currentSong?.artist, 'Title:', currentSong?.title)
 
@@ -160,9 +241,7 @@ export function AudioPlayer({
     if (isSong || isPodcast) handleSong()
   }, [audioRef, handleSongError, isPlaying, isSong, isPodcast, resumeContext])
 
-  // ⚠️ ЗАКОММЕНТИРОВАНО: Crossfade требует архитектурных изменений (два audio элемента)
-  // TODO: Реализовать полноценный crossfade с двумя audio элементами
-  /*
+  // ✅ Crossfade - плавные переходы между треками
   // Обработчик для crossfade - срабатывает когда трек заканчивается
   useEffect(() => {
     const audio = audioRef.current
@@ -228,11 +307,29 @@ export function AudioPlayer({
         if (nextIndex < songlist.currentList.length) {
           const nextSong = songlist.currentList[nextIndex]
           if (nextSong?.id) {
-            const nextSrc = `/rest/stream?id=${nextSong.id}&v=1.16.1&c=KumaFlow`
+            // Для локальных треков используем url из трека или создаём file:// URL
+            // Для серверных треков используем /rest/stream
+            let nextSrc: string
+            
+            if ((nextSong as any).isLocal) {
+              // Если есть готовый url (из IPC), используем его
+              if ((nextSong as any).url) {
+                nextSrc = (nextSong as any).url
+              } else if ((nextSong as any).localPath) {
+                console.warn('[Audio] Local track without url, this should not happen!')
+                return
+              } else {
+                console.warn('[Audio] Local track without url or localPath:', nextSong.title)
+                return
+              }
+            } else {
+              // Серверный трек - используем актуальный URL из appStore
+              nextSrc = getSongStreamUrl(nextSong.id)
+            }
 
             // Если это не тот же трек что уже готовится
             if (crossfadeNextTrack !== nextSrc) {
-              console.log(`[Audio] Preparing crossfade: ${timeToEnd.toFixed(1)}s to end`)
+              console.log(`[Audio] Preparing crossfade: ${timeToEnd.toFixed(1)}s to end, isLocal: ${(nextSong as any).isLocal}`)
               setCrossfadeNextTrack(nextSrc)
             }
           }
@@ -243,7 +340,6 @@ export function AudioPlayer({
     audio.addEventListener('timeupdate', handleTimeUpdate)
     return () => audio.removeEventListener('timeupdate', handleTimeUpdate)
   }, [audioRef, playbackSettings.crossfadeEnabled, playbackSettings.crossfadeSeconds])
-  */
 
   useEffect(() => {
     async function handleRadio() {

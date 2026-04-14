@@ -9,9 +9,12 @@ import {
   scrollAreaViewportSelector,
 } from '@/app/components/ui/scroll-area'
 import { subsonic } from '@/service/subsonic'
+import { searchLyrics, getGeniusSearchUrl } from '@/service/lyrics-multi-provider'  // 🆕 Multi-provider
 import { usePlayerRef, usePlayerSonglist } from '@/store/player.store'
 import { ILyric } from '@/types/responses/song'
 import { trackViewLyrics } from '@/service/ml-event-tracker'
+import { Button } from '@/app/components/ui/button'
+import { ExternalLink } from 'lucide-react'
 
 interface LyricProps {
   lyrics: ILyric
@@ -20,6 +23,9 @@ interface LyricProps {
 export function LyricsTab() {
   const { currentSong } = usePlayerSonglist()
   const { t } = useTranslation()
+  const [multiProviderLyrics, setMultiProviderLyrics] = useState<ILyric | null>(null)
+  const [geniusUrl, setGeniusUrl] = useState<string>('')
+  const [activeSource, setActiveSource] = useState<string>('subsonic')  // 🆕 Активный источник
 
   const { id, artist, title, duration } = currentSong
 
@@ -34,13 +40,41 @@ export function LyricsTab() {
       }),
   })
 
+  // 🆕 Multi-provider lyrics fallback
+  useEffect(() => {
+    if (lyrics?.value) return // Уже есть lyrics из Subsonic
+
+    const fetchMultiProvider = async () => {
+      const result = await searchLyrics({
+        artist,
+        title,
+        duration,
+      })
+
+      if (result) {
+        if (result.syncedLyrics) {
+          setMultiProviderLyrics({ artist, title, value: result.syncedLyrics })
+          setActiveSource(result.source)
+        } else if (result.plainLyrics) {
+          setMultiProviderLyrics({ artist, title, value: result.plainLyrics })
+          setActiveSource(result.source)
+        } else if (result.source === 'genius') {
+          setGeniusUrl(getGeniusSearchUrl(artist, title))
+          setActiveSource('genius')
+        }
+      }
+    }
+
+    fetchMultiProvider()
+  }, [artist, title, duration, lyrics?.value])
+
   // Трекинг просмотра текста
   useEffect(() => {
-    if (!isLoading && lyrics) {
-      trackViewLyrics(id, !!lyrics.value)
-      console.log('[Lyrics] View tracked:', artist, '-', title, 'hasLyrics:', !!lyrics.value)
+    if (!isLoading && (lyrics || multiProviderLyrics)) {
+      trackViewLyrics(id, !!(lyrics?.value || multiProviderLyrics?.value))
+      console.log('[Lyrics] View tracked:', artist, '-', title, 'hasLyrics:', !!(lyrics?.value || multiProviderLyrics?.value))
     }
-  }, [id, artist, title, isLoading, lyrics])
+  }, [id, artist, title, isLoading, lyrics, multiProviderLyrics])
 
   const noLyricsFound = t('fullscreen.noLyrics')
   const loadingLyrics = t('fullscreen.loadingLyrics')
@@ -52,6 +86,40 @@ export function LyricsTab() {
       <SyncedLyrics lyrics={lyrics} />
     ) : (
       <UnsyncedLyrics lyrics={lyrics} />
+    )
+  } else if (multiProviderLyrics?.value) {
+    // 🆕 Multi-provider lyrics
+    return (
+      <div className="relative w-full h-full">
+        {/* Бейдж источника */}
+        <div className="absolute top-2 right-2 z-10">
+          <span className="text-xs px-2 py-1 rounded-full bg-black/60 text-white/80 backdrop-blur-sm">
+            Источник: {activeSource === 'lrclib' ? 'LRCLIB' : activeSource === 'netease' ? 'NetEase' : activeSource === 'simpmusic' ? 'SimpMusic' : 'Genius'}
+          </span>
+        </div>
+        {areLyricsSynced(multiProviderLyrics) ? (
+          <SyncedLyrics lyrics={multiProviderLyrics} />
+        ) : (
+          <UnsyncedLyrics lyrics={multiProviderLyrics} />
+        )}
+      </div>
+    )
+  } else if (geniusUrl) {
+    // 🆕 Genius search link
+    return (
+      <CenteredMessage>
+        <div className="flex flex-col items-center gap-4">
+          <p>{noLyricsFound}</p>
+          <Button
+            onClick={() => window.open(geniusUrl, '_blank')}
+            variant="outline"
+            size="sm"
+          >
+            <ExternalLink className="w-4 h-4 mr-2" />
+            Искать на Genius
+          </Button>
+        </div>
+      </CenteredMessage>
     )
   } else {
     return <CenteredMessage>{noLyricsFound}</CenteredMessage>

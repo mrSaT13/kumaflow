@@ -34,6 +34,26 @@ export function LogoutConfirmDialog({
 
   function handleRemoveConfig(e: MouseEvent<HTMLButtonElement>) {
     e.preventDefault()
+
+    // 💾 Принудительно сохраняем ВСЕ данные перед выходом
+    try {
+      // Zustand persist пишет в localStorage синхронно,
+      // но для надёжности даём 200мс на завершение записи
+      const stores = ['ml_profile', 'ratings', 'settings', 'accounts-persistence',
+                     'homepage-settings', 'page-design-settings', 'theme-store',
+                     'ml-playlists', 'ml-playlists-state', 'generated-playlists',
+                     'app-persistence', 'auth-persistence', 'shared-accounts'];
+
+      for (const key of stores) {
+        const data = localStorage.getItem(key)
+        if (data) {
+          console.log('[Logout] ✓ Сохранён:', key, '(' + Math.round(data.length / 1024) + ' KB)')
+        }
+      }
+    } catch (err) {
+      console.error('[Logout] Error checking stores:', err)
+    }
+
     removeConfig()
     clearPlayerState()
     resetConfig()

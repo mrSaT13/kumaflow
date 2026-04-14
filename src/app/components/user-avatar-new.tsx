@@ -7,6 +7,7 @@ import React, { useState } from 'react'
 import { Fragment } from 'react/jsx-runtime'
 import { AboutDialog } from '@/app/components/about/dialog'
 import { ShortcutsDialog } from '@/app/components/shortcuts/dialog'
+import { LogoutObserver } from '@/app/observers/logout-observer'
 import { useAvatar, useAvatarActions } from '@/store/avatar.store'
 import { useAppData, useAppStore } from '@/store/app.store'
 import { cn } from '@/lib/utils'
@@ -239,6 +240,9 @@ export function UserAvatar({ size = 32, className }: UserAvatarProps) {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Диалог подтверждения выхода */}
+      <LogoutObserver />
     </Fragment>
   )
 }

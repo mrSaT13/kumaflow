@@ -139,22 +139,42 @@ export function orchestratePlaylist(
     bpm: firstTrack.features.bpm,
   })
 
-  // 3. Алгоритм ближайшего соседа
+  // 3. Алгоритм ближайшего соседа С ЗАЩИТОЙ ОТ ПОВТОРА АРТИСТОВ
   const result: OrchestratedTrack[] = [firstTrack]
   const remaining = tracksWithFeatures.filter(t => t !== firstTrack)
 
   while (remaining.length > 0) {
     const lastTrack = result[result.length - 1]
+    const lastArtist = lastTrack.track.artist || ''
 
-    // Находим самый похожий трек на последний в результате
+    // Находим самый похожий трек НО НЕ того же артиста
     let mostSimilar: OrchestratedTrack | null = null
     let highestSimilarity = -1
-
+    
+    // Сначала ищем похожие с ДРУГИМ артистом
     for (const track of remaining) {
+      const trackArtist = track.track.artist || ''
+      
+      // ПРОПУСКАЕМ если тот же артист подряд
+      if (trackArtist === lastArtist && trackArtist !== '') {
+        continue
+      }
+      
       const similarity = vibeSimilarity(lastTrack.features, track.features)
       if (similarity > highestSimilarity) {
         highestSimilarity = similarity
         mostSimilar = track
+      }
+    }
+    
+    // Если не нашли с другим артистом - берём любой (fallback)
+    if (!mostSimilar && remaining.length > 0) {
+      for (const track of remaining) {
+        const similarity = vibeSimilarity(lastTrack.features, track.features)
+        if (similarity > highestSimilarity) {
+          highestSimilarity = similarity
+          mostSimilar = track
+        }
       }
     }
 
@@ -162,6 +182,17 @@ export function orchestratePlaylist(
       result.push(mostSimilar)
       remaining.splice(remaining.indexOf(mostSimilar), 1)
     }
+  }
+  
+  // Проверка на повторы артистов
+  const artistRepeats = result.filter((t, i) => 
+    i > 0 && t.track.artist === result[i-1].track.artist && t.track.artist !== ''
+  ).length
+  
+  if (artistRepeats > 0) {
+    console.log(`[Orchestrator] ⚠️ ${artistRepeats} artist repeats detected (out of ${result.length} tracks)`)
+  } else {
+    console.log(`[Orchestrator] ✅ No artist repeats!`)
   }
 
   console.log('[Orchestrator] Orchestration complete!')

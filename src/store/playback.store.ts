@@ -14,6 +14,7 @@ interface PlaybackSettings {
   floatingPlayerEnabled: boolean
   floatingPlayerPosition: { x: number; y: number } | null
   progressBarType: 'line' | 'dot' | 'spectrogram'  // Тип прогресс бара
+  autoColorByGenre: boolean  // Автоподбор цвета прогресс-бара по жанру
 }
 
 interface PlaybackStore {
@@ -29,7 +30,8 @@ interface PlaybackStore {
   setReplayGainMode: (mode: 'album' | 'track' | 'off') => void
   setFloatingPlayerEnabled: (enabled: boolean) => void
   setFloatingPlayerPosition: (position: { x: number; y: number } | null) => void
-  setProgressBarType: (type: 'line' | 'wave' | 'dot') => void  // Новый action
+  setProgressBarType: (type: 'line' | 'wave' | 'dot') => void
+  setAutoColorByGenre: (enabled: boolean) => void  // Новый action
 }
 
 const defaultSettings: PlaybackSettings = {
@@ -43,6 +45,7 @@ const defaultSettings: PlaybackSettings = {
   floatingPlayerEnabled: false,
   floatingPlayerPosition: null,
   progressBarType: 'line',  // По умолчанию обычный прогресс бар
+  autoColorByGenre: false,  // По умолчанию автоцвет выключен
 }
 
 export const usePlaybackStore = createWithEqualityFn<PlaybackStore>()(
@@ -109,6 +112,12 @@ export const usePlaybackStore = createWithEqualityFn<PlaybackStore>()(
           setProgressBarType: (type) => {
             set((state) => {
               state.settings.progressBarType = type
+            })
+          },
+
+          setAutoColorByGenre: (enabled) => {
+            set((state) => {
+              state.settings.autoColorByGenre = enabled
             })
           },
         })),

@@ -9,10 +9,12 @@ import {
 import { LyricsTab } from './lyrics'
 import { FullscreenSongQueue } from './queue'
 import { SongInfo } from './song-info'
+import { FullscreenExplanation } from './explanation'
 
 const MemoSongQueue = memo(FullscreenSongQueue)
 const MemoSongInfo = memo(SongInfo)
 const MemoLyricsTab = memo(LyricsTab)
+const MemoExplanation = memo(FullscreenExplanation)
 
 enum TabsEnum {
   Queue = 'queue',

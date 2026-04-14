@@ -16,6 +16,7 @@ import { getAverageColor } from '@/utils/getAverageColor'
 import { logger } from '@/utils/logger'
 import { ALBUM_ARTISTS_MAX_NUMBER } from '@/utils/multipleArtists'
 import { Button } from '@/app/components/ui/button'
+import { TrackRecommendInfo } from './track-recommend-info'
 
 export function TrackInfo({ song }: { song: ISong | undefined }) {
   const { t } = useTranslation()
@@ -74,29 +75,47 @@ export function TrackInfo({ song }: { song: ISong | undefined }) {
   return (
     <Fragment>
       <div className="group relative">
-        <div 
+        <div
           className="min-w-[70px] max-w-[70px] aspect-square bg-cover bg-center bg-skeleton rounded overflow-hidden shadow-md cursor-pointer"
           onClick={() => setIsFullscreen(!isFullscreen)}
           title={isFullscreen ? 'Свернуть плеер' : 'Развернуть плеер'}
         >
-          <ImageLoader id={song.coverArt} type="song" size={400}>
-            {(src) => (
-              <LazyLoadImage
-                key={song.id}
-                id="track-song-image"
-                src={src}
-                width="100%"
-                height="100%"
-                crossOrigin="anonymous"
-                effect="opacity"
-                className="aspect-square object-cover w-full h-full bg-skeleton text-transparent"
-                data-testid="track-image"
-                alt={`${song.artist} - ${song.title}`}
-                onLoad={getImageColor}
-                onError={handleError}
-              />
-            )}
-          </ImageLoader>
+          {/* Для аудиокниг используем прямой URL */}
+          {(song as any).isAudiobook && song.coverUrl ? (
+            <LazyLoadImage
+              key={song.id}
+              id="track-song-image"
+              src={song.coverUrl}
+              width="100%"
+              height="100%"
+              crossOrigin="anonymous"
+              effect="opacity"
+              className="aspect-square object-cover w-full h-full bg-skeleton text-transparent"
+              data-testid="track-image"
+              alt={`${song.artist} - ${song.title}`}
+              onLoad={getImageColor}
+              onError={handleError}
+            />
+          ) : (
+            <ImageLoader id={song.coverArt} type="song" size={400}>
+              {(src) => (
+                <LazyLoadImage
+                  key={song.id}
+                  id="track-song-image"
+                  src={src}
+                  width="100%"
+                  height="100%"
+                  crossOrigin="anonymous"
+                  effect="opacity"
+                  className="aspect-square object-cover w-full h-full bg-skeleton text-transparent"
+                  data-testid="track-image"
+                  alt={`${song.artist} - ${song.title}`}
+                  onLoad={getImageColor}
+                  onError={handleError}
+                />
+              )}
+            </ImageLoader>
+          )}
         </div>
         
         {/* Кнопка разворачивания/сворачивания обложки */}
@@ -121,10 +140,11 @@ export function TrackInfo({ song }: { song: ISong | undefined }) {
         <MarqueeTitle gap="mr-2">
           <Link to={ROUTES.ALBUM.PAGE(song.albumId)} tabIndex={-1}>
             <span
-              className="text-sm font-medium hover:underline cursor-pointer"
+              className="text-sm font-medium hover:underline cursor-pointer flex items-center gap-1"
               data-testid="track-title"
             >
               {song.title}
+              <TrackRecommendInfo song={song} />
             </span>
           </Link>
         </MarqueeTitle>

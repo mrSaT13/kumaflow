@@ -11,6 +11,7 @@ import { convertSecondsToTime } from '@/utils/convertSecondsToTime'
 import { ALBUM_ARTISTS_MAX_NUMBER } from '@/utils/multipleArtists'
 import { usePlayerActions } from '@/store/player.store'
 import { trackRemoveFromPlaylist } from '@/service/ml-event-tracker'
+import { QueueItemExplanation } from './queue-explanation'
 
 type QueueItemProps = ComponentPropsWithRef<'div'> & {
   song: ISong
@@ -72,17 +73,27 @@ export function QueueItem({
         )}
       </div>
       <div className="flex flex-1 items-center">
-        <div className="w-10 h-10 bg-accent rounded mr-2">
-          <ImageLoader id={song.coverArt} type="song" size={100}>
-            {(src) => (
-              <LazyLoadImage
-                src={src}
-                effect="opacity"
-                className="w-10 h-10 rounded text-transparent"
-                alt={`${song.title} - ${song.artist}`}
-              />
-            )}
-          </ImageLoader>
+        <div className="w-10 h-10 bg-accent rounded mr-2 overflow-hidden">
+          {/* Для аудиокниг — прямой URL, для музыки — ImageLoader */}
+          {(song as any).isAudiobook && (song as any).coverUrl ? (
+            <LazyLoadImage
+              src={(song as any).coverUrl}
+              effect="opacity"
+              className="w-10 h-10 rounded text-transparent"
+              alt={`${song.title} - ${song.artist}`}
+            />
+          ) : (
+            <ImageLoader id={song.coverArt} type="song" size={100}>
+              {(src) => (
+                <LazyLoadImage
+                  src={src}
+                  effect="opacity"
+                  className="w-10 h-10 rounded text-transparent"
+                  alt={`${song.title} - ${song.artist}`}
+                />
+              )}
+            </ImageLoader>
+          )}
         </div>
         <div className="flex flex-col">
           <span className="font-semibold">{song.title}</span>
@@ -90,6 +101,9 @@ export function QueueItem({
         </div>
       </div>
       <div className="w-[120px] flex items-center justify-center gap-1">
+        {/* Explanation */}
+        <QueueItemExplanation song={song} />
+
         {/* Move Up */}
         <Button
           variant="ghost"

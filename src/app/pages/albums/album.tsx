@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
+import { Share2 } from 'lucide-react'
+import { toast } from 'react-toastify'
 import { AlbumComment } from '@/app/components/album/comment'
 import ImageHeader from '@/app/components/album/image-header'
 import { AlbumInfo } from '@/app/components/album/info'
@@ -23,11 +25,19 @@ import { ColumnFilter } from '@/types/columnFilter'
 import { Albums } from '@/types/responses/album'
 import { sortRecentAlbums } from '@/utils/album'
 import { convertSecondsToHumanRead } from '@/utils/convertSecondsToTime'
+import { usePageDesignSettings } from '@/store/page-design.store'  // 🆕 Новый дизайн
+import NewAlbumPage from './new-album-page'  // 🆕 Новый дизайн
 
 export default function Album() {
   const { albumId } = useParams() as { albumId: string }
   const { setSongList } = usePlayerActions()
   const { t } = useTranslation()
+  const pageDesignSettings = usePageDesignSettings()  // 🆕 Новый дизайн
+
+  // 🆕 Если включён новый дизайн — рендерим NewAlbumPage
+  if (pageDesignSettings.newAlbumDesignEnabled) {
+    return <NewAlbumPage />
+  }
 
   const {
     data: album,
@@ -114,6 +124,19 @@ export default function Album() {
 
   const albumComment = album.song.length > 0 ? album.song[0].comment : null
 
+  // Функция "Поделиться" альбомом
+  const handleShareAlbum = () => {
+    const shareText = `@album:${album.name}`
+    navigator.clipboard.writeText(shareText)
+      .then(() => {
+        toast(`📋 Скопировано: ${shareText}`, { type: 'success' })
+      })
+      .catch(err => {
+        console.error('Failed to copy:', err)
+        toast('Ошибка копирования', { type: 'error' })
+      })
+  }
+
   return (
     <div className="w-full">
       <ImageHeader
@@ -127,6 +150,15 @@ export default function Album() {
         coverArtSize="700"
         coverArtAlt={album.name}
         badges={badges}
+        actions={
+          <button
+            onClick={handleShareAlbum}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors"
+            title="Поделиться альбомом"
+          >
+            <Share2 className="w-5 h-5 text-white/70 hover:text-white" />
+          </button>
+        }
       />
 
       <ListWrapper>

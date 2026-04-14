@@ -1,3 +1,8 @@
+/**
+ * Настройки сайдбара - устарело, перенесено в Appearance
+ * Этот файл можно удалить
+ */
+
 import { useTranslation } from 'react-i18next'
 import {
   Content,
@@ -39,6 +44,11 @@ export function SidebarContent() {
               disabled={hideRadiosSectionConfig}
             />
           </ContentItemForm>
+        </ContentItem>
+        <ContentItem>
+          <ContentItemTitle>
+            Настройки перенесены в Настройки → Внешний вид → Сайдбар
+          </ContentItemTitle>
         </ContentItem>
       </Content>
       <ContentSeparator />

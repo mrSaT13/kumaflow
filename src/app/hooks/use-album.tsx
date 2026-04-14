@@ -22,6 +22,15 @@ export const useGetArtistAlbums = (artistId: string) => {
     queryKey: [queryKeys.album.moreAlbums, artistId],
     queryFn: () => subsonic.artists.getOne(artistId),
     enabled: !!artistId,
+    refetchOnWindowFocus: false,
+    staleTime: 1000 * 60 * 5, // 5 минут
+    retry: 2,
+    onError: (error) => {
+      console.error('[useGetArtistAlbums] Error fetching artist:', artistId, error)
+    },
+    onSuccess: (data) => {
+      console.log('[useGetArtistAlbums] Fetched artist:', artistId, 'albums:', data?.album?.length || 0)
+    },
   })
 }
 

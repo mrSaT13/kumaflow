@@ -32,11 +32,11 @@ export function LastFmTagsImport() {
       
       if (result.success) {
         toast.success(
-          `✅ Импортировано ${result.genresAdded} жанров для ${result.artistsProcessed} артистов`,
+          `Импортировано ${result.genresAdded} жанров для ${result.artistsProcessed} артистов`,
           { type: 'success', autoClose: 5000 }
         )
       } else {
-        toast.error(`❌ Ошибка: ${result.error}`, { type: 'error', autoClose: 5000 })
+        toast.error(`Ошибка: ${result.error}`, { type: 'error', autoClose: 5000 })
       }
     } catch (error) {
       console.error('[LastFmTagsImport] Error:', error)
@@ -61,11 +61,11 @@ export function LastFmTagsImport() {
       
       if (result.success) {
         toast.success(
-          `✅ Импортировано ${result.moodsAdded} настроений для ${result.tracksProcessed} треков`,
+          `Импортировано ${result.moodsAdded} настроений для ${result.tracksProcessed} треков`,
           { type: 'success', autoClose: 5000 }
         )
       } else {
-        toast.error(`❌ Ошибка: ${result.error}`, { type: 'error', autoClose: 5000 })
+        toast.error(`Ошибка: ${result.error}`, { type: 'error', autoClose: 5000 })
       }
     } catch (error) {
       console.error('[LastFmTagsImport] Error:', error)
@@ -90,11 +90,11 @@ export function LastFmTagsImport() {
       
       if (result.success) {
         toast.success(
-          `✅ Импортировано ${result.genresAdded} жанров и ${result.moodsAdded} настроений`,
+          `Импортировано ${result.genresAdded} жанров и ${result.moodsAdded} настроений`,
           { type: 'success', autoClose: 10000 }
         )
       } else {
-        toast.error(`❌ Ошибка: ${result.error}`, { type: 'error', autoClose: 5000 })
+        toast.error(`Ошибка: ${result.error}`, { type: 'error', autoClose: 5000 })
       }
     } catch (error) {
       console.error('[LastFmTagsImport] Error:', error)
@@ -107,7 +107,7 @@ export function LastFmTagsImport() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>🎵 Last.fm Теги</CardTitle>
+        <CardTitle>Last.fm Теги</CardTitle>
         <CardDescription>
           Импорт жанров и настроений из Last.fm для улучшения рекомендаций
         </CardDescription>
@@ -116,7 +116,7 @@ export function LastFmTagsImport() {
         {/* Проверка авторизации */}
         {!isLastFmAuthorized && (
           <div className="text-sm text-amber-600">
-            ⚠️ Требуется авторизация Last.fm в разделе "Внешние API"
+            Требуется авторизация Last.fm в разделе "Внешние API"
           </div>
         )}
 
@@ -137,7 +137,7 @@ export function LastFmTagsImport() {
                 Импорт...
               </>
             ) : (
-              '🎵 Импортировать жанры'
+              'Импортировать жанры'
             )}
           </Button>
         </div>
@@ -159,14 +159,14 @@ export function LastFmTagsImport() {
                 Импорт...
               </>
             ) : (
-              '🎭 Импортировать настроения'
+              'Импортировать настроения'
             )}
           </Button>
         </div>
 
         {/* Массовый импорт */}
         <div className="space-y-2 pt-2 border-t">
-          <h4 className="text-sm font-medium">📚 Массовый импорт</h4>
+          <h4 className="text-sm font-medium">Массовый импорт</h4>
           <p className="text-xs text-muted-foreground">
             Импортировать жанры и настроения для всей библиотеки
           </p>
@@ -182,16 +182,16 @@ export function LastFmTagsImport() {
                 Импорт библиотеки...
               </>
             ) : (
-              '📚 Импортировать всю библиотеку'
+              'Импортировать всю библиотеку'
             )}
           </Button>
         </div>
 
         {/* Информация */}
         <div className="text-xs text-muted-foreground space-y-1">
-          <p>📊 <strong>Жанры:</strong> industrial, alternative, rock, metal, etc.</p>
-          <p>🎭 <strong>Настроения:</strong> chill, energetic, melancholic, happy, etc.</p>
-          <p>⏱️ <strong>Время импорта:</strong> ~1 минута на 50 артистов/треков</p>
+          <p><strong>Жанры:</strong> industrial, alternative, rock, metal, etc.</p>
+          <p><strong>Настроения:</strong> chill, energetic, melancholic, happy, etc.</p>
+          <p><strong>Время импорта:</strong> ~1 минута на 50 артистов/треков</p>
         </div>
       </CardContent>
     </Card>
