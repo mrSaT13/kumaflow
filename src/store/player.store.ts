@@ -14,7 +14,13 @@ import { isDesktop } from '@/utils/desktop'
 import { discordRpc } from '@/utils/discordRpc'
 import { addNextSongList, shuffleSongList } from '@/utils/songListFunctions'
 import { idbStorage } from './idb'
-import { trackRepeatModeEnabled, trackSkipAfterHalf } from '@/service/ml-event-tracker'
+import { trackRepeatModeEnabled, trackSkipAfterHalf, trackEvent } from '@/service/ml-event-tracker'
+import { cacheService } from '@/service/cache-service'
+import { useAppStore } from './app.store'
+import { behaviorTracker } from '@/service/behavior-tracker'
+import { moodDriftDetector } from '@/service/mood-drift-detector'
+import { timeAwareHistory } from '@/service/time-aware-history'
+import { myWaveDiscoveryTracker } from '@/service/mywave-discoveries'
 
 const miniStores = {
   songlist: 'player_songlist',
@@ -171,7 +177,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
             },
           },
           actions: {
-            setSongList: (songlist, index, shuffle = false) => {
+            setSongList: (songlist, index, shuffle = false, sharedTracksInfo?: Record<string, { accounts: string[]; totalPlays: number; songKey?: string }>, playlistName?: string) => {
               const { currentList, currentSongIndex } = get().songlist
 
               const listsAreEqual = areSongListsEqual(currentList, songlist)
@@ -195,6 +201,8 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 state.playerState.mediaType = 'song'
                 state.songlist.radioList = []
                 state.songlist.podcastList = []
+                state.songlist.sharedTracksInfo = sharedTracksInfo
+                state.songlist.currentPlaylistName = playlistName
               })
 
               if (shuffle) {
@@ -230,6 +238,32 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               const songIsAlreadyPlaying = get().actions.checkActiveSong(
                 song.id,
               )
+              
+              // Логируем начало воспроизведения
+              behaviorTracker.logEvent({
+                trackId: song.id,
+                action: 'play',
+                position: 0,
+              })
+
+              // === MOOD DRIFT: Положительное взаимодействие сбрасывает счётчик пропусков ===
+              moodDriftDetector.logPositiveInteraction(song.id)
+
+              // === TIME-AWARE: Логируем прослушивание ===
+              timeAwareHistory.logPlay(song.id)
+
+              // === MY WAVE DISCOVERIES: Если играет из Моей волны — логируем артиста ===
+              const { currentListName } = get().songlist
+              const isMyWave = currentListName?.toLowerCase().includes('моя волна') || 
+                               currentListName?.toLowerCase().includes('mywave') || 
+                               currentListName?.toLowerCase().includes('my wave')
+              
+              if (isMyWave && (song.artistId || song.artist)) {
+                const artistId = song.artistId || song.artist
+                const artistName = song.artist || 'Unknown'
+                myWaveDiscoveryTracker.logArtistHeard(artistId, artistName, undefined)
+              }
+              
               if (songIsAlreadyPlaying && !isPlaying) {
                 set((state) => {
                   state.playerState.isPlaying = true
@@ -503,6 +537,16 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                   // Скип после 50% но не в конце трека
                   trackSkipAfterHalf(currentSong.id, progress)
                   console.log('[ML] Skip after half detected:', currentSong.title, `${progress.toFixed(1)}%`)
+                  
+                  // Логируем пропуск трека
+                  behaviorTracker.logEvent({
+                    trackId: currentSong.id,
+                    action: 'skip',
+                    position: Math.floor(audio.currentTime),
+                  })
+
+                  // === MOOD DRIFT: Логируем пропуск для определения смены настроения ===
+                  moodDriftDetector.logSkip(currentSong.id, currentSong)
                 }
               }
 
@@ -664,6 +708,39 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
 
               const { id, starred } = get().songlist.currentSong
               const isSongStarred = typeof starred === 'string'
+
+              // Если лайкаем - отслеживаем для ML и кэшируем
+              if (!isSongStarred) {
+                // ML Event Tracking для автодиджея
+                trackEvent('first_like', { songId: id })
+                console.log('[ML Tracker] Tracked first_like event:', id)
+
+                // Проверяем настройку автосохранения
+                const appState = useAppStore.getState()
+                const autoCacheEnabled = appState.pages.autoCacheStarred
+                
+                console.log('[PlayerStore] Auto-cache settings:', {
+                  enabled: autoCacheEnabled,
+                  autoCacheStarred: appState.pages.autoCacheStarred,
+                  allPages: appState.pages,
+                })
+
+                if (autoCacheEnabled) {
+                  console.log('[PlayerStore] Liking song + auto-cache enabled, caching:', id)
+                  // Кэшируем в фоне без ожидания
+                  cacheService.cacheAudioFile(id).then((success) => {
+                    console.log('[PlayerStore] Cache result:', success ? 'SUCCESS ✅' : 'FAILED ❌')
+                    if (success) {
+                      console.log('[PlayerStore] Song cached successfully:', id)
+                    }
+                  }).catch((err) => {
+                    console.error('[PlayerStore] Failed to cache liked song:', err)
+                  })
+                } else {
+                  console.log('[PlayerStore] Liking song but auto-cache disabled:', id)
+                }
+              }
+
               await subsonic.star.handleStarItem({
                 id,
                 starred: isSongStarred,
@@ -864,12 +941,28 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
             },
             handleSongEnded: () => {
               const { loopState } = get().playerState
+              const { currentSong } = get().songlist
               const {
                 hasNextSong,
                 playNextSong,
                 setPlayingState,
                 clearPlayerState,
               } = get().actions
+
+              // Логируем завершение трека
+              if (currentSong?.id) {
+                behaviorTracker.logEvent({
+                  trackId: currentSong.id,
+                  action: 'complete',
+                  position: currentSong.duration || 0,
+                })
+
+                // === MOOD DRIFT: Завершение трека - положительное взаимодействие ===
+                moodDriftDetector.logPositiveInteraction(currentSong.id)
+
+                // === TIME-AWARE: Логируем завершение прослушивания ===
+                timeAwareHistory.logPlay(currentSong.id)
+              }
 
               if (hasNextSong() || loopState === LoopState.All) {
                 playNextSong()
@@ -1095,6 +1188,39 @@ usePlayerStore.subscribe(
   },
   {
     equalityFn: shallow,
+  },
+)
+
+// Подписка на изменения URL для бесшовного переключения
+// НЕ перезапускаем текущий трек - он доигрывается из буфера
+// Следующий трек автоматически возьмёт новый URL из appStore
+let previousUrl: string | null = null
+useAppStore.subscribe(
+  (state) => state.data.url,
+  async (newUrl) => {
+    if (previousUrl && newUrl !== previousUrl) {
+      console.log('[PlayerStore] URL changed from', previousUrl, 'to', newUrl)
+      console.log('[PlayerStore] Current track will continue playing, next track will use new URL')
+      
+      // Обновляем currentSong с актуальными данными (coverUrl, quality и т.д.)
+      const playerState = usePlayerStore.getState()
+      const { currentSong } = playerState.songlist
+      
+      if (currentSong?.id && !currentSong.isLocal) {
+        try {
+          // Получаем актуальные данные о треке с нового сервера
+          const updatedSong = await subsonic.songs.getSong(currentSong.id)
+          if (updatedSong) {
+            console.log('[PlayerStore] Updated song metadata from new URL')
+            // Примечание: currentList модифицировать нельзя (readonly),
+            // но следующий трек всё равно загрузится с нового URL
+          }
+        } catch (error) {
+          console.warn('[PlayerStore] Failed to update song metadata:', error)
+        }
+      }
+    }
+    previousUrl = newUrl
   },
 )
 

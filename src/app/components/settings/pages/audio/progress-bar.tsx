@@ -20,7 +20,7 @@ import { Button } from '@/app/components/ui/button'
 import { Switch } from '@/app/components/ui/switch'
 import { usePlayerCustomization, usePlayerCustomizationActions } from '@/store/player-customization.store'
 import { cn } from '@/lib/utils'
-import { Palette, RotateCcw, Upload, Sparkles, Music, Zap, Star, Heart } from 'lucide-react'
+import { RotateCcw, Upload, Sparkles, Music, Zap, Star, Heart } from 'lucide-react'
 
 // Пресеты иконок SVG
 const ICON_PRESETS = [
@@ -46,7 +46,7 @@ export function ProgressBarSettings() {
   const { t } = useTranslation()
   const settings = usePlayerCustomization()
   const actions = usePlayerCustomizationActions()
-  
+
   const [customSvg, setCustomSvg] = useState('')
   const [previewValue, setPreviewValue] = useState(50)
   const [showPresets, setShowPresets] = useState(false)
@@ -76,10 +76,7 @@ export function ProgressBarSettings() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center gap-2">
-          <Palette className="h-5 w-5" />
-          <CardTitle className="text-lg">Прогресс-бар</CardTitle>
-        </div>
+        <CardTitle className="text-lg">Прогресс-бар</CardTitle>
         <CardDescription>
           Настройте внешний вид прогресс-бара плеера
         </CardDescription>
@@ -88,24 +85,12 @@ export function ProgressBarSettings() {
         {/* Тип прогресс-бара */}
         <div className="space-y-2">
           <Label>Тип прогресс-бара</Label>
-          <Select
-            value={settings.progressType}
-            onValueChange={(value) => actions.setProgressType(value as any)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="slider">Slider (классический)</SelectItem>
-              <SelectItem value="bar">Bar (линия)</SelectItem>
-              <SelectItem value="waveform">Waveform (волна)</SelectItem>
-            </SelectContent>
-          </Select>
-          {settings.progressType !== 'slider' && (
-            <p className="text-xs text-amber-500 flex items-center gap-1">
-              ⚠️ Custom SVG и пресеты доступны только для типа "Slider"
+          <div className="p-3 bg-muted/50 rounded-lg">
+            <p className="text-sm">Slider (классический)</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Классический слайдер с полосой прогресса
             </p>
-          )}
+          </div>
         </div>
 
         {/* Форма маркера */}

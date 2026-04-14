@@ -106,7 +106,7 @@ export function YandexMusicSettings() {
   }
 
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader>
         <CardTitle>Яндекс.Музыка</CardTitle>
         <CardDescription>
@@ -220,11 +220,11 @@ export function YandexMusicSettings() {
             </div>
 
             {/* Buttons */}
-            <div className="flex gap-2">
-              <Button onClick={handleManualSave} variant="default">
+            <div className="flex gap-2 flex-wrap">
+              <Button onClick={handleManualSave} variant="default" className="whitespace-nowrap">
                 Сохранить
               </Button>
-              <Button onClick={handleTestConnection} variant="secondary" disabled={isLoading}>
+              <Button onClick={handleTestConnection} variant="secondary" disabled={isLoading} className="whitespace-nowrap">
                 {isLoading ? 'Проверка...' : 'Проверить подключение'}
               </Button>
             </div>

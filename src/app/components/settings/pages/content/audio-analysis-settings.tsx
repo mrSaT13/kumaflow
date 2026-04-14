@@ -14,7 +14,7 @@ export function AudioAnalysisSettings() {
   const { isAnalyzing, queueLength, analyzedCount, totalInPlaylist } = useBackgroundAudioAnalysis()
   const [analysisEnabled, setAnalysisEnabled] = useState(true)
   const { settings } = usePlaybackSettings()
-  const { setProgressBarType } = usePlaybackActions()
+  const { setProgressBarType, setAutoColorByGenre } = usePlaybackActions()
 
   const progress = totalInPlaylist > 0 ? Math.round((analyzedCount / totalInPlaylist) * 100) : 0
 
@@ -34,7 +34,7 @@ export function AudioAnalysisSettings() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>🎵 Анализ аудио</cardTitle>
+        <CardTitle>🎵 Анализ аудио</CardTitle>
         <CardDescription>
           Автоматический анализ BPM, энергии и настроения треков
         </CardDescription>
@@ -84,54 +84,6 @@ export function AudioAnalysisSettings() {
           <p>• Анализируются только треки из текущего плейлиста</p>
           <p>• Данные сохраняются в ML Store для улучшения рекомендаций</p>
           <p>• Анализ происходит после запуска трека, не мешает воспроизведению</p>
-        </div>
-      </CardContent>
-    </Card>
-
-    {/* Progress Bar Type */}
-    <Card>
-      <CardHeader>
-        <CardTitle>📊 Тип прогресс бара</CardTitle>
-        <CardDescription>
-          Выберите стиль отображения прогресса воспроизведения
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label>Тип прогресс бара</Label>
-          <Select
-            value={settings.progressBarType}
-            onValueChange={(value: 'line' | 'dot' | 'spectrogram') => setProgressBarType(value)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Выберите тип" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="line">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4" />
-                  <span>Линия (обычный)</span>
-                </div>
-              </SelectItem>
-              <SelectItem value="dot">
-                <div className="flex items-center gap-2">
-                  <Circle className="w-4 h-4" />
-                  <span>Точка</span>
-                </div>
-              </SelectItem>
-              <SelectItem value="spectrogram">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-4 h-4" />
-                  <span>Спектрограмма</span>
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            {settings.progressBarType === 'line' && 'Классический слайдер с полосой прогресса'}
-            {settings.progressBarType === 'dot' && 'Движущаяся точка с пульсацией'}
-            {settings.progressBarType === 'spectrogram' && 'Цветные столбики спектрограммы'}
-          </p>
         </div>
       </CardContent>
     </Card>

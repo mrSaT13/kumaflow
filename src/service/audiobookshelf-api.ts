@@ -359,12 +359,55 @@ class AudiobookshelfService {
   }
 
   /**
-   * Поиск книг
+   * Поиск книг (через библиотеки — универсальный метод)
    */
-  async searchBooks(query: string): Promise<Audiobook[]> {
+  async searchBooks(query: string, limit: number = 10): Promise<Audiobook[]> {
+    this.initClient()
+    console.log('[Audiobookshelf] Search called')
+    console.log('[Audiobookshelf] URL:', this.baseUrl)
+    console.log('[Audiobookshelf] API Key:', this.apiKey ? 'Set' : 'NOT SET')
+    console.log('[Audiobookshelf] Query:', query)
+
+    if (!this.baseUrl) {
+      console.warn('[Audiobookshelf] ⚠️ Server URL not configured!')
+      return []
+    }
+    if (!this.apiKey) {
+      console.warn('[Audiobookshelf] ⚠️ API key not configured!')
+      return []
+    }
+
     try {
-      const data = await this.request<any>(`/api/search/books?q=${encodeURIComponent(query)}`)
-      return (data.book || []).map((item: any) => this.parseAudiobook(item))
+      // Получаем библиотеки и ищем в первой
+      console.log('[Audiobookshelf] Getting libraries for search')
+      const libraries = await this.getLibraries()
+      console.log('[Audiobookshelf] Found', libraries.length, 'libraries')
+
+      if (libraries.length === 0) {
+        console.warn('[Audiobookshelf] ⚠️ No libraries found!')
+        return []
+      }
+
+      // Берём первую библиотеку и ищем в ней
+      const libraryId = libraries[0].id
+      console.log('[Audiobookshelf] Searching in library:', libraryId, libraries[0].name)
+
+      // /api/libraries/{id}/search?q=...
+      const data = await this.request<any>(`/api/libraries/${libraryId}/search?q=${encodeURIComponent(query)}&limit=${limit}`)
+      console.log('[Audiobookshelf] Library search response:', JSON.stringify(data).substring(0, 300))
+
+      const books = data?.book || []
+      console.log('[Audiobookshelf] Library search found', books.length, 'books')
+
+      if (books.length > 0) {
+        console.log('[Audiobookshelf] First book:', books[0]?.libraryItem?.media?.metadata?.title || 'Unknown')
+      }
+
+      // Парсим правильно — каждый book содержит libraryItem
+      return books.map((item: any) => {
+        const libraryItem = item.libraryItem || item
+        return this.parseAudiobook(libraryItem)
+      })
     } catch (error) {
       console.error('[Audiobookshelf] Search failed:', error)
       return []
@@ -398,7 +441,9 @@ class AudiobookshelfService {
         narrator: metadata.narratorName,
         description: metadata.description,
         // Обложка - используем стандартный endpoint с токеном
-        coverUrl: `${this.baseUrl}/api/items/${item.id}/cover?token=${this.apiKey}`,
+        coverUrl: metadata.coverPath 
+          ? `${this.baseUrl}${metadata.coverPath}?token=${this.apiKey}`
+          : `${this.baseUrl}/api/items/${item.id}/cover?token=${this.apiKey}`,
         duration: item.media?.duration || 0,
         series: seriesInfo || metadata.seriesName
           ? { 
@@ -432,8 +477,78 @@ class AudiobookshelfService {
   }
 
   /**
-   * Парсинг детальной информации о книге (с треками)
+   * Получить серии книг
+   * GET /api/libraries/{libraryId}/series
    */
+  async getSeries(libraryId: string): Promise<Array<{
+    id: string
+    name: string
+    description?: string
+    books: Array<{ id: string; title: string; sequence: string }>
+  }>> {
+    try {
+      const data = await this.request<any>(`/api/libraries/${libraryId}/series`)
+      return (data.series || []).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        books: (s.books || []).map((b: any) => ({
+          id: b.id,
+          title: b.title,
+          sequence: b.sequence,
+        })),
+      }))
+    } catch (error) {
+      console.error('[Audiobookshelf] Get series error:', error)
+      return []
+    }
+  }
+
+  /**
+   * Получить авторов
+   * GET /api/libraries/{libraryId}/authors
+   */
+  async getAuthors(libraryId: string): Promise<Array<{
+    id: string
+    name: string
+    description?: string
+    books: Array<{ id: string; title: string }>
+  }>> {
+    try {
+      const data = await this.request<any>(`/api/libraries/${libraryId}/authors`)
+      return (data.authors || []).map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        description: a.description,
+        books: (a.books || []).map((b: any) => ({
+          id: b.id,
+          title: b.title,
+        })),
+      }))
+    } catch (error) {
+      console.error('[Audiobookshelf] Get authors error:', error)
+      return []
+    }
+  }
+
+  /**
+   * Пакетное обновление прогресса
+   * PATCH /api/me/progress/batch/update
+   */
+  async batchUpdateProgress(updates: Array<{
+    libraryItemId: string
+    currentTime: number
+    duration: number
+    isFinished?: boolean
+  }>): Promise<boolean> {
+    try {
+      await this.request(`/api/me/progress/batch/update`, 'PATCH', { updates })
+      return true
+    } catch (error) {
+      console.error('[Audiobookshelf] Batch update error:', error)
+      return false
+    }
+  }
   private parseAudiobookDetail(item: any): Audiobook & {
     description?: string
     publishedYear?: string
@@ -481,7 +596,9 @@ class AudiobookshelfService {
         narrator: metadata.narratorName,
         description: metadata.description,
         // Обложка - используем стандартный endpoint с токеном
-        coverUrl: `${this.baseUrl}/api/items/${item.id}/cover?token=${this.apiKey}`,
+        coverUrl: metadata.coverPath 
+          ? `${this.baseUrl}${metadata.coverPath}?token=${this.apiKey}`
+          : `${this.baseUrl}/api/items/${item.id}/cover?token=${this.apiKey}`,
         duration: item.media?.duration || 0,
         series: seriesInfo || metadata.seriesName
           ? {

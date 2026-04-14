@@ -6,6 +6,8 @@ import { useEffect } from 'react'
 import { toast } from 'react-toastify'
 import { usePlayerActions } from '@/store/player.store'
 import { useSleepTimer } from '@/store/sleep-timer.store'
+import { generateArtistRadio } from '@/service/ml-wave-service'
+import { useMLStore } from '@/store/ml.store'
 
 export function useTrayEvents() {
   const { setSongList } = usePlayerActions()
@@ -42,9 +44,28 @@ export function useTrayEvents() {
       try {
         toast('Генерация радио артиста...', { type: 'info' })
 
-        // Здесь будет логика генерации радио
-        // Пока просто уведомление
-        toast('Функция в разработке', { type: 'info' })
+        // Получаем топ артиста из ML профиля
+        const mlState = useMLStore.getState()
+        const profile = mlState.profile
+        const topArtistIds = Object.entries(profile.preferredArtists || {})
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 1)
+          .map(([id, _]) => id)
+
+        if (topArtistIds.length === 0) {
+          toast('Нет любимых артистов для генерации радио', { type: 'warning' })
+          return
+        }
+
+        const artistId = topArtistIds[0]
+        const result = await generateArtistRadio(artistId, 25)
+
+        if (result.songs.length > 0) {
+          setSongList(result.songs, 0)
+          toast.success('▶️ Радио артиста запущено!', { autoClose: 2000 })
+        } else {
+          toast.error('Не удалось сгенерировать радио')
+        }
       } catch (error) {
         console.error('[Tray] Artist radio error:', error)
         toast('Ошибка при генерации радио', { type: 'error' })

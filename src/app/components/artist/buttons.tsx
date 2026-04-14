@@ -36,7 +36,7 @@ export function ArtistButtons({
       queryClient.invalidateQueries({
         queryKey: [queryKeys.artist.single, artist.id],
       })
-      
+
       // Обновляем ML store при лайке артиста
       if (!variables.starred) {
         // Лайкнули артиста → добавляем в preferredArtists с весом 5

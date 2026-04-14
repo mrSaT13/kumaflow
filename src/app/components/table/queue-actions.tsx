@@ -1,9 +1,10 @@
 import { Row } from '@tanstack/react-table'
-import { XIcon, ChevronUp, ChevronDown } from 'lucide-react'
+import { XIcon, ChevronUp, ChevronDown, Download } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { usePlayerActions } from '@/store/player.store'
 import { ISong } from '@/types/responses/song'
 import { trackRemoveFromPlaylist } from '@/service/ml-event-tracker'
+import { CacheTrackButton } from '@/app/components/song/cache-button'
 
 export function QueueActions({ row }: { row: Row<ISong> }) {
   const { removeSongFromQueue, moveSongInQueue } = usePlayerActions()
@@ -27,6 +28,9 @@ export function QueueActions({ row }: { row: Row<ISong> }) {
 
   return (
     <div className="flex items-center gap-1">
+      {/* Кеш - сохранить трек */}
+      <CacheTrackButton song={row.original} variant="ghost" size="sm" />
+
       {/* Move Up */}
       <Button
         variant="ghost"

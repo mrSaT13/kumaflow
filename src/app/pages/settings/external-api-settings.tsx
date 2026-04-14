@@ -57,7 +57,7 @@ export default function ExternalApiSettings() {
   }
 
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader>
         <CardTitle>Внешние API</CardTitle>
         <CardDescription>
@@ -82,16 +82,16 @@ export default function ExternalApiSettings() {
 
           <div className="space-y-2">
             <Label htmlFor="lastfm-key">API Key</Label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Input
                 id="lastfm-key"
                 type="text"
                 placeholder="Введите Last.fm API ключ"
                 value={lastFmInput}
                 onChange={(e) => setLastFmInput(e.target.value)}
-                className="flex-1"
+                className="flex-1 min-w-0"
               />
-              <Button onClick={handleSaveLastFm} variant="secondary">
+              <Button onClick={handleSaveLastFm} variant="secondary" className="whitespace-nowrap">
                 Сохранить
               </Button>
             </div>
@@ -149,16 +149,16 @@ export default function ExternalApiSettings() {
 
           <div className="space-y-2">
             <Label htmlFor="fanart-key">API Key</Label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Input
                 id="fanart-key"
                 type="text"
                 placeholder="Введите Fanart.tv API ключ"
                 value={fanartInput}
                 onChange={(e) => setFanartInput(e.target.value)}
-                className="flex-1"
+                className="flex-1 min-w-0"
               />
-              <Button onClick={handleSaveFanart} variant="secondary">
+              <Button onClick={handleSaveFanart} variant="secondary" className="whitespace-nowrap">
                 Сохранить
               </Button>
             </div>
@@ -176,16 +176,16 @@ export default function ExternalApiSettings() {
 
           <div className="space-y-2">
             <Label htmlFor="fanart-client-key">Personal API Key (опционально)</Label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Input
                 id="fanart-client-key"
                 type="text"
                 placeholder="Введите Personal ключ для лучшего доступа"
                 value={fanartClientInput}
                 onChange={(e) => setFanartClientInput(e.target.value)}
-                className="flex-1"
+                className="flex-1 min-w-0"
               />
-              <Button onClick={handleSaveFanartClient} variant="secondary">
+              <Button onClick={handleSaveFanartClient} variant="secondary" className="whitespace-nowrap">
                 Сохранить
               </Button>
             </div>

@@ -4,7 +4,9 @@ import { getAudiobookshelfApi, type Audiobook } from '@/service/audiobookshelf-a
 import { useAudiobookshelf } from '@/store/audiobookshelf.store'
 import { usePlayerActions, usePlayerSonglist, usePlayerIsPlaying } from '@/store/player.store'
 import { toast } from 'react-toastify'
-import { ArrowLeft, Play, Pause, SkipForward, SkipBack, BookOpen } from 'lucide-react'
+import { Button } from '@/app/components/ui/button'
+import { ArrowLeft, Play, Pause, SkipForward, SkipBack, BookOpen, Settings, AlertCircle } from 'lucide-react'
+import { useAppStore } from '@/store/app.store'
 import styles from './audiobook-detail.module.css'
 
 interface AudiobookDetail extends Audiobook {
@@ -268,12 +270,23 @@ export default function AudiobookDetail() {
     return (
       <div className={styles.container}>
         <div className={styles.error}>
-          <BookOpen className={styles.errorIcon} />
+          <AlertCircle className={styles.errorIcon} />
           <h2>Audiobookshelf не подключён</h2>
           <p>Настройте подключение к вашему серверу Audiobookshelf в настройках</p>
-          <button onClick={() => navigate('/settings#audiobookshelf')}>
-            ⚙️ Открыть настройки
-          </button>
+          <Button onClick={() => {
+            const { setOpenDialog, setCurrentPage } = useAppStore.getState().settings
+            setOpenDialog(true)
+            setCurrentPage('accounts')
+            setTimeout(() => {
+              const element = document.getElementById('audiobookshelf')
+              if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              }
+            }, 500)
+          }} className="gap-2">
+            <Settings className="w-4 h-4" />
+            Открыть настройки
+          </Button>
         </div>
       </div>
     )
@@ -344,7 +357,23 @@ export default function AudiobookDetail() {
               </p>
             )}
 
-            <p className={styles.author}>📝 {book.author}</p>
+            <p className={styles.author}>
+              📝 {book.author}
+              {book.author && (
+                <button 
+                  className={styles.authorButton}
+                  onClick={() => {
+                    // Переход к странице автора
+                    const authorId = encodeURIComponent(book.author)
+                    const authorName = encodeURIComponent(book.author)
+                    navigate(`/audiobooks/author/${authorId}/${authorName}`)
+                  }}
+                  title="Все книги автора"
+                >
+                  📖
+                </button>
+              )}
+            </p>
             
             {book.narrator && (
               <p className={styles.narrator}>🎙️ {book.narrator}</p>

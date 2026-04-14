@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { createHashRouter } from 'react-router-dom'
+import { createHashRouter, Navigate } from 'react-router-dom'
 
 import {
   AlbumFallback,
@@ -24,9 +24,17 @@ import { ROUTES } from '@/routes/routesList'
 
 const BaseLayout = lazy(() => import('@/app/layout/base'))
 const ColdStartOnboarding = lazy(() => import('@/app/pages/artists/cold-start-onboarding'))
+const RemoteControlPage = lazy(() => import('@/app/pages/remote'))
 const MLForYouPage = lazy(() => import('@/app/pages/ml/for-you-page'))
+const MLPlaylistViewPage = lazy(() => import('@/app/pages/ml/ml-playlist-view-page'))
 const MLStatsPage = lazy(() => import('@/app/pages/ml/stats'))
-const WrappedPage = lazy(() => import('@/app/pages/wrapped'))
+const MLDiscoveriesPage = lazy(() => import('@/app/pages/ml/discoveries-page'))  // 🆕
+const SharedListensPage = lazy(() => import('@/app/pages/ml/shared-listens-page'))
+const MyWaveEncountersPage = lazy(() => import('@/app/pages/ml/my-wave-encounters'))
+const InStyleArtistsPage = lazy(() => import('@/app/pages/ml/in-style-artists'))
+const WrappedPage = lazy(() => import('@/app/pages/wrapped/index'))
+const HistoryPage = lazy(() => import('@/app/pages/history/history-page'))
+const SearchPage = lazy(() => import('@/app/pages/search/search-page'))
 const AudiobooksPage = lazy(() => import('@/app/pages/audiobooks/audiobooks-page'))
 const AudiobookDetail = lazy(() => import('@/app/pages/audiobooks/audiobook-detail'))
 const GenreCardsPage = lazy(() => import('@/app/pages/genres/genre-cards'))
@@ -39,6 +47,8 @@ const Favorites = lazy(() => import('@/app/pages/favorites/songlist'))
 const Login = lazy(() => import('@/app/pages/login'))
 const PlaylistsPage = lazy(() => import('@/app/pages/playlists/list'))
 const Playlist = lazy(() => import('@/app/pages/playlists/playlist'))
+const SavedPlaylistPage = lazy(() => import('@/app/pages/playlists/saved-playlist-page'))
+const AudiobookAuthor = lazy(() => import('@/app/pages/audiobooks/author-detail'))
 const Radios = lazy(() => import('@/app/pages/radios/radios-list'))
 const SongList = lazy(() => import('@/app/pages/songs/songlist'))
 const Home = lazy(() => import('@/app/pages/home'))
@@ -48,6 +58,8 @@ const Episode = lazy(() => import('@/app/pages/podcasts/episode'))
 const LatestEpisodes = lazy(
   () => import('@/app/pages/podcasts/latest-episodes'),
 )
+const LocalLibrary = lazy(() => import('@/app/pages/local-library'))
+const CachePage = lazy(() => import('@/app/pages/cache'))
 
 export const router = createHashRouter([
   {
@@ -127,6 +139,26 @@ export const router = createHashRouter([
         ),
       },
       {
+        id: 'local-library',
+        path: '/library/local',
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense fallback={<SongListFallback />}>
+            <LocalLibrary />
+          </Suspense>
+        ),
+      },
+      {
+        id: 'cache',
+        path: ROUTES.CACHE.PAGE,
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense fallback={<SongListFallback />}>
+            <CachePage />
+          </Suspense>
+        ),
+      },
+      {
         id: 'artist',
         path: ROUTES.ARTIST.PATH,
         errorElement: <ErrorPage />,
@@ -147,6 +179,16 @@ export const router = createHashRouter([
         ),
       },
       {
+        id: 'remote',
+        path: '/remote',
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense>
+            <RemoteControlPage />
+          </Suspense>
+        ),
+      },
+      {
         id: 'ml-for-you',
         path: '/ml/for-you',
         errorElement: <ErrorPage />,
@@ -157,12 +199,71 @@ export const router = createHashRouter([
         ),
       },
       {
+        id: 'ml-playlist',
+        path: '/ml/playlist/:playlistId',
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense>
+            <MLPlaylistViewPage />
+          </Suspense>
+        ),
+      },
+      {
+        // 🔒 Редирект /ml/discover → /ml/for-you?tab=trends
+        id: 'ml-discover',
+        path: '/ml/discover',
+        element: <Navigate to="/ml/for-you?tab=trends" replace />,
+      },
+      {
         id: 'ml-stats',
         path: '/ml/stats',
         errorElement: <ErrorPage />,
         element: (
           <Suspense>
             <MLStatsPage />
+          </Suspense>
+        ),
+      },
+      {
+        // 🆕 "Открытия" — праздничные плейлисты и новые рекомендации
+        id: 'ml-discoveries',
+        path: '/ml/discoveries',
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense>
+            <MLDiscoveriesPage />
+          </Suspense>
+        ),
+      },
+      {
+        // 🔒 "Встречали в Моей Волне" — артисты из истории с лайками
+        id: 'ml-my-wave-encounters',
+        path: '/ml/my-wave-encounters',
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense>
+            <MyWaveEncountersPage />
+          </Suspense>
+        ),
+      },
+      {
+        // 🔒 "В стиле" — все лайкнутые артисты
+        id: 'ml-in-style-artists',
+        path: '/ml/in-style-artists',
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense>
+            <InStyleArtistsPage />
+          </Suspense>
+        ),
+      },
+      {
+        id: 'shared-listens',
+        path: '/ml/shared-listens/:playlistId?',
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense>
+            <SharedListensPage />
           </Suspense>
         ),
       },
@@ -217,6 +318,26 @@ export const router = createHashRouter([
         ),
       },
       {
+        id: 'saved-playlist',
+        path: '/library/playlists/saved/:playlistType/:playlistId',
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense>
+            <SavedPlaylistPage />
+          </Suspense>
+        ),
+      },
+      {
+        id: 'audiobook-author',
+        path: '/audiobooks/author/:authorId/:authorName?',
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense>
+            <AudiobookAuthor />
+          </Suspense>
+        ),
+      },
+      {
         id: 'podcasts',
         path: ROUTES.LIBRARY.PODCASTS,
         errorElement: <ErrorPage />,
@@ -267,6 +388,26 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={<HomeFallback />}>
             <WrappedPage />
+          </Suspense>
+        ),
+      },
+      {
+        id: 'history',
+        path: '/history',
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense fallback={<SongListFallback />}>
+            <HistoryPage />
+          </Suspense>
+        ),
+      },
+      {
+        id: 'search',
+        path: '/search',
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense fallback={<HomeFallback />}>
+            <SearchPage />
           </Suspense>
         ),
       },

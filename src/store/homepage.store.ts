@@ -21,14 +21,16 @@ export interface HomepageSection {
 
 export interface HomepageSettings {
   sections: HomepageSection[]
+  newDesignEnabled: boolean  // 🆕 Feature Flag для нового дизайна
 }
 
 interface HomepageSettingsStore {
   settings: HomepageSettings
-  
+
   // Actions
   setSectionEnabled: (id: SectionType, enabled: boolean) => void
-  setSectionOrder: (id: SectionType, order: number) => void
+  setSectionOrder: (ids: SectionType[]) => void  // Передаём массив ID в новом порядке
+  setNewDesignEnabled: (enabled: boolean) => void  // 🆕 Переключатель нового дизайна
   resetToDefaults: () => void
 }
 
@@ -36,7 +38,7 @@ const defaultSections: HomepageSection[] = [
   { id: 'genres', title: 'Жанры', enabled: true, order: 0 },
   { id: 'artistRadio', title: 'В стиле', enabled: true, order: 1 },
   { id: 'newReleases', title: 'Новинки подписок', enabled: true, order: 2 },
-  { id: 'globalCharts', title: 'Global Charts', enabled: true, order: 3 },
+  { id: 'globalCharts', title: 'Мировые чарты', enabled: true, order: 3 },
   { id: 'recentlyPlayed', title: 'Недавно прослушанные', enabled: true, order: 4 },
   { id: 'mostPlayed', title: 'Наиболее прослушиваемые', enabled: true, order: 5 },
   { id: 'recentlyAdded', title: 'Недавно добавлено', enabled: true, order: 6 },
@@ -45,6 +47,7 @@ const defaultSections: HomepageSection[] = [
 
 const defaultSettings: HomepageSettings = {
   sections: defaultSections,
+  newDesignEnabled: false,  // 🆕 По умолчанию старый дизайн
 }
 
 export const useHomepageSettingsStore = createWithEqualityFn<HomepageSettingsStore>()(
@@ -63,13 +66,22 @@ export const useHomepageSettingsStore = createWithEqualityFn<HomepageSettingsSto
             })
           },
 
-          setSectionOrder: (id, order) => {
+          setSectionOrder: (ids: SectionType[]) => {
             set((state) => {
-              // Находим секцию и обновляем её order
-              const section = state.settings.sections.find(s => s.id === id)
-              if (section) {
-                section.order = order
-              }
+              // Создаём новую карту порядков на основе переданных ID
+              const orderMap = new Map<SectionType, number>()
+              ids.forEach((id, index) => {
+                orderMap.set(id, index)
+              })
+              
+              // Обновляем order для каждой секции
+              state.settings.sections.forEach((section) => {
+                const newOrder = orderMap.get(section.id as SectionType)
+                if (newOrder !== undefined) {
+                  section.order = newOrder
+                }
+              })
+              
               // Сортируем секции по order
               state.settings.sections.sort((a, b) => a.order - b.order)
             })
@@ -77,6 +89,13 @@ export const useHomepageSettingsStore = createWithEqualityFn<HomepageSettingsSto
 
           resetToDefaults: () => {
             set({ settings: defaultSettings })
+          },
+
+          // 🆕 Переключатель нового дизайна
+          setNewDesignEnabled: (enabled) => {
+            set((state) => {
+              state.settings.newDesignEnabled = enabled
+            })
           },
         })),
         {
@@ -106,5 +125,6 @@ export const useHomepageSettings = () => useHomepageSettingsStore((state) => sta
 export const useHomepageSettingsActions = () => useHomepageSettingsStore((state) => ({
   setSectionEnabled: state.setSectionEnabled,
   setSectionOrder: state.setSectionOrder,
+  setNewDesignEnabled: state.setNewDesignEnabled,  // 🆕
   resetToDefaults: state.resetToDefaults,
 }))

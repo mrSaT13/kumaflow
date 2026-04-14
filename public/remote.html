@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f0f1a">
+  <title>KumaFlow Remote</title>
+  <style>
+    :root { --bg: #0f0f1a; --bg-surface: rgba(26,26,46,0.8); --bg-elevated: rgba(22,33,62,0.9); --text: #f0f0f0; --text-secondary: #a0a0a0; --accent: #6366f1; --accent-hover: #818cf8; --accent-rgb: 99,102,241; --success: #22c55e; --error: #ef4444; --border: rgba(255,255,255,0.08); --glass: rgba(255,255,255,0.05); }
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html,body { height:100%; overflow:hidden; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,sans-serif; background:linear-gradient(135deg,var(--bg) 0%,#1a1a2e 50%,#16213e 100%); background-attachment:fixed; color:var(--text); display:flex; flex-direction:column; position:relative; }
+    .bg-blur { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+    .bg-blur img { width:100%; height:100%; object-fit:cover; filter:blur(60px) saturate(1.5) brightness(0.4); transform:scale(1.2); opacity:0.6; transition:opacity 0.5s ease; }
+    .glass { background:var(--glass); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid var(--border); }
+    .header { padding:12px 16px; display:flex; align-items:center; justify-content:space-between; position:relative; z-index:1; }
+    .logo { font-size:14px; font-weight:700; letter-spacing:-0.02em; }
+    .status { font-size:10px; color:var(--text-secondary); display:flex; align-items:center; gap:5px; text-transform:uppercase; letter-spacing:0.05em; }
+    .status-dot { width:6px; height:6px; border-radius:50%; background:var(--error); transition:background 0.3s; }
+    .status.connected .status-dot { background:var(--success); box-shadow:0 0 6px var(--success); }
+    .main { flex:1; display:flex; flex-direction:column; align-items:center; padding:16px; overflow-y:auto; gap:16px; max-width:480px; width:100%; margin:0 auto; position:relative; z-index:1; }
+    .cover-container { width:100%; max-width:320px; aspect-ratio:1/1; border-radius:16px; overflow:hidden; background:rgba(var(--accent-rgb),0.1); display:flex; align-items:center; justify-content:center; box-shadow:0 12px 40px rgba(0,0,0,0.5), 0 0 80px rgba(var(--accent-rgb),0.15); }
+    .cover-container img { width:100%; height:100%; object-fit:cover; }
+    .cover-placeholder { font-size:80px; opacity:0.3; }
+    .track-info { width:100%; text-align:center; display:flex; flex-direction:column; gap:2px; }
+    .track-title { font-size:18px; font-weight:700; letter-spacing:-0.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .track-album { font-size:13px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .track-artist { font-size:13px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .playback-controls { display:flex; align-items:center; justify-content:center; gap:20px; width:100%; }
+    .btn { background:transparent; border:none; color:var(--text); border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.15s; }
+    .btn:active { transform:scale(0.9); }
+    .btn-icon { width:44px; height:44px; }
+    .btn-icon svg { width:24px; height:24px; fill:currentColor; }
+    .btn-play { width:56px; height:56px; background:var(--accent); color:white; box-shadow:0 4px 20px rgba(var(--accent-rgb),0.4); }
+    .btn-play svg { width:26px; height:26px; }
+    .btn-play:active { background:var(--accent-hover); transform:scale(0.95); }
+    .extra-controls { display:flex; justify-content:center; gap:24px; }
+    .btn-extra { background:transparent; border:none; color:var(--text-secondary); padding:8px; border-radius:8px; cursor:pointer; transition:all 0.15s; display:flex; align-items:center; justify-content:center; }
+    .btn-extra svg { width:20px; height:20px; fill:currentColor; }
+    .btn-extra.active { color:var(--accent); }
+    .btn-extra:active { background:var(--bg-elevated); }
+    .slider-container { width:100%; display:flex; flex-direction:column; gap:8px; }
+    .slider-labels { display:flex; justify-content:space-between; font-size:11px; color:var(--text-secondary); font-variant-numeric:tabular-nums; }
+    .slider-wrapper { display:flex; align-items:center; gap:10px; }
+    .slider-icon { color:var(--text-secondary); flex-shrink:0; }
+    .slider-icon svg { width:18px; height:18px; fill:currentColor; }
+    input[type="range"] { -webkit-appearance:none; appearance:none; width:100%; height:6px; background:linear-gradient(90deg,var(--accent) 0%,var(--accent-hover) 100%); border-radius:3px; outline:none; cursor:pointer; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; background:white; border:2px solid var(--accent); border-radius:50%; cursor:pointer; transition:transform 0.15s,box-shadow 0.15s; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+    input[type="range"]::-webkit-slider-thumb:active { transform:scale(1.3); box-shadow:0 2px 12px rgba(var(--accent-rgb),0.5); }
+    .volume-label { font-size:11px; font-weight:600; color:var(--text-secondary); min-width:28px; text-align:right; flex-shrink:0; }
+    .queue-btn { position:fixed; bottom:20px; right:20px; width:48px; height:48px; border-radius:50%; background:var(--accent); color:white; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(var(--accent-rgb),0.4); z-index:10; transition:transform 0.2s; }
+    .queue-btn:active { transform:scale(0.9); }
+    .queue-btn svg { width:24px; height:24px; fill:currentColor; }
+    .queue-panel { position:fixed; bottom:80px; right:16px; width:calc(100% - 32px); max-width:400px; max-height:60vh; border-radius:16px; overflow:hidden; z-index:10; display:none; flex-direction:column; }
+    .queue-panel.visible { display:flex; }
+    .queue-header { padding:12px 16px; font-weight:600; font-size:14px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+    .queue-list { overflow-y:auto; max-height:50vh; }
+    .queue-item { padding:10px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; font-size:13px; }
+    .queue-item.active { color:var(--accent); font-weight:600; }
+    .queue-item-num { color:var(--text-secondary); min-width:24px; }
+    .queue-item-title { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    @media (max-height:700px) { .cover-container { max-width:260px; } .main { gap:12px; padding:12px; } }
+    @media (max-width:360px) { .cover-container { max-width:220px; } .btn-play { width:50px; height:50px; } }
+  </style>
+</head>
+<body>
+  <div class="bg-blur" id="bgBlur"></div>
+  <div class="header glass"><div class="logo">KumaFlow</div><div class="status" id="status"><span class="status-dot"></span><span id="statusText">Connecting...</span></div></div>
+  <div class="main">
+    <div class="cover-container" id="coverContainer"><div class="cover-placeholder"></div></div>
+    <div class="track-info">
+      <div class="track-title" id="trackTitle">No track playing</div>
+      <div class="track-album" id="trackAlbum"></div>
+      <div class="track-artist" id="trackArtist"></div>
+    </div>
+    <div class="extra-controls" style="margin-bottom:8px;">
+      <button class="btn-extra" id="likeBtn" onclick="send('like')" title="Like"><svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></button>
+      <button class="btn-extra" id="dislikeBtn" onclick="send('dislike')" title="Dislike"><svg viewBox="0 0 24 24"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/></svg></button>
+    </div>
+    <div class="playback-controls">
+      <button class="btn btn-icon" onclick="send('previous')" title="Previous"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
+      <button class="btn btn-play" id="playBtn" onclick="send('toggle')" title="Play/Pause"><svg id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg id="pauseIcon" viewBox="0 0 24 24" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg></button>
+      <button class="btn btn-icon" onclick="send('next')" title="Next"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+    </div>
+    <div class="extra-controls">
+      <button class="btn-extra" id="shuffleBtn" onclick="send('shuffle')" title="Shuffle"><svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
+      <button class="btn-extra" id="repeatBtn" onclick="send('repeat')" title="Repeat"><svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg></button>
+    </div>
+    <div class="slider-container">
+      <input type="range" id="positionSlider" min="0" max="100" value="0" step="0.1">
+      <div class="slider-labels"><span id="currentTime">0:00</span><span id="duration">0:00</span></div>
+    </div>
+    <div class="slider-container">
+      <div class="slider-wrapper">
+        <span class="slider-icon"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg></span>
+        <input type="range" id="volumeSlider" min="0" max="100" value="50">
+        <span class="volume-label" id="volumeLabel">50</span>
+      </div>
+    </div>
+  </div>
+  <button class="queue-btn" onclick="toggleQueue()" title="Queue"><svg viewBox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg></button>
+  <div class="queue-panel glass" id="queuePanel"><div class="queue-header"><span>Очередь воспроизведения</span><button class="btn-extra" onclick="toggleQueue()" style="padding:4px"><svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button></div><div class="queue-list" id="queueList"><div class="queue-item" style="justify-content:center;color:var(--text-secondary)">Загрузка очереди...</div></div></div>
+  <script>
+    let ws; let currentState = { isPlaying:false, title:'', artist:'', album:'', coverArt:'', duration:0, progress:0, volume:50, isShuffle:false, repeatMode:'off' }; let updateInterval; let queueVisible = false;
+    function connect() { const wsUrl = `ws://${window.location.hostname}:${window.location.port}/remote-ws`; ws = new WebSocket(wsUrl); ws.onopen = () => { console.log('[Remote] Connected'); document.getElementById('status').classList.add('connected'); document.getElementById('statusText').textContent = 'Connected'; send('get-state'); if (updateInterval) clearInterval(updateInterval); updateInterval = setInterval(updateProgress, 1000); }; ws.onmessage = (e) => { try { handleMessage(JSON.parse(e.data)); } catch(err) { console.error('[Remote] Parse:', err); } }; ws.onclose = () => { console.log('[Remote] Disconnected'); document.getElementById('status').classList.remove('connected'); document.getElementById('statusText').textContent = 'Reconnecting...'; if (updateInterval) clearInterval(updateInterval); setTimeout(connect, 3000); }; ws.onerror = () => { document.getElementById('status').classList.remove('connected'); document.getElementById('statusText').textContent = 'Error'; }; }
+    function handleMessage(msg) { if (msg.event === 'state-update' && msg.data) { currentState = { ...currentState, ...msg.data }; updateUI(); } if (msg.event === 'queue-update' && msg.data) updateQueue(msg.data); }
+    function updateUI() {
+      const coverEl = document.getElementById('coverContainer');
+      if (currentState.coverArt) {
+        let coverUrl = currentState.coverArt;
+        if (coverUrl.startsWith('/')) coverUrl = `http://${window.location.host}${coverUrl}`;
+        const bgBlur = document.getElementById('bgBlur');
+        const existingImg = coverEl.querySelector('img');
+        if (!existingImg || existingImg.src !== coverUrl) {
+          const img = new Image(); img.crossOrigin = 'anonymous';
+          img.onload = () => { bgBlur.innerHTML = ''; bgBlur.appendChild(img.cloneNode()); coverEl.innerHTML = ''; coverEl.appendChild(img); };
+          img.onerror = () => { bgBlur.innerHTML = ''; coverEl.innerHTML = '<div class="cover-placeholder">🎵</div>'; };
+          img.src = coverUrl; img.alt = 'Cover';
+        }
+      } else { document.getElementById('bgBlur').innerHTML = ''; coverEl.innerHTML = '<div class="cover-placeholder">🎵</div>'; }
+      document.getElementById('trackTitle').textContent = currentState.title || 'No track playing';
+      document.getElementById('trackAlbum').textContent = currentState.album || '';
+      document.getElementById('trackArtist').textContent = currentState.artist || '';
+      document.getElementById('playIcon').style.display = currentState.isPlaying ? 'none' : 'block';
+      document.getElementById('pauseIcon').style.display = currentState.isPlaying ? 'block' : 'none';
+      const dur = currentState.duration || 0; const prog = currentState.progress || 0;
+      if (dur > 0) { const pct = Math.min(100, (prog / dur) * 100); document.getElementById('positionSlider').value = pct; document.getElementById('currentTime').textContent = formatTime(prog); document.getElementById('duration').textContent = formatTime(dur); }
+      else { document.getElementById('positionSlider').value = 0; document.getElementById('currentTime').textContent = '0:00'; document.getElementById('duration').textContent = '0:00'; }
+      const vol = Math.round(currentState.volume || 0); document.getElementById('volumeSlider').value = vol; document.getElementById('volumeLabel').textContent = vol;
+      document.getElementById('shuffleBtn').classList.toggle('active', !!currentState.isShuffle);
+      document.getElementById('repeatBtn').classList.toggle('active', currentState.repeatMode !== 'off');
+      // Обновляем состояние кнопки лайка
+      if (currentState.isLiked) {
+        document.getElementById('likeBtn').classList.add('active');
+        document.getElementById('likeBtn').style.color = 'var(--success)';
+      } else {
+        document.getElementById('likeBtn').classList.remove('active');
+        document.getElementById('likeBtn').style.color = '';
+      }
+    }
+    function updateProgress() { if (currentState.isPlaying && currentState.duration > 0) { currentState.progress += 1; if (currentState.progress > currentState.duration) currentState.progress = 0; document.getElementById('positionSlider').value = Math.min(100, (currentState.progress / currentState.duration) * 100); document.getElementById('currentTime').textContent = formatTime(currentState.progress); } }
+    function formatTime(s) { const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return `${m}:${sec.toString().padStart(2, '0')}`; }
+    function send(event, data) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ event, data })); }
+    function toggleQueue() { queueVisible = !queueVisible; document.getElementById('queuePanel').classList.toggle('visible', queueVisible); if (queueVisible) send('get-queue'); }
+    function updateQueue(queue) { const list = document.getElementById('queueList'); if (!queue || queue.length === 0) { list.innerHTML = '<div class="queue-item" style="justify-content:center;color:var(--text-secondary)">Очередь пуста</div>'; return; } list.innerHTML = queue.map((item, i) => `<div class="queue-item ${item.active ? 'active' : ''}"><span class="queue-item-num">${i + 1}</span><span class="queue-item-title">${item.title || 'Unknown'} — ${item.artist || ''}</span></div>`).join(''); }
+    document.getElementById('positionSlider').addEventListener('input', (e) => { send('position', { position: (parseFloat(e.target.value) / 100) * currentState.duration }); });
+    document.getElementById('volumeSlider').addEventListener('input', (e) => { const v = parseInt(e.target.value); document.getElementById('volumeLabel').textContent = v; send('volume', { value: v }); });
+    connect();
+  </script>
+</body>
+</html>

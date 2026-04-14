@@ -126,3 +126,10 @@
   0%, 100% { opacity: 0.6; }
   50% { opacity: 1; }
 }
+
+.lastUpdated {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.75rem;
+  font-weight: 400;
+  margin-top: 4px;
+}

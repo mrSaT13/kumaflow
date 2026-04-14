@@ -46,7 +46,7 @@ function queryParams() {
   }
 }
 
-function getUrl(path: string, options?: QueryType) {
+export function getUrl(path: string, options?: QueryType) {
   const serverUrl = useAppStore.getState().data.url
   const params = new URLSearchParams(queryParams())
 

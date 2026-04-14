@@ -40,6 +40,7 @@ import { manageMediaSession } from '@/utils/setMediaSession'
 import { trackSeekForward, trackSeekBackward, trackRepeatModeEnabled } from '@/service/ml-event-tracker'
 import { SleepTimerButton } from './sleep-timer-button'
 import { AutoDJButton } from './auto-dj-button'
+import { DLNACastButton } from './dlna-cast-button'
 import { useML } from '@/store/ml.store'
 
 interface PlayerControlsProps {
@@ -248,9 +249,10 @@ export function PlayerControls({
         </PlayerButton>
       )}
       
-      {/* ПРАВАЯ СТОРОНА - Like, Дизлайк */}
+      {/* ПРАВАЯ СТОРОНА - Like, Дизлайк, DLNA */}
       {isSong && (
         <>
+          <DLNACastButton />
           <PlayerButton
             disabled={!song}
             onClick={handleLike}

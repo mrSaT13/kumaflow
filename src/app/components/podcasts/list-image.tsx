@@ -3,13 +3,18 @@ import { LazyLoadImage } from 'react-lazy-load-image-component'
 import { Podcast } from '@/types/responses/podcasts'
 
 interface ListImageProps {
-  podcast: Podcast
+  podcast: Podcast & { isLocal?: boolean; imageUrl?: string; coverArt?: string }
 }
 
 const placeholderSrc = '/default_podcast_art.png'
 
 export function PodcastListImage({ podcast }: ListImageProps) {
-  const [imageSrc, setImageSrc] = useState(podcast.image_url)
+  // Для локальных подкастов используем imageUrl или coverArt
+  const initialSrc = podcast.isLocal 
+    ? (podcast.imageUrl || podcast.coverArt || placeholderSrc)
+    : podcast.image_url
+  
+  const [imageSrc, setImageSrc] = useState(initialSrc)
 
   const handleError = () => {
     setImageSrc(placeholderSrc)

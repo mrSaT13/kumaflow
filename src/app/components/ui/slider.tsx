@@ -58,6 +58,11 @@ const Slider = React.forwardRef<
             variant === 'default' && 'bg-primary',
             variant === 'secondary' && 'bg-secondary-foreground',
           )}
+          style={variant === 'default' && props.style?.['--progress-gradient'] 
+            ? { background: props.style['--progress-gradient'] as string } 
+            : variant === 'default' && props.style?.['--progress-color'] 
+              ? { backgroundColor: props.style['--progress-color'] as string } 
+              : undefined}
           onContextMenu={handleContextMenu}
         />
       </SliderPrimitive.Track>

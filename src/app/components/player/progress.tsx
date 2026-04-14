@@ -18,12 +18,13 @@ import {
   usePlayerProgress,
   usePlayerSonglist,
 } from '@/store/player.store'
-import { usePlaybackSettings } from '@/store/playback.store'
+import { usePlaybackStore } from '@/store/playback.store'
 import { convertSecondsToTime } from '@/utils/convertSecondsToTime'
 import { logger } from '@/utils/logger'
 import { QualityBadge } from './quality-badge'
 import { DotProgress } from '@/app/components/fullscreen/dot-progress'
 import { SpectrogramProgress } from '@/app/components/fullscreen/spectrogram-progress'
+import { getGenreColor, generateCSSGradient } from '@/utils/genreColors'
 
 interface PlayerProgressProps {
   audioRef: RefObject<HTMLAudioElement>
@@ -42,7 +43,7 @@ export function PlayerProgress({ audioRef }: PlayerProgressProps) {
   const { setProgress, setUpdatePodcastProgress, getCurrentPodcastProgress } =
     usePlayerActions()
   const isScrobbleSentRef = useRef(false)
-  const progressBarType = usePlaybackSettings((state) => state.settings.progressBarType)
+  const progressBarType = usePlaybackStore((state) => state.settings.progressBarType)
 
   // Переключение времени: всего / оставшееся
   const [showRemaining, setShowRemaining] = useState(false)
@@ -177,6 +178,18 @@ export function PlayerProgress({ audioRef }: PlayerProgressProps) {
     return currentDuration >= 3600
   }, [currentDuration])
 
+  // Автоподбор цвета по жанру (градиент)
+  const progressBarGradient = useMemo(() => {
+    if (!usePlaybackStore.getState().settings.autoColorByGenre) {
+      return undefined  // Используем цвет по умолчанию
+    }
+    if (currentSong?.genre) {
+      // Генерируем CSS градиент на основе жанра
+      return generateCSSGradient([currentSong.genre])
+    }
+    return undefined
+  }, [currentSong?.genre])
+
   // Рендерим нужный тип прогресс бара
   const renderProgressBar = () => {
     const commonProps = {
@@ -201,6 +214,7 @@ export function PlayerProgress({ audioRef }: PlayerProgressProps) {
             max={currentDuration}
             step={1}
             className="cursor-pointer w-[32rem]"
+            style={progressBarGradient ? { '--progress-gradient': progressBarGradient } as React.CSSProperties : undefined}
             onValueChange={([value]) => handleSeeking(value)}
             onValueCommit={([value]) => handleSeeked(value)}
             onPointerUp={handleSeekedFallback}

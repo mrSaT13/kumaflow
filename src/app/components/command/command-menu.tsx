@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { SearchIcon } from 'lucide-react'
-import { KeyboardEvent, useCallback, useState } from 'react'
+import { KeyboardEvent, useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useTranslation } from 'react-i18next'
 import { useDebouncedCallback } from 'use-debounce'
@@ -28,18 +29,23 @@ import { CommandPlaylists } from './playlists'
 import { CommandServer } from './server-management'
 import { CommandSongResult } from './song-result'
 import { CommandThemes } from './themes'
+import { getAudiobookshelfApi } from '@/service/audiobookshelf-api'
 
 export type CommandItemProps = {
   runCommand: (command: () => unknown) => void
 }
 
 export default function CommandMenu() {
+  const navigate = useNavigate()
   const { t } = useTranslation()
   const { state: sidebarState } = useMainSidebar()
   const { open, setOpen } = useAppStore((state) => state.command)
 
   const [query, setQuery] = useState('')
   const [pages, setPages] = useState<CommandPages[]>(['HOME'])
+  const [books, setBooks] = useState<any[]>([])  // Результаты поиска книг
+  const [searchingBooks, setSearchingBooks] = useState(false)
+  const api = getAudiobookshelfApi()  // Экземпляр API для использования в рендере
 
   const activePage = pages[pages.length - 1]
   const isHome = activePage === 'HOME'
@@ -68,6 +74,32 @@ export default function CommandMenu() {
   const showAlbumGroup = Boolean(query && albums.length > 0)
   const showArtistGroup = Boolean(query && artists.length > 0)
   const showSongGroup = Boolean(query && songs.length > 0)
+  const showBookGroup = Boolean(query && books.length > 0)
+
+  // Поиск книг параллельно с обычным поиском
+  useEffect(() => {
+    if (!query || byteLength(query) < 3 || !open) {
+      setBooks([])
+      return
+    }
+
+    const searchBooks = async () => {
+      setSearchingBooks(true)
+      try {
+        const foundBooks = await api.searchBooks(query, 10)
+        setBooks(foundBooks || [])
+        console.log('[CommandMenu] Found books:', foundBooks?.length || 0)
+      } catch (error) {
+        console.warn('[CommandMenu] Book search failed:', error)
+        setBooks([])
+      } finally {
+        setSearchingBooks(false)
+      }
+    }
+
+    const timeout = setTimeout(searchBooks, 600)  // Debounce 600ms
+    return () => clearTimeout(timeout)
+  }, [query, open])
 
   useHotkeys(['/', 'mod+f', 'mod+k'], () => setOpen(!open), {
     preventDefault: true,
@@ -98,11 +130,144 @@ export default function CommandMenu() {
   }
 
   function handleSearchChange(value: string) {
+    // Проверяем умный формат ссылок
+    if (value.startsWith('@track:') || value.startsWith('@artist:') || value.startsWith('@album:')) {
+      // Обрабатываем сразу без задержки
+      handleSmartSearch(value)
+      return
+    }
+    
     if (activePage === 'PLAYLISTS') {
       setQuery(value)
     } else {
       debounced(value)
     }
+  }
+
+  // Обработка умных ссылок
+  async function handleSmartSearch(value: string) {
+    console.log('[CommandMenu] Smart search:', value)
+    
+    if (value.startsWith('@track:')) {
+      // Формат: @track:Artist - TrackName
+      const trackInfo = value.replace('@track:', '')
+      const parts = trackInfo.split(' - ')
+      const artist = parts[0]?.trim()
+      const track = parts[1]?.trim()
+
+      if (artist && track) {
+        console.log('[CommandMenu] Searching track:', artist, track)
+        debounced(`${artist} ${track}`)
+        setOpen(false)
+        return
+      }
+    }
+    
+    if (value.startsWith('@artist:')) {
+      // Формат: @artist:ArtistName - ищем ТОЛЬКО артистов
+      const artistName = value.replace('@artist:', '').trim()
+      console.log('[CommandMenu] Searching artist ONLY:', artistName)
+
+      try {
+        const { search3 } = await import('@/service/subsonic-api')
+        // Ищем ТОЛЬКО артистов
+        const results = await search3(artistName, {
+          artistCount: 20,
+          albumCount: 0,
+          songCount: 0
+        })
+
+        console.log('[CommandMenu] Search results:', {
+          artists: results.artists?.length || 0,
+        })
+
+        if (results.artists && results.artists.length > 0) {
+          // Ищем точное совпадение
+          const exactMatch = results.artists.find(a => a.name.toLowerCase() === artistName.toLowerCase())
+          const artist = exactMatch || results.artists[0]
+
+          console.log('[CommandMenu] Found artist:', artist.name, artist.id)
+          // Открываем страницу артиста
+          navigate(`/library/artists/${artist.id}`)
+          setOpen(false)
+          clear()
+          return  // ✅ Важно - не продолжать выполнение!
+        }
+      } catch (error) {
+        console.error('[CommandMenu] Artist search failed:', error)
+      }
+
+      // Fallback: обычный поиск если артист не найден
+      console.log('[CommandMenu] Fallback to regular search')
+      debounced(artistName)
+      return
+    }
+
+    if (value.startsWith('@album:')) {
+      // Формат: @album:AlbumName - ищем только по названию альбома
+      const albumName = value.replace('@album:', '').trim()
+      console.log('[CommandMenu] Searching album:', albumName)
+
+      try {
+        const { search3 } = await import('@/service/subsonic-api')
+        const results = await search3(albumName, { artistCount: 0, albumCount: 20, songCount: 0 })
+
+        if (results.albums && results.albums.length > 0) {
+          // Ищем точное совпадение
+          const exactMatch = results.albums.find(a => a.name.toLowerCase() === albumName.toLowerCase())
+          const album = exactMatch || results.albums[0]
+
+          console.log('[CommandMenu] Found album:', album.name, album.id)
+          // Открываем страницу альбома
+          navigate(`/albums/${album.id}`)
+          setOpen(false)
+          clear()
+          return  // ✅ Важно - не продолжать выполнение!
+        } else {
+          console.warn('[CommandMenu] No albums found for:', albumName)
+        }
+      } catch (error) {
+        console.error('[CommandMenu] Album search failed:', error)
+      }
+
+      // Fallback: обычный поиск если альбом не найден
+      console.log('[CommandMenu] Fallback to regular search')
+      debounced(albumName)
+      return
+    }
+
+    if (value.startsWith('@book:')) {
+      // Формат: @book:BookName - ищем аудиокниги
+      const bookName = value.replace('@book:', '').trim()
+      console.log('[CommandMenu] Searching audiobook:', bookName)
+
+      try {
+        const { getAudiobookshelfApi } = await import('@/service/audiobookshelf-api')
+        const api = getAudiobookshelfApi()
+        const books = await api.searchBooks(bookName, 20)
+
+        console.log('[CommandMenu] Found books:', books.length)
+
+        if (books.length > 0) {
+          // Открываем страницу аудиокниг с результатами поиска
+          // Сохраняем запрос в localStorage для страницы
+          localStorage.setItem('audiobook-search-query', bookName)
+          navigate('/audiobooks?search=' + encodeURIComponent(bookName))
+          setOpen(false)
+          return
+        }
+      } catch (error) {
+        console.error('[CommandMenu] Book search failed:', error)
+      }
+
+      // Fallback: открываем страницу аудиокниг
+      navigate('/audiobooks')
+      setOpen(false)
+      return
+    }
+
+    // Общий fallback: обычный поиск для всего остального
+    debounced(value)
   }
 
   const removeLastPage = useCallback(() => {
@@ -163,6 +328,13 @@ export default function CommandMenu() {
             spellCheck="false"
             onValueChange={(value) => handleSearchChange(value)}
             onKeyDown={handleInputKeyDown}
+            onPaste={(e) => {
+              // Обрабатываем вставку сразу
+              const pastedText = e.clipboardData.getData('text')
+              setTimeout(() => {
+                handleSearchChange(pastedText)
+              }, 100)
+            }}
           />
           <ScrollArea className="max-h-[500px] 2xl:max-h-[700px]">
             <CommandList className="max-h-fit pr-1">
@@ -188,6 +360,70 @@ export default function CommandMenu() {
                   songs={songs}
                   runCommand={runCommand}
                 />
+              )}
+
+              {/* Audiobooks секция */}
+              {showBookGroup && books.length > 0 && (
+                <div className="px-2 py-1.5">
+                  <div className="mb-1 px-2 text-xs font-medium text-muted-foreground">
+                    📚 Аудиокниги
+                  </div>
+                  {books.slice(0, 5).map((book) => {
+                    // book уже распарсен через parseAudiobook — id, title, author, coverUrl готовы
+                    const bookId = book.id || 'unknown'
+                    const title = book.title || 'Без названия'
+                    const author = book.author || 'Неизвестный автор'
+                    const coverUrl = book.coverUrl
+
+                    return (
+                      <button
+                        key={bookId}
+                        className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-accent cursor-pointer transition-colors"
+                        onClick={() => {
+                          console.log('[CommandMenu] Navigating to book:', bookId, title)
+                          navigate(`/audiobooks/${bookId}`)
+                          setOpen(false)
+                        }}
+                      >
+                        {/* Обложка */}
+                        <div className="flex-shrink-0 w-10 h-10 rounded overflow-hidden bg-secondary">
+                          {coverUrl ? (
+                            <img 
+                              src={coverUrl} 
+                              alt={title}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                // Fallback если обложка не загрузилась
+                                e.currentTarget.style.display = 'none'
+                                const parent = e.currentTarget.parentElement
+                                if (parent) {
+                                  parent.innerHTML = '<div class="w-full h-full flex items-center justify-center text-lg">📖</div>'
+                                }
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-lg">📖</div>
+                          )}
+                        </div>
+                        {/* Информация */}
+                        <div className="flex-1 text-left min-w-0">
+                          <div className="font-medium text-foreground truncate">
+                            {title}
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {author}
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {searchingBooks && (
+                <div className="px-2 py-1.5 text-xs text-muted-foreground text-center">
+                  🔍 Поиск книг...
+                </div>
               )}
 
               {showArtistGroup && (

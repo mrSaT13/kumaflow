@@ -8,7 +8,6 @@ import {
   Root,
 } from '@/app/components/settings/section'
 import { LrcLib } from './lrclib'
-import { Audiobookshelf } from './audiobookshelf'
 
 export function Services() {
   const { t } = useTranslation()
@@ -24,7 +23,6 @@ export function Services() {
       <ContentSeparator className="mb-2" />
       <Content>
         <LrcLib />
-        <Audiobookshelf />
       </Content>
     </Root>
   )

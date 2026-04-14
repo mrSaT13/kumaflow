@@ -24,6 +24,8 @@ const {
   SERVER_URL,
   HIDE_SERVER,
   HIDE_RADIOS_SECTION,
+  HIDE_AUDIOBOOKS_SECTION,
+  HIDE_PLAYLISTS_SECTION,
   SERVER_TYPE,
   IMAGE_CACHE_ENABLED,
 } = window
@@ -162,6 +164,10 @@ export const useAppStore = createWithEqualityFn<IAppContext>()(
             lockUser: hasValidConfig,
             songCount: null,
           },
+          remoteControl: {
+            enabled: false,
+            port: 4333,
+          },
           accounts: {
             discord: {
               rpcEnabled: false,
@@ -225,6 +231,78 @@ export const useAppStore = createWithEqualityFn<IAppContext>()(
                 state.pages.hideRadiosSection = value
               })
             },
+            hideAudiobooksSection: HIDE_AUDIOBOOKS_SECTION ?? false,
+            setHideAudiobooksSection: (value) => {
+              set((state) => {
+                state.pages.hideAudiobooksSection = value
+              })
+            },
+            hideLocalSection: false,
+            setHideLocalSection: (value) => {
+              set((state) => {
+                state.pages.hideLocalSection = value
+              })
+            },
+            hidePlaylistsSection: HIDE_PLAYLISTS_SECTION ?? false,
+            setHidePlaylistsSection: (value) => {
+              set((state) => {
+                state.pages.hidePlaylistsSection = value
+              })
+            },
+            hideArtistsSection: false,
+            setHideArtistsSection: (value) => {
+              set((state) => {
+                state.pages.hideArtistsSection = value
+              })
+            },
+            hideTracksSection: false,
+            setHideTracksSection: (value) => {
+              set((state) => {
+                state.pages.hideTracksSection = value
+              })
+            },
+            hideAlbumsSection: false,
+            setHideAlbumsSection: (value) => {
+              set((state) => {
+                state.pages.hideAlbumsSection = value
+              })
+            },
+            hideFavoritesSection: false,
+            setHideFavoritesSection: (value) => {
+              set((state) => {
+                state.pages.hideFavoritesSection = value
+              })
+            },
+            hideGenresSection: false,
+            setHideGenresSection: (value) => {
+              set((state) => {
+                state.pages.hideGenresSection = value
+              })
+            },
+            hidePodcastsSection: false,
+            setHidePodcastsSection: (value) => {
+              set((state) => {
+                state.pages.hidePodcastsSection = value
+              })
+            },
+            sidebarSectionOrder: [
+              'artists',
+              'songs',
+              'albums',
+              'favorites',
+              'playlists',
+              'podcasts',
+              'radios',
+              'genres',
+              'audiobooks',
+              'local',
+              'cache',
+            ] as string[],
+            setSidebarSectionOrder: (order: string[]) => {
+              set((state) => {
+                state.pages.sidebarSectionOrder = order
+              })
+            },
             artistsPageViewType: 'table',
             setArtistsPageViewType: (type) => {
               set((state) => {
@@ -235,6 +313,18 @@ export const useAppStore = createWithEqualityFn<IAppContext>()(
             setImagesCacheLayerEnabled: (value) => {
               set((state) => {
                 state.pages.imagesCacheLayerEnabled = value
+              })
+            },
+            showCachePage: true,
+            setShowCachePage: (value) => {
+              set((state) => {
+                state.pages.showCachePage = value
+              })
+            },
+            autoCacheStarred: true,
+            setAutoCacheStarred: (value) => {
+              set((state) => {
+                state.pages.autoCacheStarred = value
               })
             },
           },
@@ -307,10 +397,22 @@ export const useAppStore = createWithEqualityFn<IAppContext>()(
                 state.data.password = value
               })
             },
+            setRemoteEnabled: (value: boolean) => {
+              set((state) => {
+                state.remoteControl.enabled = value
+              })
+              console.log('[AppStore] Remote Control enabled:', value)
+            },
+            setRemotePort: (value: number) => {
+              set((state) => {
+                state.remoteControl.port = value
+              })
+              console.log('[AppStore] Remote Control port:', value)
+            },
             saveConfig: async ({ url, username, password }: IServerConfig) => {
               // Получаем текущий аккаунт
               const currentAccount = useAccountsStore.getState().getCurrentAccount()
-              
+
               // try both token and password methods
               for (const authType of [AuthType.TOKEN, AuthType.PASSWORD]) {
                 const token =

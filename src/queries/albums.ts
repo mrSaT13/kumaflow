@@ -4,9 +4,14 @@ import { subsonic } from '@/service/subsonic'
 const emptyResponse = { albums: [], nextOffset: null, albumsCount: 0 }
 
 export async function getArtistDiscography(artistId: string) {
+  console.log('[getArtistDiscography] Fetching artist:', artistId)
   const response = await subsonic.artists.getOne(artistId)
+  console.log('[getArtistDiscography] Response:', response ? `${response.album?.length || 0} albums` : 'null/undefined')
 
-  if (!response || !response.album) return emptyResponse
+  if (!response || !response.album) {
+    console.warn('[getArtistDiscography] No albums found! Response:', response)
+    return emptyResponse
+  }
 
   return {
     albums: response.album,

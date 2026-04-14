@@ -29,6 +29,21 @@ export interface ExternalApiSettings {
   // Apple Music
   appleMusicEnabled: boolean
   appleMusicCountry: CountryCode // Страна для локализации
+
+  // LLM
+  llmEnabled: boolean
+  llmProvider: 'lm-studio' | 'qwen' | 'ollama' | 'none'
+  llmLmStudioUrl: string
+  llmApiKey: string  // Общий API key для LM Studio
+  llmQwenApiKey: string
+  llmQwenModel: string
+  llmOllamaUrl: string
+  llmOllamaModel: string
+  llmAllowMLAccess: boolean
+  llmAllowOrchestratorAccess: boolean
+  llmAllowPlaylistAccess: boolean
+  llmAllowPlayerAccess: boolean
+  llmCustomPrompt: string
 }
 
 interface ExternalApiStore {
@@ -54,6 +69,22 @@ interface ExternalApiStore {
   setAppleMusicEnabled: (enabled: boolean) => void
   setAppleMusicCountry: (country: CountryCode) => void
 
+  // LLM Actions
+  setLlmEnabled: (enabled: boolean) => void
+  setLlmProvider: (provider: 'lm-studio' | 'qwen' | 'ollama' | 'none') => void
+  setLlmLmStudioUrl: (url: string) => void
+  setLlmModel: (model: string) => void
+  setLlmApiKey: (key: string) => void
+  setLlmQwenApiKey: (key: string) => void
+  setLlmQwenModel: (model: string) => void
+  setLlmOllamaUrl: (url: string) => void
+  setLlmOllamaModel: (model: string) => void
+  setLlmAllowMLAccess: (enabled: boolean) => void
+  setLlmAllowOrchestratorAccess: (enabled: boolean) => void
+  setLlmAllowPlaylistAccess: (enabled: boolean) => void
+  setLlmAllowPlayerAccess: (enabled: boolean) => void
+  setLlmCustomPrompt: (prompt: string) => void
+
   resetSettings: () => void
 
   // Initialize services
@@ -75,6 +106,20 @@ const defaultSettings: ExternalApiSettings = {
   discogsEnabled: false,
   appleMusicEnabled: false,
   appleMusicCountry: 'RU', // Россия по умолчанию
+
+  // LLM
+  llmEnabled: false,
+  llmProvider: 'none',
+  llmLmStudioUrl: 'http://localhost:1234',
+  llmQwenApiKey: '',
+  llmQwenModel: 'qwen-max',
+  llmOllamaUrl: 'http://localhost:11434',
+  llmOllamaModel: 'llama3',
+  llmAllowMLAccess: true,
+  llmAllowOrchestratorAccess: true,
+  llmAllowPlaylistAccess: true,
+  llmAllowPlayerAccess: true,
+  llmCustomPrompt: '',
 }
 
 export const useExternalApiStore = createWithEqualityFn<ExternalApiStore>()(
@@ -195,8 +240,92 @@ export const useExternalApiStore = createWithEqualityFn<ExternalApiStore>()(
             set((state) => {
               state.settings.appleMusicCountry = country
             })
-            // Обновляем страну в сервисе
             appleMusicService.setCountry(country)
+          },
+
+          // LLM
+          setLlmEnabled: (enabled: boolean) => {
+            set((state) => {
+              state.settings.llmEnabled = enabled
+            })
+          },
+
+          setLlmProvider: (provider: 'lm-studio' | 'qwen' | 'ollama' | 'none') => {
+            set((state) => {
+              state.settings.llmProvider = provider
+            })
+          },
+
+          setLlmLmStudioUrl: (url: string) => {
+            set((state) => {
+              state.settings.llmLmStudioUrl = url
+            })
+          },
+
+          setLlmModel: (model: string) => {
+            set((state) => {
+              state.settings.llmModel = model
+            })
+          },
+
+          setLlmApiKey: (key: string) => {
+            set((state) => {
+              state.settings.llmApiKey = key
+            })
+          },
+
+          setLlmQwenApiKey: (key: string) => {
+            set((state) => {
+              state.settings.llmQwenApiKey = key
+            })
+          },
+
+          setLlmQwenModel: (model: string) => {
+            set((state) => {
+              state.settings.llmQwenModel = model
+            })
+          },
+
+          setLlmOllamaUrl: (url: string) => {
+            set((state) => {
+              state.settings.llmOllamaUrl = url
+            })
+          },
+
+          setLlmOllamaModel: (model: string) => {
+            set((state) => {
+              state.settings.llmOllamaModel = model
+            })
+          },
+
+          setLlmAllowMLAccess: (enabled: boolean) => {
+            set((state) => {
+              state.settings.llmAllowMLAccess = enabled
+            })
+          },
+
+          setLlmAllowOrchestratorAccess: (enabled: boolean) => {
+            set((state) => {
+              state.settings.llmAllowOrchestratorAccess = enabled
+            })
+          },
+
+          setLlmAllowPlaylistAccess: (enabled: boolean) => {
+            set((state) => {
+              state.settings.llmAllowPlaylistAccess = enabled
+            })
+          },
+
+          setLlmAllowPlayerAccess: (enabled: boolean) => {
+            set((state) => {
+              state.settings.llmAllowPlayerAccess = enabled
+            })
+          },
+
+          setLlmCustomPrompt: (prompt: string) => {
+            set((state) => {
+              state.settings.llmCustomPrompt = prompt
+            })
           },
 
           resetSettings: () => {

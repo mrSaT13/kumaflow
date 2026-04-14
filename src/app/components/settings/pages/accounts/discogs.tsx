@@ -65,7 +65,7 @@ export function DiscogsSettings() {
   }
 
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader>
         <CardTitle>Discogs</CardTitle>
         <CardDescription>
@@ -142,11 +142,11 @@ export function DiscogsSettings() {
         </div>
 
         {/* Buttons */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button onClick={handleSave} variant="default">
             Сохранить
           </Button>
-          <Button onClick={handleTestConnection} variant="secondary">
+          <Button onClick={handleTestConnection} variant="secondary" className="whitespace-nowrap">
             Проверить подключение
           </Button>
         </div>

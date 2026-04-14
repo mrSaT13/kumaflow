@@ -38,6 +38,7 @@ export function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false,
+      devTools: true,  // Включаем DevTools для отладки
     },
   })
 

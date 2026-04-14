@@ -1,25 +1,42 @@
 import { Link } from 'react-router-dom'
 import { CoverImage } from '@/app/components/table/cover-image'
+import { ExplanationTooltip } from '@/app/components/song/explanation-tooltip'
 import { cn } from '@/lib/utils'
 import { ROUTES } from '@/routes/routesList'
 import { useMainDrawerState } from '@/store/player.store'
 import { ISong } from '@/types/responses/song'
 
 export function TableSongTitle({ song }: { song: ISong }) {
+  // Для аудиокниг используем прямой URL обложки
+  const isAudiobook = (song as any).isAudiobook
+  const coverUrl = (song as any).coverUrl
+
   return (
-    <div className="flex w-full gap-2 items-center">
-      <CoverImage
-        coverArt={song.coverArt}
-        coverArtType="song"
-        altText={song.title}
-      />
-      <div className="flex flex-col w-full justify-center truncate">
-        <span className="font-medium truncate">{song.title}</span>
-        <div className="flex items-center truncate">
-          <TableArtists song={song} />
+    <ExplanationTooltip song={song}>
+      <div className="flex w-full gap-2 items-center cursor-help">
+        {isAudiobook && coverUrl ? (
+          <img
+            src={coverUrl}
+            alt={song.title}
+            className="w-10 h-10 rounded object-cover flex-shrink-0"
+            width="40"
+            height="40"
+          />
+        ) : (
+          <CoverImage
+            coverArt={song.coverArt}
+            coverArtType="song"
+            altText={song.title}
+          />
+        )}
+        <div className="flex flex-col w-full justify-center truncate">
+          <span className="font-medium truncate">{song.title}</span>
+          <div className="flex items-center truncate">
+            <TableArtists song={song} />
+          </div>
         </div>
       </div>
-    </div>
+    </ExplanationTooltip>
   )
 }
 

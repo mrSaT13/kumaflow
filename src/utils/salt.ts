@@ -1,4 +1,6 @@
-import { MD5 } from 'crypto-js'
+import CryptoJS from 'crypto-js'
+
+const { MD5 } = CryptoJS
 import { AuthType } from '@/types/serverConfig'
 
 export const saltWord = '40n50kuPl4y3r'

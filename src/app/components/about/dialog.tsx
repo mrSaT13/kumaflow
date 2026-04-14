@@ -146,19 +146,29 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
                     </p>
                     {updateInfo.releaseNotes && (
                       <div className="text-xs text-muted-foreground mb-3 max-h-32 overflow-y-auto">
-                        {typeof updateInfo.releaseNotes === 'string' 
-                          ? updateInfo.releaseNotes 
+                        {typeof updateInfo.releaseNotes === 'string'
+                          ? updateInfo.releaseNotes
                           : String(updateInfo.releaseNotes)}
                       </div>
                     )}
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={downloadUpdate}
-                      className="w-full"
-                    >
-                      Скачать и установить
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={downloadUpdate}
+                        className="flex-1"
+                      >
+                        Скачать и установить
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(getAppInfo().releaseUrl, '_blank')}
+                        className="flex-1"
+                      >
+                        Скачать вручную
+                      </Button>
+                    </div>
                   </div>
                 )}
 

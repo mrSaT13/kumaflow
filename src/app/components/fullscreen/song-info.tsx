@@ -7,8 +7,10 @@ import { usePlayerStore } from '@/store/player.store'
 import { ISong } from '@/types/responses/song'
 import { ALBUM_ARTISTS_MAX_NUMBER } from '@/utils/multipleArtists'
 import { FullscreenSongImage } from './song-image'
+import { FullscreenSongExplanation } from './song-explanation'
 
 const MemoFullscreenSongImage = memo(FullscreenSongImage)
+const MemoFullscreenSongExplanation = memo(FullscreenSongExplanation)
 
 export function SongInfo() {
   const currentSong = usePlayerStore((state) => state.songlist.currentSong)
@@ -17,7 +19,12 @@ export function SongInfo() {
     <div className="flex items-center justify-start h-full min-h-full max-h-full gap-4 2xl:gap-6 flex-1 pt-2 overflow-hidden">
       <MemoFullscreenSongImage />
 
-      <div className="flex flex-col w-[66%] max-w-full h-full max-h-[450px] 2xl:max-h-[550px] justify-end text-left overflow-hidden">
+      <div className="flex flex-col w-[66%] max-w-full h-full max-h-[450px] 2xl:max-h-[550px] justify-end text-left overflow-hidden relative">
+        {/* Кнопка объяснений в правом верхнем углу */}
+        <div className="absolute top-0 right-0 z-10">
+          <MemoFullscreenSongExplanation />
+        </div>
+        
         <MarqueeTitle gap="mr-6">
           <h2 className="scroll-m-20 text-4xl 2xl:text-5xl font-bold tracking-tight py-2 2xl:py-3 text-shadow-md">
             {currentSong.title}

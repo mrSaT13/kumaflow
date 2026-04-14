@@ -32,7 +32,7 @@ export default function MLStats() {
   const [artistImages, setArtistImages] = useState<Record<string, string>>({})
   const [artistNames, setArtistNames] = useState<Record<string, string>>({})
   const [artistAlbumCovers, setArtistAlbumCovers] = useState<Record<string, string[]>>({})
-  const [favoriteArtists, setFavoriteArtists] = useState<Array<{ id: string; name: string; starred?: string; songCount?: number }>>([])
+  const [favoriteArtists, setFavoriteArtists] = useState<Array<{ id: string; name: string; starred?: string; songCount?: number; coverArt?: string }>>([])
   const [navidromeStats, setNavidromeStats] = useState({
     lovedTracks: 0,
     totalPlays: 0,
@@ -40,6 +40,24 @@ export default function MLStats() {
   const [showAllFavorites, setShowAllFavorites] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [hasImportedFromNavidrome, setHasImportedFromNavidrome] = useState(false)
+  
+  // ML Patterns (реальное время)
+  const [mlPatterns, setMlPatterns] = useState({
+    temporalPatterns: {
+      morning: { tracks: 0, avgEnergy: 0, topGenre: '-' },
+      day: { tracks: 0, avgEnergy: 0, topGenre: '-' },
+      evening: { tracks: 0, avgEnergy: 0, topGenre: '-' },
+      night: { tracks: 0, avgEnergy: 0, topGenre: '-' },
+    },
+    skipRate: 0,
+    replayRate: 0,
+    diversityScore: 0,
+    likeRate: 0,
+    totalLikes: 0,
+    totalDislikes: 0,
+    actionsLast24h: 0,
+    lastUpdated: new Date(),
+  })
 
   // Подсчитываем статистику
   const totalRatings = Object.entries(ratings).filter(([_, rating]) => rating.like !== null).length
@@ -52,13 +70,14 @@ export default function MLStats() {
       try {
         const { getFavoriteArtists, getStarredSongs } = await import('@/service/subsonic-api')
         
-        // Загружаем артистов
+        // Загружаем артистов с coverArt
         const favorites = await getFavoriteArtists()
-        setFavoriteArtists(favorites.map(a => ({ 
-          id: a.id, 
-          name: a.name, 
+        setFavoriteArtists(favorites.map(a => ({
+          id: a.id,
+          name: a.name,
           starred: a.starred,
-          songCount: a.songCount 
+          songCount: a.songCount,
+          coverArt: a.coverArt  // ← СОХРАНЯЕМ coverArt!
         })))
         console.log('[ML Stats] Loaded favorite artists:', favorites.length)
         
@@ -98,87 +117,71 @@ export default function MLStats() {
       ...favoriteArtists.map(a => a.id),
     ])
 
-    if (allArtistIds.size === 0) return
-
-    async function loadAllArtistInfo() {
+    const loadArtistInfo = async () => {
       const images: Record<string, string> = {}
       const names: Record<string, string> = {}
-      const albumCovers: Record<string, string[]> = {}
+      const mbids: Record<string, string> = {}
 
-      console.log('[ML Stats] Loading info for all artists:', allArtistIds.size)
+      console.log('[ML Stats] Loading images for', allArtistIds.size, 'artists...')
 
-      const { settings } = useExternalApiStore.getState()
-      const lastFmEnabled = settings.lastfmEnabled && settings.lastfmApiKey
-
-      // Загружаем всех артистов
-      for (const artistId of Array.from(allArtistIds)) {
+      // Загружаем ВСЕГДА с сервера (без кэша)
+      let loadedCount = 0
+      for (const artistId of allArtistIds) {
         try {
-          // Сначала проверяем есть ли уже данные
-          if (names[artistId]) continue
-
-          // Загружаем данные из Navidrome
-          const artistData = await subsonic.artists.getOne(artistId)
-          
-          if (!artistData) continue
-
-          // Имя артиста
-          if (artistData.name) {
-            names[artistId] = artistData.name
-            console.log(`[ML Stats] ✅ Name for ${artistId}: ${artistData.name}`)
-          }
-
-          // Обложка артиста
-          if (artistData.coverArt) {
-            images[artistId] = getSimpleCoverArtUrl(artistData.coverArt, 'artist', '300')
-            console.log(`[ML Stats] ✅ Image for ${artistData.name}`)
-          }
-
-          // Обложки альбомов для коллажа (первые 4)
-          if (artistData.album && artistData.album.length > 0) {
-            const covers = artistData.album.slice(0, 4).map(album => {
-              const coverId = album.coverArt || album.id
-              return coverId ? getSimpleCoverArtUrl(coverId, 'album', '200') : undefined
-            }).filter((url): url is string => url !== undefined)
-
-            if (covers.length > 0) {
-              albumCovers[artistId] = covers
-              console.log(`[ML Stats] ✅ ${covers.length} album covers for ${artistData.name}`)
+          const artist = await subsonic.artists.getOne(artistId)
+          if (artist) {
+            // Имя артиста
+            if (artist.name) {
+              names[artistId] = artist.name
+            }
+            
+            // Обложка артиста из Navidrome — используем getSimpleCoverArtUrl
+            if (artist.coverArt) {
+              const { getSimpleCoverArtUrl } = await import('@/api/httpClient')
+              images[artistId] = getSimpleCoverArtUrl(artist.coverArt, 'artist', '300')
+              console.log(`[ML Stats] ✅ ${artist.name} → cover loaded`)
+              loadedCount++
+            }
+            
+            // MBID для Fanart.tv
+            if (artist.musicBrainzId) {
+              mbids[artistId] = artist.musicBrainzId
             }
           }
-
-          // Если нет картинки из Navidrome, пробуем Last.fm по имени
-          if (!images[artistId] && lastFmEnabled && artistData.name) {
-            try {
-              const { lastFmService } = await import('@/service/lastfm-api')
-              
-              if (!lastFmService.isInitialized()) {
-                lastFmService.initialize(settings.lastfmApiKey, settings.lastfmApiSecret)
-              }
-
-              const lastFmInfo = await lastFmService.getArtistInfo(artistData.name)
-              if (lastFmInfo?.image) {
-                images[artistId] = lastFmInfo.image
-                console.log(`[ML Stats] ✅ Last.fm image for ${artistData.name}`)
-              }
-            } catch (error) {
-              // Last.fm не дал картинку
-            }
-          }
-
         } catch (error) {
-          console.error('Failed to load artist info:', artistId, error)
+          console.error('Failed to load artist:', artistId, error)
+        }
+      }
+
+      // Загружаем Fanart.tv HD изображения если включен
+      const { settings } = useExternalApiStore.getState()
+      if (settings.fanartEnabled && settings.fanartApiKey) {
+        console.log('[ML Stats] Fanart.tv enabled, loading HD images...')
+        
+        for (const artistId of Object.keys(names)) {
+          try {
+            if (mbids[artistId]) {
+              const fanartImages = await fanartService.getArtistImages(mbids[artistId])
+              if (fanartImages?.backgrounds?.[0]) {
+                images[artistId] = fanartImages.backgrounds[0]
+                console.log(`[ML Stats] ✅ Fanart.tv HD for ${names[artistId]}`)
+              }
+            }
+          } catch (error) {
+            console.error('Failed to load HD image:', artistId, error)
+          }
         }
       }
 
       // Обновляем состояния
-      setArtistImages(prev => ({ ...prev, ...images }))
-      setArtistNames(prev => ({ ...prev, ...names }))
-      setArtistAlbumCovers(prev => ({ ...prev, ...albumCovers }))
+      setArtistImages(images)
+      setArtistNames(names)
       
-      console.log('[ML Stats] Loaded:', Object.keys(names).length, 'names,', Object.keys(images).length, 'images')
+      console.log('[ML Stats] Loaded:', loadedCount, 'images')
+      console.log('[ML Stats] Final images object:', images)
     }
 
-    loadAllArtistInfo()
+    loadArtistInfo()
   }, [profile.preferredArtists, favoriteArtists])
 
   // Догружаем коллаж для артистов при открытии спойлера
@@ -198,7 +201,7 @@ export default function MLStats() {
       for (const artist of artistsToLoad) {
         try {
           const artistData = await subsonic.artists.getOne(artist.id)
-          
+
           if (artistData?.album && artistData.album.length > 0) {
             const covers = artistData.album.slice(0, 4).map(album => {
               const coverId = album.coverArt || album.id
@@ -219,6 +222,95 @@ export default function MLStats() {
 
     loadMoreCovers()
   }, [showAllFavorites, favoriteArtists, artistAlbumCovers])
+
+  // ВЫЧИСЛЕНИЕ ML ПАТТЕРНОВ (обновляется при каждом изменении ratings)
+  useEffect(() => {
+    function calculateMLPatterns() {
+      const ratingsArray = Object.values(ratings)
+
+      // 1. TEMPORAL PATTERNS (время суток)
+      const temporalPatterns = {
+        morning: { tracks: 0, energySum: 0, genreCounts: {} as Record<string, number> },
+        day: { tracks: 0, energySum: 0, genreCounts: {} as Record<string, number> },
+        evening: { tracks: 0, energySum: 0, genreCounts: {} as Record<string, number> },
+        night: { tracks: 0, energySum: 0, genreCounts: {} as Record<string, number> },
+      }
+
+      ratingsArray.forEach(rating => {
+        if (!rating.playCount || !rating.songInfo) return
+
+        const hour = rating.lastPlayed ? new Date(rating.lastPlayed).getHours() : 12
+        const timeOfDay = hour >= 6 && hour < 12 ? 'morning'
+          : hour >= 12 && hour < 18 ? 'day'
+          : hour >= 18 && hour < 23 ? 'evening'
+          : 'night'
+
+        const pattern = temporalPatterns[timeOfDay]
+        pattern.tracks += rating.playCount
+        pattern.energySum += (rating.songInfo.energy || 0.5) * rating.playCount
+
+        const genre = rating.songInfo.genre || 'unknown'
+        pattern.genreCounts[genre] = (pattern.genreCounts[genre] || 0) + rating.playCount
+      })
+
+      // Форматируем для отображения
+      const formattedTemporalPatterns = Object.entries(temporalPatterns).map(([key, data]) => {
+        const avgEnergy = data.tracks > 0 ? data.energySum / data.tracks : 0
+        const topGenre = Object.entries(data.genreCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '-'
+        return {
+          time: key,
+          tracks: data.tracks,
+          avgEnergy: Math.round(avgEnergy * 100) / 100,
+          topGenre,
+        }
+      })
+
+      // 2. SKIP RATE
+      const totalSkips = ratingsArray.reduce((sum, r) => sum + (r.skipCount || 0), 0)
+      const totalPlays = ratingsArray.reduce((sum, r) => sum + (r.playCount || 0), 0)
+      const skipRate = totalPlays > 0 ? totalSkips / totalPlays : 0
+
+      // 3. REPLAY RATE
+      const totalReplays = ratingsArray.reduce((sum, r) => sum + (r.replayCount || 0), 0)
+      const replayRate = totalPlays > 0 ? totalReplays / totalPlays : 0
+
+      // 4. DIVERSITY SCORE
+      const uniqueArtists = new Set(ratingsArray.filter(r => r.playCount > 0).map(r => r.songInfo?.artistId)).size
+      const uniqueGenres = new Set(ratingsArray.filter(r => r.playCount > 0).map(r => r.songInfo?.genre)).size
+      const diversityScore = uniqueArtists > 0 && uniqueGenres > 0
+        ? Math.min(1, (uniqueArtists / 10) * 0.5 + (uniqueGenres / 20) * 0.5)
+        : 0
+
+      // 5. ACTION PATTERNS (действия пользователя)
+      const totalLikes = ratingsArray.filter(r => r.like === true).length
+      const totalDislikes = ratingsArray.filter(r => r.like === false).length
+      const likeRate = totalPlays > 0 ? totalLikes / totalPlays : 0
+      const actionsLast24h = ratingsArray.filter(r => {
+        if (!r.lastPlayed) return false
+        const hoursSince = (Date.now() - new Date(r.lastPlayed).getTime()) / (1000 * 60 * 60)
+        return hoursSince < 24
+      }).length
+
+      setMlPatterns({
+        temporalPatterns: {
+          morning: formattedTemporalPatterns.find(p => p.time === 'morning')!,
+          day: formattedTemporalPatterns.find(p => p.time === 'day')!,
+          evening: formattedTemporalPatterns.find(p => p.time === 'evening')!,
+          night: formattedTemporalPatterns.find(p => p.time === 'night')!,
+        },
+        skipRate: Math.round(skipRate * 100) / 100,
+        replayRate: Math.round(replayRate * 100) / 100,
+        diversityScore: Math.round(diversityScore * 100) / 100,
+        likeRate: Math.round(likeRate * 100) / 100,
+        totalLikes,
+        totalDislikes,
+        actionsLast24h,
+        lastUpdated: new Date(),
+      })
+    }
+
+    calculateMLPatterns()
+  }, [ratings])  // Пересчитываем при КАЖДОМ изменении ratings!
 
   useEffect(() => {
     // Считаем прослушивания и скипы
@@ -263,21 +355,19 @@ export default function MLStats() {
 
       console.log('[ML Stats] Loading artist info for top artists:', topArtists.map(([id]) => id))
 
-      // Сначала получаем информацию из Navidrome
+      // Сначала получаем информацию из Navidrome — ВСЕГДА загружаем обложки
       for (const [artistId] of topArtists) {
         try {
           const artist = await subsonic.artists.getOne(artistId)
           if (artist) {
-            // Проверяем есть ли coverArt и формируем полный URL
             if (artist.coverArt) {
-              images[artistId] = `/rest/getCoverArt?id=${artist.coverArt}&u=${window.env?.username || ''}&t=${window.env?.token || ''}&v=1.16.1&c=KumaFlow`
-              console.log(`[ML Stats] Got Navidrome image for ${artist.name}`)
+              const { getSimpleCoverArtUrl } = await import('@/api/httpClient')
+              images[artistId] = getSimpleCoverArtUrl(artist.coverArt, 'artist', '300')
+              console.log(`[ML Stats] ✅ Navidrome cover for ${artist.name}`)
             }
             names[artistId] = artist.name
-            // Сохраняем MBID если есть
             if (artist.musicBrainzId) {
               mbids[artistId] = artist.musicBrainzId
-              console.log(`[ML Stats] Got MBID for ${artist.name}: ${artist.musicBrainzId}`)
             }
           }
         } catch (error) {
@@ -618,10 +708,10 @@ export default function MLStats() {
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
               {favoriteArtists.slice(0, showAllFavorites ? favoriteArtists.length : 12).map((artist, index) => {
-                const imageUrl = artistImages[artist.id]
+                const imageUrl = artistImages[artist.id] || (artist.coverArt ? getSimpleCoverArtUrl(artist.coverArt, 'artist', '150') : null)
                 const artistName = artistNames[artist.id] || artist.name
                 const covers = artistAlbumCovers[artist.id] || []
-                const hasImage = !!imageUrl
+                const hasImage = !!imageUrl || !!artist.coverArt
                 const hasCovers = covers.length > 0
 
                 return (
@@ -664,7 +754,7 @@ export default function MLStats() {
                       <div className={`w-16 h-16 rounded-full bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center text-2xl font-bold text-primary ${hasCovers || hasImage ? 'hidden' : ''}`}>
                         {artistName.charAt(0).toUpperCase()}
                       </div>
-                      
+
                       <span className="text-sm font-medium text-center line-clamp-2">
                         {artistName}
                       </span>
@@ -835,6 +925,142 @@ export default function MLStats() {
       {/* Статистика оркестратора */}
       <div id="orchestrator-stats" className="scroll-mt-4">
         <OrchestratorStats />
+      </div>
+
+      {/* ML PATTERNS - ПЕРЕМЕЩЕНО ПЕРЕД MUSIC MAP */}
+      <div id="ml-patterns" className="scroll-mt-4">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">🧠 ML Паттерны (реальное время)</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Анализируется история прослушиваний
+                </p>
+              </div>
+              <Badge variant="outline" className="text-xs">
+                📊 Обновлено: {mlPatterns.lastUpdated.toLocaleTimeString()}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* SKIP RATE */}
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-muted-foreground">🚫 Skip Rate (процент скипов)</div>
+                <div className="text-2xl font-bold">{mlPatterns.skipRate}</div>
+                <Progress value={mlPatterns.skipRate * 100} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  {mlPatterns.skipRate < 0.1 ? '✅ Отлично' :
+                   mlPatterns.skipRate < 0.3 ? '⚠️ Норма' : '❌ Много скипов'}
+                </p>
+              </div>
+
+              {/* REPLAY RATE */}
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-muted-foreground">🔁 Replay Rate (процент повторов)</div>
+                <div className="text-2xl font-bold">{mlPatterns.replayRate}</div>
+                <Progress value={mlPatterns.replayRate * 100} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  {mlPatterns.replayRate > 0.5 ? '✅ Много повторов' :
+                   mlPatterns.replayRate > 0.2 ? '⚠️ Норма' : '📝 Мало повторов'}
+                </p>
+              </div>
+
+              {/* DIVERSITY SCORE */}
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-muted-foreground">🎲 Diversity Score (разнообразие вкуса)</div>
+                <div className="text-2xl font-bold">{mlPatterns.diversityScore}</div>
+                <Progress value={mlPatterns.diversityScore * 100} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  {mlPatterns.diversityScore > 0.7 ? '✅ Разнообразно' :
+                   mlPatterns.diversityScore > 0.4 ? '⚠️ Норма' : '🎯 Узкий вкус'}
+                </p>
+              </div>
+
+              {/* LIKE RATE */}
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-muted-foreground">❤️ Like Rate (процент лайков)</div>
+                <div className="text-2xl font-bold">{mlPatterns.likeRate}</div>
+                <Progress value={mlPatterns.likeRate * 100} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  {mlPatterns.likeRate > 0.3 ? '✅ Много лайков' :
+                   mlPatterns.likeRate > 0.1 ? '⚠️ Норма' : '📝 Мало лайков'}
+                </p>
+              </div>
+
+              {/* ACTION PATTERNS */}
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-muted-foreground">📊 Действия за 24ч</div>
+                <div className="text-2xl font-bold">{mlPatterns.actionsLast24h}</div>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <div>👍 Лайки: {mlPatterns.totalLikes}</div>
+                  <div>👎 Дизлайки: {mlPatterns.totalDislikes}</div>
+                </div>
+              </div>
+
+              {/* TEMPORAL PATTERNS */}
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-muted-foreground">🕐 Активность по времени</div>
+                <div className="grid grid-cols-4 gap-1 text-xs">
+                  <div className="text-center">
+                    <div className="font-bold">☀️</div>
+                    <div>{mlPatterns.temporalPatterns.morning.tracks}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold">🌤️</div>
+                    <div>{mlPatterns.temporalPatterns.day.tracks}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold">🌆</div>
+                    <div>{mlPatterns.temporalPatterns.evening.tracks}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold">🌙</div>
+                    <div>{mlPatterns.temporalPatterns.night.tracks}</div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Треков по времени суток
+                </p>
+              </div>
+            </div>
+
+            {/* Detailed Temporal Patterns Table */}
+            <div className="mt-6">
+              <h4 className="text-sm font-medium mb-3">📈 Паттерны по времени суток</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                {[
+                  { name: 'Утро (6-12)', data: mlPatterns.temporalPatterns.morning, icon: '☀️' },
+                  { name: 'День (12-18)', data: mlPatterns.temporalPatterns.day, icon: '🌤️' },
+                  { name: 'Вечер (18-23)', data: mlPatterns.temporalPatterns.evening, icon: '🌆' },
+                  { name: 'Ночь (23-6)', data: mlPatterns.temporalPatterns.night, icon: '🌙' },
+                ].map(period => (
+                  <Card key={period.name} className="p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">{period.icon}</span>
+                      <span className="text-sm font-medium">{period.name}</span>
+                    </div>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Треков:</span>
+                        <span className="font-medium">{period.data.tracks}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Энергия:</span>
+                        <span className="font-medium">{period.data.avgEnergy}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Жанр:</span>
+                        <span className="font-medium truncate max-w-[100px]">{period.data.topGenre}</span>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Music Map */}

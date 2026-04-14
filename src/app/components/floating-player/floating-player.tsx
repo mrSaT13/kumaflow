@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, Minimize2, Maximize2, GripVertical, PictureInPicture2, Radio } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, Minimize2, Maximize2, GripVertical, PictureInPicture2, Radio, Users } from 'lucide-react'
 import { usePlayerStore, usePlayerActions } from '@/store/player.store'
 import { usePlaybackSettings, usePlaybackActions } from '@/store/playback.store'
 import { Button } from '@/app/components/ui/button'
@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'react-toastify'
 import { useAutoDJSettings, useAutoDJActions } from '@/store/auto-dj.store'
 import { SimpleTooltip } from '@/app/components/ui/simple-tooltip'
+import { getSimpleCoverArtUrl } from '@/api/httpClient'
 
 export function FloatingPlayer() {
   const { t } = useTranslation()
@@ -23,10 +24,35 @@ export function FloatingPlayer() {
   const [isDragging, setIsDragging] = useState(false)
   const [position, setPosition] = useState(settings.floatingPlayerPosition || { x: 100, y: 100 })
   const [isPipActive, setIsPipActive] = useState(false)
+  const [showArtistSelector, setShowArtistSelector] = useState(false)
   const dragRef = useRef<HTMLDivElement>(null)
   const dragStartRef = useRef({ x: 0, y: 0 })
   const initialPositionRef = useRef({ x: 0, y: 0 })
   const pipWindowRef = useRef<DocumentPictureInPicture | null>(null)
+  const artistSelectorRef = useRef<HTMLDivElement>(null)
+
+  // Закрытие выбора артистов при клике вне
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (artistSelectorRef.current && !artistSelectorRef.current.contains(e.target as Node)) {
+        setShowArtistSelector(false)
+      }
+    }
+
+    if (showArtistSelector) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showArtistSelector])
+
+  // Обработчик выбора артиста (навигация через hash т.к. FloatingPlayer вне Router)
+  const handleArtistClick = (artistId: string) => {
+    setShowArtistSelector(false)
+    // Используем history.pushState для SPA навигации без перезагрузки
+    window.history.pushState({}, '', `/library/artists/${artistId}`)
+    // Диспатчим событие для react-router
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }
 
   // Синхронизация громкости
   useEffect(() => {
@@ -276,7 +302,7 @@ export function FloatingPlayer() {
       {!isMinimized && (
         <div className="p-3 space-y-3 bg-card">
           {/* Информация о треке */}
-          <div className="flex items-start gap-3">
+          <div className="flex items-start gap-3 relative">
             {currentSong?.coverUrl && (
               <img
                 src={currentSong.coverUrl}
@@ -288,9 +314,75 @@ export function FloatingPlayer() {
               <p className="font-semibold text-sm truncate">
                 {currentSong?.title || 'Нет трека'}
               </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {currentSong?.artist || '—'}
-              </p>
+              
+              {/* Артисты - кликабельно если несколько */}
+              {(currentSong as any)?.artists?.length > 1 ? (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowArtistSelector(!showArtistSelector)}
+                    className="flex items-center gap-1 text-xs text-muted-foreground truncate hover:text-primary transition-colors group"
+                    title="Нажмите чтобы выбрать артиста"
+                  >
+                    <Users size={12} className="group-hover:text-primary transition-colors" />
+                    {(currentSong as any).artists.map((a: any, i: number) => (
+                      <span key={a.id}>
+                        {i > 0 && ' / '}
+                        {a.name}
+                      </span>
+                    ))}
+                  </button>
+
+                  {/* Мини-окошко выбора артиста (Glassmorphism) */}
+                  {showArtistSelector && (
+                    <div
+                      ref={artistSelectorRef}
+                      className="absolute top-full left-0 mt-2 z-50 w-64 rounded-lg overflow-hidden shadow-xl border backdrop-blur-md"
+                      style={{
+                        backgroundColor: 'hsla(var(--card) / 0.9)',
+                        borderColor: 'hsla(var(--border) / 0.5)',
+                      }}
+                    >
+                      <div className="px-3 py-2 border-b" style={{ borderColor: 'hsla(var(--border) / 0.3)' }}>
+                        <p className="text-xs font-semibold" style={{ color: 'var(--muted-foreground)' }}>Выберите артиста:</p>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto p-1">
+                        {(currentSong as any).artists.map((artist: any) => (
+                          <button
+                            key={artist.id}
+                            onClick={() => handleArtistClick(artist.id)}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent transition-colors group"
+                          >
+                            {/* Аватарка артиста */}
+                            <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border" style={{ borderColor: 'var(--border)' }}>
+                              {artist.coverArt ? (
+                                <img
+                                  src={getSimpleCoverArtUrl(artist.coverArt, 'artist', '100')}
+                                  alt={artist.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center" style={{ color: 'var(--muted-foreground)' }}>
+                                  <Users size={14} />
+                                </div>
+                              )}
+                            </div>
+                            {/* Имя артиста */}
+                            <span className="text-sm truncate group-hover:text-primary transition-colors" style={{ color: 'var(--foreground)' }}>
+                              {artist.name}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // Один артист - обычный текст
+                <p className="text-xs text-muted-foreground truncate">
+                  {currentSong?.artist || '—'}
+                </p>
+              )}
+              
               {currentSong?.album && (
                 <p className="text-xs text-muted-foreground truncate">
                   {currentSong.album}

@@ -4,6 +4,9 @@ import { getAudiobookshelfApi } from '@/service/audiobookshelf-api'
 import { toast } from 'react-toastify'
 import { usePlayerActions } from '@/store/player.store'
 import { useNavigate } from 'react-router-dom'
+import { Button } from '@/app/components/ui/button'
+import { AlertCircle, Settings } from 'lucide-react'
+import { useAppStore } from '@/store/app.store'
 import styles from './audiobooks-page.module.css'
 
 interface Audiobook {
@@ -181,17 +184,31 @@ export default function AudiobooksPage() {
 
         <div className="flex items-center justify-center py-16">
           <div className="text-center space-y-4 max-w-md">
-            <div className="text-6xl">📚</div>
+            <AlertCircle className="w-16 h-16 mx-auto text-muted-foreground" />
             <h2 className="text-xl font-bold">Audiobookshelf не подключён</h2>
             <p className="text-sm text-muted-foreground">
               Настройте подключение к вашему серверу Audiobookshelf в настройках
             </p>
-            <button
-              onClick={() => navigate('/settings#audiobookshelf')}
-              className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            <Button
+              onClick={() => {
+                // Открываем диалог настроек и переключаем на вкладку accounts
+                const { setOpenDialog, setCurrentPage } = useAppStore.getState().settings
+                setOpenDialog(true)
+                setCurrentPage('accounts')
+                // Прокрутка к секции Audiobookshelf
+                setTimeout(() => {
+                  const element = document.getElementById('audiobookshelf')
+                  if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    element.classList.add('animate-pulse')
+                  }
+                }, 500)
+              }}
+              className="gap-2"
             >
-              ⚙️ Открыть настройки
-            </button>
+              <Settings className="w-4 h-4" />
+              Открыть настройки
+            </Button>
           </div>
         </div>
       </div>
@@ -211,17 +228,18 @@ export default function AudiobooksPage() {
       {!config.enabled || !config.isConnected ? (
         <div className="flex items-center justify-center py-16">
           <div className="text-center space-y-4 max-w-md">
-            <div className="text-6xl">📖</div>
+            <AlertCircle className="w-16 h-16 mx-auto text-muted-foreground" />
             <h2 className="text-xl font-bold">Audiobookshelf не подключён</h2>
             <p className="text-sm text-muted-foreground">
               Настройте подключение к вашему серверу Audiobookshelf в настройках
             </p>
-            <button
-              onClick={() => window.location.hash = '/settings#audiobookshelf'}
-              className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            <Button
+              onClick={() => navigate('/settings/account#audiobookshelf')}
+              className="gap-2"
             >
-              ⚙️ Открыть настройки
-            </button>
+              <Settings className="w-4 h-4" />
+              Открыть настройки
+            </Button>
           </div>
         </div>
       ) : (

@@ -74,14 +74,17 @@ export default function ArtistRadio() {
 
   const handlePlayArtistRadio = async (artistId: string, event: React.MouseEvent) => {
     event.stopPropagation()
-    
+
     if (isLoading) return
-    
+
+    console.log('[ArtistRadio] 🔘 Clicked artist radio:', artistId)
     setIsLoading(artistId)
-    
+
     try {
       const result = await generateArtistRadio(artistId, 25)
-      
+
+      console.log('[ArtistRadio] ✅ Generated playlist:', result.songs.length, 'tracks')
+
       if (result.songs.length > 0) {
         setSongList(
           result.songs,
@@ -92,10 +95,16 @@ export default function ArtistRadio() {
         toast.success('▶️ Радио артиста запущено!', {
           autoClose: 2000,
         })
+      } else {
+        toast.error('Не удалось найти треки для радио артиста', {
+          autoClose: 3000,
+        })
       }
     } catch (error) {
-      console.error('Ошибка запуска радио:', error)
-      toast.error('Не удалось запустить радио артиста')
+      console.error('[ArtistRadio] ❌ Ошибка запуска радио:', error)
+      toast.error(`Не удалось запустить радио артиста: ${error instanceof Error ? error.message : 'неизвестная ошибка'}`, {
+        autoClose: 5000,
+      })
     } finally {
       setIsLoading(null)
     }
@@ -175,11 +184,19 @@ export default function ArtistRadio() {
               </button>
             </div>
             
-            {/* Имя артиста */}
+            {/* Имя артиста — КЛИКАБЕЛЬНО для перехода на страницу */}
             <div className="artist-info">
-              <span className="artist-name" onClick={(e) => handleNavigateToArtist(artist.id, e)}>
+              <a
+                className="artist-name"
+                onClick={(e) => handleNavigateToArtist(artist.id, e)}
+                href={`/library/artists/${artist.id}`}
+                onClickCapture={(e) => {
+                  e.preventDefault()
+                  handleNavigateToArtist(artist.id, e)
+                }}
+              >
                 {artist.name}
-              </span>
+              </a>
             </div>
           </div>
         ))}
@@ -328,18 +345,24 @@ export default function ArtistRadio() {
 
         .artist-info {
           text-align: center;
+          width: 100%;
+          margin-top: 8px;
         }
 
         .artist-name {
-          font-size: 14px;
+          font-size: 13px;
           font-weight: 600;
           color: #333;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-          max-width: 140px;
+          max-width: 130px;
           display: block;
           transition: color 200ms ease;
+          cursor: pointer;
+          text-decoration: none;
+          pointer-events: auto;
+          line-height: 1.3;
         }
 
         .artist-name:hover {

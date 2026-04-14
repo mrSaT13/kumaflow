@@ -46,7 +46,7 @@ export default function AudiobookshelfSettings() {
   }
 
   return (
-    <Card>
+    <Card id="audiobookshelf" className="w-full">
       <CardHeader>
         <CardTitle>📚 Audiobookshelf</CardTitle>
         <CardDescription>

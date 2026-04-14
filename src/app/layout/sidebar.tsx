@@ -1,7 +1,9 @@
 import {
   BarChart3Icon,
   ChevronDownIcon,
+  DatabaseIcon,
   DiscIcon,
+  FolderOpenIcon,
   HeartIcon,
   HomeIcon,
   LibraryIcon,
@@ -26,6 +28,8 @@ const Heart = memo(HeartIcon)
 const Sparkles = memo(SparklesIcon)
 const BarChart3 = memo(BarChart3Icon)
 const Disc = memo(DiscIcon)
+const Database = memo(DatabaseIcon)
+const FolderOpen = memo(FolderOpenIcon)
 
 export interface ISidebarItem {
   id: string
@@ -46,6 +50,7 @@ export enum SidebarItems {
   PodcastAll = 'podcast-all',
   PodcastLatest = 'podcast-latest',
   Audiobooks = 'audiobooks',
+  Local = 'local',
 }
 
 export const mainNavItems = [
@@ -112,7 +117,21 @@ export const libraryItems = [
     route: '/audiobooks',
     icon: Library,
   },
+  {
+    id: SidebarItems.Local,
+    title: 'sidebar.local',
+    route: '/library/local',
+    icon: FolderOpen,
+  },
 ]
+
+// Кеш - отдельный пункт вне библиотеки
+export const cacheItem = {
+  id: 'cache',
+  title: 'Кеш',
+  route: '/cache',
+  icon: Database,
+}
 
 export const podcastItems = [
   {

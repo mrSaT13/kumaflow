@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { SlidersHorizontal } from 'lucide-react'
+import { Share2, SlidersHorizontal } from 'lucide-react'
 import { ComponentPropsWithoutRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/app/components/ui/button'
@@ -13,10 +13,15 @@ import { Slider } from '@/app/components/ui/slider'
 import { Switch } from '@/app/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { useSongColor } from '@/store/player.store'
+import { usePlayerStore } from '@/store/player.store'
 import { buttonsStyle } from './controls'
 
 export function FullscreenSettings() {
   const { useSongColorOnBigPlayer } = useSongColor()
+
+  const handleShareTrack = () => {
+    // Просто закрываем popover, копирование происходит в ShareTrackOption
+  }
 
   return (
     <Popover>
@@ -35,6 +40,8 @@ export function FullscreenSettings() {
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0" align="start" side="top">
         <div className="flex flex-col">
+          <ShareTrackOption onShare={handleShareTrack} />
+          <Separator />
           <DynamicColorOption showSeparator={false} />
           {useSongColorOnBigPlayer && <ColorIntensityOption />}
           {!useSongColorOnBigPlayer && <ImageBlurSizeOption />}
@@ -69,6 +76,64 @@ export function QueueSettings() {
 }
 
 type OptionProps = Omit<ComponentPropsWithoutRef<typeof SettingWrapper>, 'text'>
+
+function ShareTrackOption({ onShare }: { onShare: () => void }) {
+  const sharePhrases = [
+    '🎧 Отличный трек!',
+    '🔥 Слушай это!',
+    '🎵 Включай на повтор!',
+    '💯 Рекомендую!',
+    '🎶 Мой хит сегодня!',
+    '✨ Это стоит услышать!',
+    '🚀 Просто огонь!',
+    '🎵 Лови вайб!',
+    '🔥 Жжёт динамики!',
+    '💎 Чистое золото!',
+    '⚡ Заряжено энергией!',
+    '🌟 Must hear!',
+    '🎤 Топчик!',
+    '🎹 Музыка для души!',
+    '🎸 Стоит каждого прослушивания!',
+  ]
+
+  const handleShare = () => {
+    const state = usePlayerStore.getState()
+    const currentSong = state.songlist?.currentSong
+    
+    const title = currentSong?.title || currentSong?.songTitle || currentSong?.name || ''
+    const artist = currentSong?.artist || currentSong?.artistName || currentSong?.performer || ''
+    
+    if (!title || !artist) {
+      return
+    }
+
+    const randomPhrase = sharePhrases[Math.floor(Math.random() * sharePhrases.length)]
+    const shareText = `${randomPhrase} ${artist} — ${title}`
+    
+    navigator.clipboard.writeText(shareText)
+      .then(() => {
+        console.log('[ShareTrack] Copied to clipboard:', shareText)
+      })
+      .catch((err) => {
+        console.error('[ShareTrack] Failed to copy:', err)
+      })
+    
+    onShare()
+  }
+
+  return (
+    <SettingWrapper text="Поделиться" showSeparator={false}>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleShare}
+        className="gap-2"
+      >
+        <Share2 className="w-4 h-4" />
+      </Button>
+    </SettingWrapper>
+  )
+}
 
 function DynamicColorOption(props: OptionProps) {
   const { t } = useTranslation()

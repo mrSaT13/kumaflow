@@ -18,6 +18,8 @@ export interface ISongList {
   radioList: Radio[]
   podcastList: EpisodeWithPodcast[]
   podcastListProgresses: number[]
+  sharedTracksInfo?: Record<string, { accounts: string[]; totalPlays: number; songKey?: string }>  // Информация о shared listens
+  currentPlaylistName?: string  // Название текущего плейлиста для Title Bar
 }
 
 export interface IPlayerState {

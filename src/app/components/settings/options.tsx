@@ -1,10 +1,12 @@
 import {
   CircleUserRound,
+  Database,
   EarthLock,
   FileText,
   Globe,
   Headphones,
   LaptopIcon,
+  Music2,
   Paintbrush,
 } from 'lucide-react'
 import { ComponentType } from 'react'
@@ -24,6 +26,8 @@ export type SettingsOptions =
   | 'language'
   | 'audio'
   | 'content'
+  | 'local-music'
+  | 'cache'
   | 'accounts'
   | 'account'
   | 'desktop'
@@ -37,13 +41,15 @@ interface OptionsData {
 const accountsOption: OptionsData = { id: 'accounts', icon: CircleUserRound }
 const accountOption: OptionsData = { id: 'account', icon: CircleUserRound }
 const desktopOption: OptionsData = { id: 'desktop', icon: LaptopIcon }
+const cacheOption: OptionsData = { id: 'cache', icon: Database }
+const localMusicOption: OptionsData = { id: 'local-music', icon: Music2 }
 
 const options: OptionsData[] = [
   { id: 'appearance', icon: Paintbrush },
   { id: 'language', icon: Globe },
   { id: 'audio', icon: Headphones },
   { id: 'content', icon: FileText },
-  ...(isDesktop() ? [accountsOption, accountOption, desktopOption] : []),
+  ...(isDesktop() ? [localMusicOption, cacheOption, accountsOption, accountOption, desktopOption] : []),
   { id: 'privacy', icon: EarthLock },
 ]
 

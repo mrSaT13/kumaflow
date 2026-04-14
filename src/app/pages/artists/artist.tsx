@@ -7,6 +7,7 @@ import { ArtistImageViewer } from '@/app/components/artist/artist-image-viewer'
 import ArtistTopSongs from '@/app/components/artist/artist-top-songs'
 import { ArtistInfo } from '@/app/components/artist/info'
 import { ArtistDiscography } from '@/app/components/artist/artist-discography'
+import { AppearsInCompilations } from '@/app/components/artist/appears-in-compilations'
 import { NewReleases } from '@/app/components/artist/new-releases'
 import RelatedArtistsList from '@/app/components/artist/related-artists'
 import { AlbumFallback } from '@/app/components/fallbacks/album-fallbacks'
@@ -34,9 +35,15 @@ import { useExternalApi } from '@/store/external-api.store'
 import { lastFmService } from '@/service/lastfm-api'
 import { fanartService } from '@/service/fanart-api'
 import { wikipediaService } from '@/service/wikipedia-api'
-import { Bell, BellOff, Radio, Loader2, ThumbsDown, Globe } from 'lucide-react'
+import { CacheArtistButton } from '@/app/components/artist/cache-button'
+import { Bell, BellOff, Radio, Loader2, ThumbsDown, Globe, Download, Share2 } from 'lucide-react'
 import { useML, useMLActions } from '@/store/ml.store'
 import { trackViewArtistPage } from '@/service/ml-event-tracker'
+import { usePageDesignSettings } from '@/store/page-design.store'
+import NewArtistPage from './new-artist-page'  // 🆕 Новый дизайн
+import { Users } from 'lucide-react'
+import { songsColumns } from '@/app/tables/songs-columns'
+import { DataTable } from '@/app/components/ui/data-table'
 
 export default function Artist() {
   const { t } = useTranslation()
@@ -46,6 +53,7 @@ export default function Artist() {
   const { settings } = useExternalApi()
   const { profile } = useML()
   const mlActions = useMLActions()
+  const pageDesignSettings = usePageDesignSettings()
 
   const [isGeneratingRadio, setIsGeneratingRadio] = useState(false)
   const [isSubscribing, setIsSubscribing] = useState(false)
@@ -168,6 +176,11 @@ export default function Artist() {
   }
   if (!artist) return <AlbumFallback />
 
+  // 🆕 Если включён новый дизайн — рендерим NewArtistPage
+  if (pageDesignSettings.newArtistDesignEnabled) {
+    return <NewArtistPage />
+  }
+
   function getSongCount() {
     if (!artist) return null
     if (artist.albumCount === undefined) return null
@@ -224,6 +237,21 @@ export default function Artist() {
     }
   }
 
+  // Функция "Поделиться" артистом
+  const handleShareArtist = () => {
+    if (!artist) return
+    
+    const shareText = `@artist:${artist.name}`
+    navigator.clipboard.writeText(shareText)
+      .then(() => {
+        toast(`📋 Скопировано: ${shareText}`, { type: 'success' })
+      })
+      .catch(err => {
+        console.error('Failed to copy:', err)
+        toast('Ошибка копирования', { type: 'error' })
+      })
+  }
+
   const handleToggleSubscription = async () => {
     setIsSubscribing(true)
     try {
@@ -270,6 +298,12 @@ export default function Artist() {
 
   const recentAlbums = artist.album ? sortRecentAlbums(artist.album) : []
 
+  // Совместные треки (если есть topSongs)
+  const collaborativeSongs = topSongs?.filter((song: any) => 
+    song.artists && song.artists.length > 1 && 
+    song.artists.some((a: any) => a.id === artistId)
+  ) || []
+
   return (
     <div className="w-full">
       <ImageHeader
@@ -285,6 +319,33 @@ export default function Artist() {
         onCoverClick={() => setIsImageViewerOpen(true)}
         actions={
           <div className="flex gap-2">
+            {/* Кеш - сохранить артиста */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <CacheArtistButton artistId={artistId} artistName={artist?.name} />
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                Сохранить артиста в кеш
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Поделиться */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleShareArtist}
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 rounded-full hover:bg-purple-600/20 text-muted-foreground hover:text-purple-600"
+                >
+                  <Share2 className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                Поделиться артистом
+              </TooltipContent>
+            </Tooltip>
+
             {/* Wikipedia */}
             {wikiUrl && (
               <Tooltip>
@@ -340,37 +401,35 @@ export default function Artist() {
             )}
 
             {/* Подписка на артиста */}
-            {settings.lastFmEnabled && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={handleToggleSubscription}
-                    disabled={isSubscribing}
-                    variant="ghost"
-                    size="icon"
-                    className={clsx(
-                      'h-10 w-10 rounded-full',
-                      subscribed
-                        ? 'bg-red-600/20 hover:bg-red-600/30 text-red-600'
-                        : 'hover:bg-green-600/20 text-muted-foreground hover:text-green-600'
-                    )}
-                  >
-                    {isSubscribing ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : subscribed ? (
-                      <BellOff className="h-5 w-5" />
-                    ) : (
-                      <Bell className="h-5 w-5" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  {subscribed
-                    ? 'Отписаться от новых треков'
-                    : 'Подписаться на новые треки'}
-                </TooltipContent>
-              </Tooltip>
-            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleToggleSubscription}
+                  disabled={isSubscribing}
+                  variant="ghost"
+                  size="icon"
+                  className={clsx(
+                    'h-10 w-10 rounded-full',
+                    subscribed
+                      ? 'bg-red-600/20 hover:bg-red-600/30 text-red-600'
+                      : 'hover:bg-green-600/20 text-muted-foreground hover:text-green-600'
+                  )}
+                >
+                  {isSubscribing ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : subscribed ? (
+                    <BellOff className="h-5 w-5" />
+                  ) : (
+                    <Bell className="h-5 w-5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {subscribed
+                  ? 'Отписаться от новых треков'
+                  : 'Подписаться на новые треки'}
+              </TooltipContent>
+            </Tooltip>
 
             {/* Радио артиста */}
             <Tooltip>
@@ -413,6 +472,28 @@ export default function Artist() {
           <ArtistTopSongs topSongs={topSongs} artist={artist} />
         )}
 
+        {/* Совместные треки */}
+        {collaborativeSongs.length > 0 && (
+          <div className="w-full mb-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="w-6 h-6 text-primary" />
+              <h3 className="scroll-m-20 text-2xl font-semibold tracking-tight">
+                Совместные треки
+              </h3>
+              <span className="text-sm text-muted-foreground">
+                ({collaborativeSongs.length})
+              </span>
+            </div>
+            <DataTable
+              columns={songsColumns()}
+              data={collaborativeSongs.slice(0, 10)}
+              handlePlaySong={(row) => setSongList(collaborativeSongs, row.index)}
+              columnFilter={['index', 'title', 'artist', 'album', 'year', 'duration', 'playCount', 'select']}
+              variant="modern"
+            />
+          </div>
+        )}
+
         {recentAlbums.length > 0 && (
           <PreviewList
             title={t('artist.recentAlbums')}
@@ -428,6 +509,11 @@ export default function Artist() {
             title={t('artist.relatedArtists')}
             similarArtists={artistInfo.similarArtist}
           />
+        )}
+
+        {/* Участвует в сборниках/саундтреках */}
+        {artist && (
+          <AppearsInCompilations artistId={artist.id} artistName={artist.name} />
         )}
         
         {/* Дискография из Discogs */}

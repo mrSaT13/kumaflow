@@ -138,17 +138,40 @@ function stopTimer() {
   }
 }
 
-function handleTimerComplete() {
-  console.log('[SleepTimer] Timer completed, stopping playback')
+async function handleTimerComplete() {
+  console.log('[SleepTimer] Timer completed, starting fade-out...')
 
   // Выключаем таймер
   useSleepTimerStore.getState().disable()
+
+  // Плавное затухание громкости (3 секунды)
+  const audio = document.querySelector('audio')
+  if (audio) {
+    const initialVolume = audio.volume
+    const fadeDuration = 3000 // 3 секунды
+    const fadeSteps = 30
+    const stepDelay = fadeDuration / fadeSteps
+    const volumeStep = initialVolume / fadeSteps
+
+    console.log('[SleepTimer] Fading out volume over', fadeDuration, 'ms')
+
+    // Плавное уменьшение громкости
+    for (let i = 0; i < fadeSteps; i++) {
+      await new Promise(resolve => setTimeout(resolve, stepDelay))
+      audio.volume = initialVolume - (volumeStep * (i + 1))
+    }
+
+    // Останавливаем воспроизведение
+    audio.pause()
+    audio.currentTime = 0
+    audio.volume = initialVolume // Возвращаем громкость для следующего запуска
+  }
 
   // Создаём кастомное событие которое слушает плеер
   window.dispatchEvent(new CustomEvent('sleep-timer-complete'))
 
   // Уведомление (опционально)
-  console.log('[SleepTimer] Playback stopped')
+  console.log('[SleepTimer] Playback stopped with fade-out')
 
   // Toast уведомление
   import('react-toastify').then(({ toast }) => {
@@ -245,7 +268,7 @@ export const useSleepTimerStore = createWithEqualityFn<SleepTimerStore>()(
               state.state.remainingSeconds = seconds
             })
 
-            // Если время вышло, останавливаем воспроизведение
+            // Если время вышло, останавливаем воспроизведение с затуханием
             if (seconds <= 0) {
               handleTimerComplete()
             }
