@@ -18,7 +18,7 @@ export function HeaderSongInfo() {
   }
 
   return (
-    <div className="col-span-2 flex justify-center items-center">
+    <div className="md:col-span-2 flex justify-center items-center min-w-0 px-1">
       {isPlaylistEmpty && <AppTitle />}
       {!isPlaylistEmpty && (
         <div className="flex w-full justify-center subpixel-antialiased font-medium text-sm text-muted-foreground">

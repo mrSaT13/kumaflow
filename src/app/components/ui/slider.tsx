@@ -156,6 +156,7 @@ type ProgressSliderProps = React.ComponentPropsWithoutRef<
   variant?: Variant
   tooltipValue?: string
   tooltipTransformer?: (value: number) => string
+  trackHeight?: number
 }
 
 export function ProgressSlider(props: ProgressSliderProps) {
@@ -164,12 +165,16 @@ export function ProgressSlider(props: ProgressSliderProps) {
     tooltipValue,
     tooltipTransformer,
     variant = 'default',
+    trackHeight,
     onValueChange,
     ...rest
   } = props
 
   // Получаем настройки кастомизации
   const customization = usePlayerCustomization()
+  const effectiveTrackHeight = trackHeight ?? customization.progressHeight
+  const effectiveThumbSize = Math.max(16, effectiveTrackHeight + 6)
+  const alwaysShowThumb = trackHeight !== undefined
 
   // ВАЖНО: Хук должен быть на верхнем уровне, до всех useMemo!
   const { isPlaying } = usePlayerIsPlaying()
@@ -340,6 +345,7 @@ export function ProgressSlider(props: ProgressSliderProps) {
         'transition-transform duration-200',
         'hover-scale-110',
         showTooltip && 'opacity-100',
+        alwaysShowThumb && 'opacity-100',
         'bg-transparent border-0 shadow-none',
         'flex items-center justify-center',
         pulseClass
@@ -353,6 +359,7 @@ export function ProgressSlider(props: ProgressSliderProps) {
       'hover-scale-125',
       'hover-rotate-hover',
       showTooltip && 'opacity-100',
+      alwaysShowThumb && 'opacity-100',
       variant === 'default' && 'bg-foreground border-foreground',
       variant === 'secondary' && 'bg-secondary-foreground border-secondary-foreground',
       pulseClass
@@ -362,16 +369,16 @@ export function ProgressSlider(props: ProgressSliderProps) {
     const shapeClasses = (() => {
       switch (progressIcon) {
         case 'square':
-          return 'h-3 w-3 rounded-sm'
+          return 'rounded-sm'
         case 'diamond':
-          return 'h-3 w-3 rotate-45'
-        default:  // circle
-          return 'h-3 w-3 rounded-full'
+          return 'rotate-45'
+        default:
+          return 'rounded-full'
       }
     })()
 
     return clsx(baseClasses, shapeClasses)
-  }, [customization, showTooltip, variant, pulseClass])
+  }, [customization, showTooltip, variant, pulseClass, effectiveThumbSize, alwaysShowThumb])
 
   // Стили для thumb
   const thumbStyle = React.useMemo(() => {
@@ -400,8 +407,8 @@ export function ProgressSlider(props: ProgressSliderProps) {
 
     // Для стандартных иконок
     const baseStyle: React.CSSProperties = {
-      width: `${Math.max(12, progressHeight)}px`,
-      height: `${Math.max(12, progressHeight)}px`,
+      width: `${effectiveThumbSize}px`,
+      height: `${effectiveThumbSize}px`,
       backgroundColor: progressColor,
       borderColor: progressColor,
       // CSS переменная для hover вращения
@@ -409,7 +416,7 @@ export function ProgressSlider(props: ProgressSliderProps) {
     } as React.CSSProperties
 
     return baseStyle
-  }, [customization])
+  }, [customization, effectiveThumbSize])
 
   return (
     <SliderPrimitive.Root
@@ -440,8 +447,8 @@ export function ProgressSlider(props: ProgressSliderProps) {
           )}
           onContextMenu={handleContextMenu}
           style={{
-            height: `${customization.progressHeight}px`,
-            borderRadius: `${customization.progressHeight / 2}px`,
+            height: `${effectiveTrackHeight}px`,
+            borderRadius: `${effectiveTrackHeight / 2}px`,
           }}
         >
           <SliderPrimitive.Range
@@ -457,8 +464,8 @@ export function ProgressSlider(props: ProgressSliderProps) {
               background: customization.gradientProgress
                 ? `linear-gradient(90deg, ${customization.progressColor}, #3b82f6, #8b5cf6)`
                 : customization.progressColor || undefined,
-              height: `${customization.progressHeight}px`,
-              borderRadius: `${customization.progressHeight / 2}px`,
+              height: `${effectiveTrackHeight}px`,
+              borderRadius: `${effectiveTrackHeight / 2}px`,
             }}
           />
         </SliderPrimitive.Track>

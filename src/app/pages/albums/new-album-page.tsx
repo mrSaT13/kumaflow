@@ -524,10 +524,10 @@ export default function NewAlbumPage() {
   const handlePlayTrackRadio = async (song: any) => {
     setIsTrackRadioGenerating(true)
     try {
-      // Пока просто добавляем похожие треки
-      toast.info(`📻 Радио трека: ${song.title} (скоро)`, { autoClose: 2000 })
+      const { playTrackRadio } = await import('@/service/track-radio-service')
+      await playTrackRadio(song, 25)
     } catch (error) {
-      toast.error('Не удалось запустить радио')
+      console.error('Failed to start track radio:', error)
     } finally {
       setIsTrackRadioGenerating(false)
     }

@@ -48,6 +48,7 @@ interface PlayerControlsProps {
   radio: Radio
   podcast: EpisodeWithPodcast
   audioRef: RefObject<HTMLAudioElement>
+  compact?: boolean
 }
 
 export function PlayerControls({
@@ -55,6 +56,7 @@ export function PlayerControls({
   radio,
   podcast,
   audioRef,
+  compact = false,
 }: PlayerControlsProps) {
   const { t } = useTranslation()
   const { isSong, isPodcast } = usePlayerMediaType()
@@ -147,6 +149,47 @@ export function PlayerControls({
 
   const cannotGotoNextSong = !hasNext && loopState !== LoopState.All
   const disableButtons = !song && !radio && !podcast
+
+  if (compact) {
+    return (
+      <div className="flex shrink-0 gap-1 items-center">
+        <PlayerButton
+          disabled={disableButtons || !hasPrev}
+          onClick={playPrevSong}
+          data-testid="player-button-prev"
+          tooltip={previousTooltip}
+          className="size-12 [&_svg]:size-7"
+        >
+          <SkipBack className="text-secondary-foreground fill-secondary-foreground" />
+        </PlayerButton>
+
+        <PlayerButton
+          variant="default"
+          disabled={!song && !radio && !isPodcast}
+          onClick={togglePlayPause}
+          data-testid={`player-button-${isPlaying ? 'pause' : 'play'}`}
+          tooltip={playTooltip}
+          className="size-12 [&_svg]:size-6"
+        >
+          {isPlaying ? (
+            <Pause className="fill-primary-foreground" />
+          ) : (
+            <Play className="fill-primary-foreground" />
+          )}
+        </PlayerButton>
+
+        <PlayerButton
+          disabled={disableButtons || cannotGotoNextSong}
+          onClick={playNextSong}
+          data-testid="player-button-next"
+          tooltip={nextTooltip}
+          className="size-12 [&_svg]:size-7"
+        >
+          <SkipForward className="text-secondary-foreground fill-secondary-foreground" />
+        </PlayerButton>
+      </div>
+    )
+  }
 
   return (
     <div className="flex w-full gap-1 justify-center items-center mb-1">

@@ -15,9 +15,10 @@ interface SettingItem {
 
 interface SettingsSearchProps {
   onClose: () => void
+  embedded?: boolean
 }
 
-export function SettingsSearch({ onClose }: SettingsSearchProps) {
+export function SettingsSearch({ onClose, embedded = false }: SettingsSearchProps) {
   const [query, setQuery] = useState('')
 
   // Список всех настроек для поиска
@@ -108,6 +109,14 @@ export function SettingsSearch({ onClose }: SettingsSearchProps) {
     
     // === Last.fm ===
     {
+      id: 'lastfm-api',
+      title: 'Last.fm API ключ',
+      description: 'Настройка API ключа и авторизации Last.fm',
+      category: 'Внешние API',
+      keywords: ['lastfm', 'api', 'ключ', 'авторизация', 'last.fm', 'внешние'],
+      sectionId: 'lastfm',
+    },
+    {
       id: 'lastfm-tags',
       title: 'Last.fm Теги',
       description: 'Импорт жанров и настроений из Last.fm',
@@ -115,7 +124,7 @@ export function SettingsSearch({ onClose }: SettingsSearchProps) {
       keywords: ['lastfm', 'теги', 'жанры', 'настроения', 'импорт', 'last.fm'],
       sectionId: 'lastfm',
     },
-    
+
     // === Кэш ===
     {
       id: 'cache-auto-starred',
@@ -211,9 +220,9 @@ export function SettingsSearch({ onClose }: SettingsSearchProps) {
     // Для разных секций - разные страницы
     const pageRoutes: Record<string, string> = {
       'ml-playlists': '/settings/ml-playlists',
-      'analysis': '/settings/ml-playlists',  // Анализ в ML настройках
-      'lastfm': '/settings/external-api',  // Last.fm во внешних API
-      'cache': '/cache',  // Кэш на отдельной странице
+      'analysis': '/settings/ml-playlists',
+      'lastfm': '/settings/external-api',
+      'cache': '/cache',
     }
 
     if (!item.sectionId) return
@@ -241,28 +250,44 @@ export function SettingsSearch({ onClose }: SettingsSearchProps) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Заголовок с поиском */}
-      <div className="p-4 border-b flex-shrink-0">
-        <div className="flex items-center gap-2 mb-4">
-          <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-          <h2 className="text-lg font-semibold flex-1">Поиск настроек</h2>
+      {!embedded && (
+        <div className="p-4 border-b flex-shrink-0">
+          <div className="flex items-center gap-2 mb-4">
+            <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+            <h2 className="text-lg font-semibold flex-1">Поиск настроек</h2>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Поиск настроек..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="pl-10"
+              autoFocus
+            />
+          </div>
         </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Поиск настроек..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="pl-10"
-            autoFocus
-          />
+      )}
+
+      {embedded && (
+        <div className="border-b p-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Поиск настроек..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="pl-10"
+              autoFocus
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Результаты поиска со скроллом */}
-      <ScrollArea className="flex-1 max-h-[calc(600px-140px)]">
+      <ScrollArea className={embedded ? 'flex-1 min-h-0' : 'flex-1 max-h-[calc(600px-140px)]'}>
         <div className="p-4 space-y-4">
           {query.trim() && filteredSettings.length === 0 && (
             <div className="text-center text-muted-foreground py-8">

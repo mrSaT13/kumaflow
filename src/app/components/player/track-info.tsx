@@ -16,10 +16,12 @@ import { getAverageColor } from '@/utils/getAverageColor'
 import { logger } from '@/utils/logger'
 import { ALBUM_ARTISTS_MAX_NUMBER } from '@/utils/multipleArtists'
 import { Button } from '@/app/components/ui/button'
+import { useIsMobile } from '@/app/hooks/use-mobile'
 import { TrackRecommendInfo } from './track-recommend-info'
 
 export function TrackInfo({ song }: { song: ISong | undefined }) {
   const { t } = useTranslation()
+  const isMobile = useIsMobile()
   const { setCurrentSongColor, currentSongColor } = useSongColor()
   const { setIsFullscreen, isFullscreen } = usePlayerFullscreen()
 
@@ -117,24 +119,25 @@ export function TrackInfo({ song }: { song: ISong | undefined }) {
             </ImageLoader>
           )}
         </div>
-        
-        {/* Кнопка разворачивания/сворачивания обложки */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-          onClick={(e) => {
-            e.stopPropagation()
-            setIsFullscreen(!isFullscreen)
-          }}
-          title={isFullscreen ? 'Свернуть' : 'Развернуть'}
-        >
-          {isFullscreen ? (
-            <Shrink className="h-3 w-3" />
-          ) : (
-            <Expand className="h-3 w-3" />
-          )}
-        </Button>
+
+        {!isMobile && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute -top-1 -right-1 z-10 h-5 w-5 bg-background/80 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsFullscreen(!isFullscreen)
+            }}
+            title={isFullscreen ? 'Свернуть' : 'Развернуть'}
+          >
+            {isFullscreen ? (
+              <Shrink className="h-3 w-3" />
+            ) : (
+              <Expand className="h-3 w-3" />
+            )}
+          </Button>
+        )}
       </div>
       <div className="flex flex-col justify-center w-full overflow-hidden">
         <MarqueeTitle gap="mr-2">

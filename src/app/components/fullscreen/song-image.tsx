@@ -13,7 +13,7 @@ export function FullscreenSongImage() {
   const coverUrl = (usePlayerStore.getState().songlist.currentSong as any)?.coverUrl
 
   return (
-    <div className="2xl:w-[33%] h-full max-w-[450px] max-h-[450px] 2xl:max-w-[550px] 2xl:max-h-[550px] items-end flex aspect-square">
+    <div className="flex aspect-square h-auto w-full max-w-[min(72vw,280px)] items-end md:h-full md:max-h-[450px] md:max-w-[450px] 2xl:w-[33%] 2xl:max-h-[550px] 2xl:max-w-[550px]">
       <AspectRatio
         ratio={1 / 1}
         className="rounded-lg 2xl:rounded-2xl overflow-hidden bg-accent/60"

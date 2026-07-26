@@ -1,22 +1,22 @@
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 20px;
-  padding: 16px 0;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  padding: 12px 0;
 }
 
 .card {
   position: relative;
-  min-height: 250px;
-  border-radius: 16px;
+  min-height: 120px;
+  border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .card:hover {
-  transform: translateY(-12px) scale(1.02);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.4);
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
 }
 
 .card::before {
@@ -36,73 +36,69 @@
 .content {
   position: absolute;
   inset: 0;
-  padding: 20px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  gap: 8px;
-  background: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.6) 100%);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.22);
 }
 
 .icon {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  font-size: 32px;
-  opacity: 0.8;
+  position: static;
+  font-size: 30px;
+  line-height: 1;
+  opacity: 0.95;
 }
 
 .title {
   color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  font-size: 1.125rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+  font-size: 0.9rem;
   font-weight: 700;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.description {
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 0.875rem;
-}
-
-.trackCount {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.75rem;
+/* В компактной сетке скрываем описания, оставляем только иконку и название */
+.description,
+.trackCount,
+.llmComment,
+.lastUpdated {
+  display: none;
 }
 
 .playButton {
   position: absolute;
-  bottom: 80px;
-  right: 16px;
-  width: 56px;
-  height: 56px;
+  bottom: 8px;
+  right: 8px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.95);
   color: black;
   border: none;
-  font-size: 24px;
+  font-size: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transform: translateY(20px) scale(0.8);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(8px);
-}
-
-.card:hover .playButton {
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
 }
 
 .playButton:hover {
   background: rgba(255, 255, 255, 1);
-  transform: translateY(-2px) scale(1.1);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  transform: scale(1.08);
 }
 
 .playButton:active {
-  transform: translateY(0) scale(0.95);
+  transform: scale(0.92);
 }
 
 .animatedGradient {

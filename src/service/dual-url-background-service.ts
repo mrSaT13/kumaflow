@@ -7,6 +7,8 @@
  */
 
 import { useAppStore } from '@/store/app.store'
+import { invalidateAppSession } from '@/service/app-session'
+import { validateSubsonicUrl } from '@/utils/validate-subsonic-url'
 
 interface DualUrlBackgroundSettings {
   enabled: boolean
@@ -123,45 +125,25 @@ class DualUrlBackgroundService {
    * Тестирование URL с повторными попытками
    */
   private async testUrl(url: string): Promise<boolean> {
-    const MAX_RETRIES = 3  // 3 попытки
-    const RETRY_DELAY = 1000  // 1 секунда между попытками
+    const MAX_RETRIES = 3
+    const RETRY_DELAY = 1000
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        console.log(`[DualURL Background] Testing URL (attempt ${attempt}/${MAX_RETRIES}):`, url)
+      console.log(`[DualURL Background] Testing URL (attempt ${attempt}/${MAX_RETRIES}):`, url)
 
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), this.TIMEOUT)
+      const ok = await validateSubsonicUrl(url, this.TIMEOUT)
 
-        const response = await fetch(`${url}/rest/ping.view`, {
-          method: 'GET',
-          signal: controller.signal,
-          mode: 'cors',
-        })
+      if (ok) {
+        console.log(`[DualURL Background] URL test success on attempt ${attempt}:`, url)
+        return true
+      }
 
-        clearTimeout(timeoutId)
-
-        if (response.ok) {
-          console.log(`[DualURL Background] URL test success on attempt ${attempt}:`, url)
-          return true
-        } else {
-          console.warn(`[DualURL Background] URL test failed (non-OK response):`, url, response.status)
-          // Не повторяем для non-OK ответа
-          return false
-        }
-      } catch (error: any) {
-        console.warn(`[DualURL Background] URL test failed (attempt ${attempt}/${MAX_RETRIES}):`, url, error.name, error.message)
-        
-        // Если последняя попытка - возвращаем false
-        if (attempt >= MAX_RETRIES) {
-          return false
-        }
-
-        // Ждём перед следующей попыткой
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
+      if (attempt < MAX_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY))
       }
     }
 
+    console.warn('[DualURL Background] URL test failed after retries:', url)
     return false
   }
 
@@ -218,6 +200,11 @@ class DualUrlBackgroundService {
   private switchUrlImmediate(newUrl: string, label: string) {
     const appStore = useAppStore.getState()
 
+    if (!newUrl?.trim()) {
+      console.warn('[DualURL Background] Refusing to switch to empty URL')
+      return
+    }
+
     // Проверяем что URL действительно изменился
     if (appStore.data.url === newUrl) {
       console.log('[DualURL Background] Already on this URL, skipping')
@@ -225,6 +212,7 @@ class DualUrlBackgroundService {
     }
 
     appStore.actions.setUrl(newUrl)
+    invalidateAppSession()
 
     // Сохраняем в localStorage
     this.saveAppStoreToLocalStorage(newUrl)

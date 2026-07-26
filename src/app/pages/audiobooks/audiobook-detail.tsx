@@ -6,7 +6,7 @@ import { usePlayerActions, usePlayerSonglist, usePlayerIsPlaying } from '@/store
 import { toast } from 'react-toastify'
 import { Button } from '@/app/components/ui/button'
 import { ArrowLeft, Play, Pause, SkipForward, SkipBack, BookOpen, Settings, AlertCircle } from 'lucide-react'
-import { useAppStore } from '@/store/app.store'
+import { openSettings } from '@/lib/settings-navigation'
 import styles from './audiobook-detail.module.css'
 
 interface AudiobookDetail extends Audiobook {
@@ -273,17 +273,7 @@ export default function AudiobookDetail() {
           <AlertCircle className={styles.errorIcon} />
           <h2>Audiobookshelf не подключён</h2>
           <p>Настройте подключение к вашему серверу Audiobookshelf в настройках</p>
-          <Button onClick={() => {
-            const { setOpenDialog, setCurrentPage } = useAppStore.getState().settings
-            setOpenDialog(true)
-            setCurrentPage('accounts')
-            setTimeout(() => {
-              const element = document.getElementById('audiobookshelf')
-              if (element) {
-                element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-              }
-            }, 500)
-          }} className="gap-2">
+          <Button onClick={() => openSettings('accounts')} className="gap-2">
             <Settings className="w-4 h-4" />
             Открыть настройки
           </Button>

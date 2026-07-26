@@ -2,7 +2,7 @@
   "name": "kumaflow",
   "private": true,
   "version": "1.6.0",
-  "description": "KumaFlow - умный музыкальный плеер с ML Engine 2.0, Mood Drift Detection, Time-Aware Recommendations и Vibe Similarity",
+  "description": "KumaFlow Portrait — мобильный форк KumaFlow с адаптивным UI, тёплым стартом и автогенерацией ML-плейлистов",
   "author": {
     "name": "Alex",
     "url": "https://github.com/mrSaT13"
@@ -13,7 +13,7 @@
   },
   "main": "./out/main/index.js",
   "type": "module",
-  "productName": "KumaFlow",
+  "productName": "KumaFlow Portrait",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -96,6 +96,7 @@
     "lodash": "^4.17.23",
     "lucide-react": "^0.563.0",
     "music-metadata": "^11.12.3",
+    "node-id3": "^0.2.6",
     "react": "^18.3.1",
     "react-country-flag": "^3.1.0",
     "react-device-detect": "^2.2.3",

@@ -66,7 +66,7 @@ export default function ExternalApiSettings() {
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Last.fm */}
-        <div className="space-y-3">
+        <div id="lastfm" className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
               <Label className="text-base">Last.fm</Label>
@@ -82,7 +82,7 @@ export default function ExternalApiSettings() {
 
           <div className="space-y-2">
             <Label htmlFor="lastfm-key">API Key</Label>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <Input
                 id="lastfm-key"
                 type="text"
@@ -149,7 +149,7 @@ export default function ExternalApiSettings() {
 
           <div className="space-y-2">
             <Label htmlFor="fanart-key">API Key</Label>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <Input
                 id="fanart-key"
                 type="text"
@@ -176,7 +176,7 @@ export default function ExternalApiSettings() {
 
           <div className="space-y-2">
             <Label htmlFor="fanart-client-key">Personal API Key (опционально)</Label>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <Input
                 id="fanart-client-key"
                 type="text"

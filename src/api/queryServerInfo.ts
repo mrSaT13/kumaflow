@@ -1,5 +1,6 @@
 import { AuthType } from '@/types/serverConfig'
 import { appName } from '@/utils/appName'
+import { getServerUrlCandidates } from '@/utils/server-config'
 import { authQueryParams } from './httpClient'
 
 export async function queryServerInfo(url: string) {
@@ -13,37 +14,49 @@ export async function queryServerInfo(url: string) {
 
     const queries = new URLSearchParams(query).toString()
 
-    const response = await fetch(`${url}/rest/ping.view?${queries}`, {
-      method: 'GET',
-    })
-    const data = await response.json()
+    const candidates = getServerUrlCandidates(url)
 
-    const extensionsMap: Record<string, number[]> = {}
-
-    if (data['subsonic-response'].openSubsonic) {
-      const response = await fetch(
-        `${url}/rest/getOpenSubsonicExtensions.view?${queries}`,
-        {
+    for (const baseUrl of candidates) {
+      try {
+        const response = await fetch(`${baseUrl}/rest/ping.view?${queries}`, {
           method: 'GET',
-        },
-      )
+          signal: AbortSignal.timeout(10000),
+        })
+        const data = await response.json()
 
-      const eData = await response.json()
-      const extensions = eData['subsonic-response'].openSubsonicExtensions
+        const extensionsMap: Record<string, number[]> = {}
 
-      for (const extension of extensions) {
-        extensionsMap[extension.name] = extension.versions
+        if (data['subsonic-response'].openSubsonic) {
+          const response = await fetch(
+            `${baseUrl}/rest/getOpenSubsonicExtensions.view?${queries}`,
+            {
+              method: 'GET',
+              signal: AbortSignal.timeout(10000),
+            },
+          )
+
+          const eData = await response.json()
+          const extensions = eData['subsonic-response'].openSubsonicExtensions
+
+          for (const extension of extensions) {
+            extensionsMap[extension.name] = extension.versions
+          }
+        }
+
+        return {
+          protocolVersion: data['subsonic-response'].version,
+          protocolVersionNumber: parseInt(
+            data['subsonic-response'].version.replaceAll('.', ''),
+          ),
+          serverType: data['subsonic-response'].type.toLowerCase() || 'subsonic',
+          extensionsSupported: extensionsMap,
+        }
+      } catch (_) {
+        // Try the next candidate URL.
       }
     }
 
-    return {
-      protocolVersion: data['subsonic-response'].version,
-      protocolVersionNumber: parseInt(
-        data['subsonic-response'].version.replaceAll('.', ''),
-      ),
-      serverType: data['subsonic-response'].type.toLowerCase() || 'subsonic',
-      extensionsSupported: extensionsMap,
-    }
+    throw new Error('Unable to query server info')
   } catch (_) {
     return {
       protocolVersion: '1.16.0',

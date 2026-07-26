@@ -6,7 +6,8 @@ import { ISong } from '@/types/responses/song'
 import { AddToPlaylistSubMenu } from './add-to-playlist'
 import { CacheTrackButton } from './cache-button'
 import { usePlayerActions } from '@/store/player.store'
-import { generateTrackRadio, generateVibeMix, generateArtistRadio } from '@/service/ml-wave-service'
+import { playTrackRadio } from '@/service/track-radio-service'
+import { generateVibeMix, generateArtistRadio } from '@/service/ml-wave-service'
 import { getRandomSongs } from '@/service/subsonic-api'
 import { toast } from 'react-toastify'
 import { useState } from 'react'
@@ -45,16 +46,9 @@ export function SongMenuOptions({
   const handlePlayTrackRadio = async () => {
     setIsRadioGenerating(true)
     try {
-      const playlist = await generateTrackRadio(song.id, 25)
-      if (playlist.songs.length > 0) {
-        setSongList([song, ...playlist.songs], 0)
-        toast(`▶️ Запущено радио: ${song.title}`, { type: 'success' })
-      } else {
-        toast('Не удалось сгенерировать радио', { type: 'error' })
-      }
+      await playTrackRadio(song, 25)
     } catch (error) {
       console.error('Failed to generate track radio:', error)
-      toast('Ошибка при генерации радио', { type: 'error' })
     } finally {
       setIsRadioGenerating(false)
     }

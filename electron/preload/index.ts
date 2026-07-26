@@ -151,6 +151,18 @@ const api: IKumaFlowAPI = {
   getLocalCoverBlob: (filePath: string) => {
     return ipcRenderer.invoke('get-local-cover-blob', filePath)
   },
+  checkFileAccessible: (filePath: string) => {
+    return ipcRenderer.invoke('check-file-accessible', filePath)
+  },
+  resolveServerPath: (serverPath: string, pathPrefix?: string) => {
+    return ipcRenderer.invoke('resolve-server-path', { serverPath, pathPrefix })
+  },
+  readFileTags: (filePath: string) => {
+    return ipcRenderer.invoke('read-file-tags', filePath)
+  },
+  writeFileTags: (filePath: string, tags) => {
+    return ipcRenderer.invoke('write-file-tags', { filePath, tags })
+  },
   // Remote Control IPC
   remoteControl: {
     start: () => ipcRenderer.invoke('remote-control:start'),

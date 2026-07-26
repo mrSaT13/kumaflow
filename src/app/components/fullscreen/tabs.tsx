@@ -48,10 +48,10 @@ const getTransform = (currentTab: TabValue, tabValue: TabValue) => {
 }
 
 const tabStyles =
-  'absolute inset-0 mt-0 h-[calc(100%-64px)] overflow-y-auto transition-transform duration-300'
+  'absolute inset-0 overflow-hidden transition-transform duration-300'
 
 const triggerStyles =
-  'w-full data-[state=active]:bg-foreground data-[state=active]:text-secondary text-foreground drop-shadow-sm'
+  'w-full text-sm md:text-base data-[state=active]:bg-foreground data-[state=active]:text-secondary text-foreground drop-shadow-sm'
 
 export function FullscreenTabs() {
   const [tab, setTab] = useState<TabValue>(TabsEnum.Playing)
@@ -61,9 +61,9 @@ export function FullscreenTabs() {
     <Tabs
       value={tab}
       onValueChange={(value) => setTab(value as TabValue)}
-      className="w-full h-full min-h-full"
+      className="flex h-full min-h-0 w-full flex-col"
     >
-      <TabsList className="w-full bg-foreground/20 mb-4">
+      <TabsList className="mb-3 h-10 w-full shrink-0 bg-foreground/20 md:mb-4 md:h-11">
         <TabsTrigger value={TabsEnum.Queue} className={triggerStyles}>
           {t('fullscreen.queue')}
         </TabsTrigger>
@@ -74,7 +74,7 @@ export function FullscreenTabs() {
           {t('fullscreen.lyrics')}
         </TabsTrigger>
       </TabsList>
-      <div className="relative w-full h-full">
+      <div className="relative min-h-0 w-full flex-1">
         <TabsContent
           value={TabsEnum.Queue}
           className={tabStyles}

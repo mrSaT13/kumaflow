@@ -16,7 +16,7 @@ export function MainRoutes() {
         id="main-scroll-area"
         className="w-full bg-background-foreground"
       >
-        <Outlet />
+        <Outlet key={pathname} />
       </ScrollArea>
     </main>
   )

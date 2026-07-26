@@ -50,7 +50,10 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   }, [onComplete])
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-emerald-950 via-blue-950 to-purple-950 flex items-center justify-center z-50">
+    <div
+      className="fixed inset-0 bg-gradient-to-br from-emerald-950 via-blue-950 to-purple-950 flex items-center justify-center z-50"
+      style={{ width: '100vw', height: '100dvh' }}
+    >
       {/* Анимированные фоновые пятна */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-500/20 rounded-full blur-3xl animate-pulse" />

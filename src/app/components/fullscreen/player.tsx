@@ -1,7 +1,6 @@
 import { CloseFullscreenButton } from './buttons'
-import { FullscreenControls } from './controls'
+import { FullscreenControls, FullscreenLikeButton } from './controls'
 import { FullscreenProgress } from './progress'
-import { FullscreenSettings } from './settings'
 import { VolumeContainer } from './volume-container'
 
 export function FullscreenPlayer() {
@@ -9,17 +8,36 @@ export function FullscreenPlayer() {
     <div className="w-full">
       <FullscreenProgress />
 
-      <div className="flex items-center justify-between gap-4 mt-5">
-        <div className="w-[200px] flex items-center gap-2 justify-start">
+      {/* Мобильная раскладка */}
+      <div className="mt-3 space-y-2 md:hidden">
+        <FullscreenControls compact variant="secondary" />
+
+        <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1">
+            <CloseFullscreenButton compact />
+          </div>
+
+          <div className="flex min-w-0 flex-1 justify-center">
+            <FullscreenControls compact variant="playback" />
+          </div>
+
+          <div className="shrink-0">
+            <FullscreenLikeButton compact />
+          </div>
+        </div>
+      </div>
+
+      {/* Десктопная раскладка */}
+      <div className="mt-5 hidden items-center justify-between gap-4 md:flex">
+        <div className="flex w-[200px] items-center justify-start gap-2">
           <CloseFullscreenButton />
-          <FullscreenSettings />
         </div>
 
-        <div className="flex flex-1 justify-center items-center gap-2">
+        <div className="flex flex-1 flex-wrap items-center justify-center gap-1 md:gap-2">
           <FullscreenControls />
         </div>
 
-        <div className="w-[200px] flex items-center gap-4 justify-end">
+        <div className="flex w-[200px] items-center justify-end gap-4">
           <VolumeContainer />
         </div>
       </div>

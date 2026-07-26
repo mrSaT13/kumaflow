@@ -60,6 +60,10 @@ const LatestEpisodes = lazy(
 )
 const LocalLibrary = lazy(() => import('@/app/pages/local-library'))
 const CachePage = lazy(() => import('@/app/pages/cache'))
+const ProfilePage = lazy(() => import('@/app/pages/profile'))
+const SettingsIndexPage = lazy(() => import('@/app/pages/settings/index'))
+const SettingsCategoryPage = lazy(() => import('@/app/pages/settings/category'))
+const LibraryHubPage = lazy(() => import('@/app/pages/library'))
 
 export const router = createHashRouter([
   {
@@ -398,6 +402,46 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={<SongListFallback />}>
             <HistoryPage />
+          </Suspense>
+        ),
+      },
+      {
+        id: 'library-hub',
+        path: '/library',
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense fallback={<HomeFallback />}>
+            <LibraryHubPage />
+          </Suspense>
+        ),
+      },
+      {
+        id: 'profile',
+        path: '/profile',
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense fallback={<HomeFallback />}>
+            <ProfilePage />
+          </Suspense>
+        ),
+      },
+      {
+        id: 'settings',
+        path: ROUTES.SETTINGS.ROOT,
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense fallback={<HomeFallback />}>
+            <SettingsIndexPage />
+          </Suspense>
+        ),
+      },
+      {
+        id: 'settings-category',
+        path: `${ROUTES.SETTINGS.ROOT}/:pageId`,
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense fallback={<HomeFallback />}>
+            <SettingsCategoryPage />
           </Suspense>
         ),
       },

@@ -12,6 +12,12 @@ import { mainWindow } from '../window'
 import { app } from 'electron'
 import { promises as fs } from 'fs'
 import { join, basename, extname, normalize } from 'path'
+import {
+  readFileTags,
+  writeFileTags,
+  isFileAccessible,
+  resolveFilePath,
+} from './tag-writer'
 
 // Поддержка метаданных через music-metadata
 let mm: any = null
@@ -165,9 +171,6 @@ export function setupLocalMusicHandlers() {
     }
   })
 
-  /**
-   * Получить обложку как Blob URL (вместо base64 для экономии памяти)
-   */
   ipcMain.handle('get-local-cover-blob', async (_, filePath: string) => {
     console.log('[LocalMusic] Getting cover blob for:', filePath)
 
@@ -181,7 +184,6 @@ export function setupLocalMusicHandlers() {
 
       if (metadata.common.picture && metadata.common.picture.length > 0) {
         const picture = metadata.common.picture[0]
-        // Возвращаем буфер как есть, фронтенд создаст Blob URL
         return {
           data: picture.data.toString('base64'),
           format: picture.format,
@@ -194,6 +196,35 @@ export function setupLocalMusicHandlers() {
       return null
     }
   })
+
+  ipcMain.handle('check-file-accessible', async (_, filePath: string) => {
+    if (!filePath) return false
+    return isFileAccessible(filePath)
+  })
+
+  ipcMain.handle(
+    'resolve-server-path',
+    async (_, payload: { serverPath: string; pathPrefix?: string }) => {
+      if (!payload?.serverPath) return ''
+      return resolveFilePath(payload.serverPath, payload.pathPrefix)
+    },
+  )
+
+  ipcMain.handle('read-file-tags', async (_, filePath: string) => {
+    if (!filePath) return null
+    return readFileTags(filePath)
+  })
+
+  ipcMain.handle(
+    'write-file-tags',
+    async (_, payload: { filePath: string; tags: Record<string, unknown> }) => {
+      if (!payload?.filePath) {
+        return { success: false, error: 'Путь к файлу не указан' }
+      }
+
+      return writeFileTags(payload.filePath, payload.tags as any)
+    },
+  )
 
   console.log('[LocalMusic] IPC handlers setup complete')
 }

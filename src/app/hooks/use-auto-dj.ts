@@ -35,8 +35,8 @@ export function useAutoDJ() {
   const isProcessingRef = useRef(false)
 
   useEffect(() => {
-    // Если Авто-микс выключен, ничего не делаем
     if (!settings.enabled) return
+    if (usePlayerStore.getState().playerState.isMyWaveActive) return
 
     // Если нет текущего трека, ничего не делаем
     if (!currentSong?.id) return

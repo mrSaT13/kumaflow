@@ -21,11 +21,7 @@ import {
   resetAnalysisProgress,
   type AnalysisState,
 } from '@/service/library-analyzer'
-import { getArtists } from '@/service/subsonic-api'
 import { exportAnalysisData, importAnalysisData } from '@/service/analysis-export'
-import { HolidayPlaylistsSettings } from '@/app/components/settings/holiday-playlists'
-import { RemoteControlSettings } from '@/app/components/settings/remote-control'
-import { LLMSettings } from '@/app/components/settings/llm-settings'
 
 export default function MLPlaylistsSettings() {
   const {
@@ -306,16 +302,15 @@ export default function MLPlaylistsSettings() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>✨ ML Плейлисты</CardTitle>
-        <CardDescription>
-          Настройки персональных плейлистов с рекомендациями
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* ML Плейлисты настройки */}
-        <div id="ml-playlists" className="space-y-6">
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">ML Плейлисты</CardTitle>
+          <CardDescription>
+            Настройки персональных плейлистов с рекомендациями
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
         <div className="space-y-2">
           <div className="flex justify-between">
             <Label>Минимум треков: {settings.minTracks}</Label>
@@ -354,12 +349,12 @@ export default function MLPlaylistsSettings() {
             onValueChange={(val) => setAutoUpdateHours(val[0])}
           />
           <p className="text-sm text-muted-foreground">
-            От 1 часа до 7 дней
+            От 1 часа до 7 дней. Ежедневный микс — в полночь (~8 ч), микс по времени суток — каждые 4 ч.
           </p>
         </div>
 
         {/* 🔒 ТУМБЛЕР ОТКРЫТИЙ — ВКЛ/ВЫКЛ */}
-        <div className="flex items-center justify-between pt-4 border-t">
+        <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="font-medium">🔍 Включить музыкальные открытия</div>
             <div className="text-sm text-muted-foreground">
@@ -414,7 +409,7 @@ export default function MLPlaylistsSettings() {
         )}
 
         {/* 🎰 MULTI-ARMED BANDIT — УМНОЕ ИССЛЕДОВАНИЕ */}
-        <div className="flex items-center justify-between pt-4 border-t">
+        <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="font-medium">🎰 Multi-Armed Bandit (умное исследование)</div>
             <div className="text-sm text-muted-foreground">
@@ -721,7 +716,7 @@ export default function MLPlaylistsSettings() {
         )}
 
         {/* LLM Координатор для Моя волна */}
-        <div className="flex items-center justify-between pt-4 border-t">
+        <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="font-medium">🤖 LLM Координатор для «Моя волна»</div>
             <div className="text-sm text-muted-foreground">
@@ -739,7 +734,7 @@ export default function MLPlaylistsSettings() {
           />
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t">
+        <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="font-medium">Удалять дубликаты</div>
             <div className="text-sm text-muted-foreground">
@@ -752,7 +747,7 @@ export default function MLPlaylistsSettings() {
           />
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t">
+        <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="font-medium">Сканирование библиотеки</div>
             <div className="text-sm text-muted-foreground">
@@ -766,7 +761,7 @@ export default function MLPlaylistsSettings() {
         </div>
 
         {/* Адаптивность по времени суток */}
-        <div className="flex items-center justify-between pt-4 border-t">
+        <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="font-medium">Адаптивность по времени суток</div>
             <div className="text-sm text-muted-foreground">
@@ -779,7 +774,7 @@ export default function MLPlaylistsSettings() {
           />
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t">
+        <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="font-medium">Показывать дату обновления</div>
             <div className="text-sm text-muted-foreground">
@@ -848,22 +843,21 @@ export default function MLPlaylistsSettings() {
             </Button>
           </div>
         </div>
+      </CardContent>
+    </Card>
 
-        {/* Last.fm Теги */}
-        <div id="lastfm" className="pt-4 border-t">
-          <LastFmTagsImport />
-        </div>
+    <div id="lastfm">
+      <LastFmTagsImport />
+    </div>
 
-        {/* Анализ библиотеки */}
-        <div id="analysis" className="pt-4 border-t">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Анализ библиотеки</CardTitle>
-              <CardDescription>
-                Постепенный анализ всех треков по артистам
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+    <Card id="analysis">
+      <CardHeader>
+        <CardTitle className="text-base">Анализ библиотеки</CardTitle>
+        <CardDescription>
+          Постепенный анализ всех треков по артистам
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
               {analysisState && analysisState.totalArtists > 0 ? (
                 <>
                   <div className="space-y-2">
@@ -987,26 +981,8 @@ export default function MLPlaylistsSettings() {
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Праздничные плейлисты */}
-        <div className="pt-4 border-t">
-          <HolidayPlaylistsSettings />
-        </div>
-
-        {/* Remote Control */}
-        <div className="pt-4 border-t">
-          <RemoteControlSettings />
-        </div>
-
-        {/* LLM Интеграция */}
-        <div className="pt-4 border-t">
-          <LLMSettings />
-        </div>
-      </div>  {/* Закрываем id="ml-playlists" */}
       </CardContent>
     </Card>
+    </div>
   )
 }

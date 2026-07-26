@@ -8,6 +8,12 @@
  */
 
 import { useAudiobookshelfStore } from '@/store/audiobookshelf.store'
+import { IDLE_TIMEOUT_MS } from '@/service/app-session'
+
+interface CachedPlaybackSession {
+  session: any
+  expiresAt: number
+}
 
 export interface Audiobook {
   id: string
@@ -69,6 +75,7 @@ const getCorsProxyUrl = () => {
 class AudiobookshelfService {
   private baseUrl: string = ''
   private apiKey: string = ''
+  private playbackSessions = new Map<string, CachedPlaybackSession>()
 
   /**
    * Инициализация клиента
@@ -96,10 +103,59 @@ class AudiobookshelfService {
   }
 
   /**
-   * Получить сессию воспроизведения
+   * Получить сессию воспроизведения (с кэшем на 10 мин без активности)
    */
   async getPlaybackSession(bookId: string): Promise<any> {
+    return this.createOrGetPlaybackSession(bookId)
+  }
+
+  private getCachedPlaybackSession(bookId: string): any | null {
+    const cached = this.playbackSessions.get(bookId)
+    if (!cached) return null
+
+    if (Date.now() > cached.expiresAt) {
+      this.playbackSessions.delete(bookId)
+      return null
+    }
+
+    return cached.session
+  }
+
+  private cachePlaybackSession(bookId: string, session: any) {
+    this.playbackSessions.set(bookId, {
+      session,
+      expiresAt: Date.now() + IDLE_TIMEOUT_MS,
+    })
+  }
+
+  private touchPlaybackSession(bookId: string) {
+    const cached = this.playbackSessions.get(bookId)
+    if (!cached) return
+    cached.expiresAt = Date.now() + IDLE_TIMEOUT_MS
+  }
+
+  /** Продлить TTL сессии, пока идёт воспроизведение аудиокниги */
+  keepPlaybackSessionAlive(bookId: string) {
+    this.touchPlaybackSession(bookId)
+  }
+
+  clearPlaybackSession(bookId?: string) {
+    if (bookId) {
+      this.playbackSessions.delete(bookId)
+      return
+    }
+    this.playbackSessions.clear()
+  }
+
+  private async createOrGetPlaybackSession(bookId: string): Promise<any> {
     this.initClient()
+
+    const cached = this.getCachedPlaybackSession(bookId)
+    if (cached) {
+      console.log('[Audiobookshelf] Reusing cached playback session for:', bookId)
+      this.touchPlaybackSession(bookId)
+      return cached
+    }
 
     try {
       console.log('[Audiobookshelf] Creating playback session for:', bookId)
@@ -121,6 +177,9 @@ class AudiobookshelfService {
       )
 
       console.log('[Audiobookshelf] Playback session created:', session)
+      if (session) {
+        this.cachePlaybackSession(bookId, session)
+      }
       return session
     } catch (error) {
       console.error('[Audiobookshelf] Failed to create playback session:', error)
@@ -296,28 +355,11 @@ class AudiobookshelfService {
     this.initClient()
 
     try {
-      // Создаём сессию воспроизведения
-      console.log('[Audiobookshelf] Creating playback session for:', bookId)
-      const session: any = await this.request(
-        `/api/items/${bookId}/play`,
-        'POST',
-        {
-          deviceInfo: {
-            deviceId: 'kumaflow-web',
-            name: 'KumaFlow',
-            capabilities: {
-              canPlay: true,
-              canDownload: true
-            }
-          },
-          mediaPlayer: 'html5',
-          forceDirectPlay: true
-        }
-      )
+      const session: any = await this.createOrGetPlaybackSession(bookId)
 
       console.log('[Audiobookshelf] Playback session response:', session)
-      console.log('[Audiobookshelf] Session playMethod:', session.playMethod)
-      console.log('[Audiobookshelf] Session audioTracks:', session.audioTracks?.length)
+      console.log('[Audiobookshelf] Session playMethod:', session?.playMethod)
+      console.log('[Audiobookshelf] Session audioTracks:', session?.audioTracks?.length)
 
       // Для Direct Play (playMethod = 0) используем audioTracks[0].contentUrl
       if (session?.playMethod === 0 && session?.audioTracks?.[0]?.contentUrl) {

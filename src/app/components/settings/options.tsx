@@ -1,5 +1,6 @@
 import {
   CircleUserRound,
+  Cloud,
   Database,
   EarthLock,
   FileText,
@@ -25,6 +26,7 @@ export type SettingsOptions =
   | 'appearance'
   | 'language'
   | 'audio'
+  | 'external-api'
   | 'content'
   | 'local-music'
   | 'cache'
@@ -48,12 +50,17 @@ const options: OptionsData[] = [
   { id: 'appearance', icon: Paintbrush },
   { id: 'language', icon: Globe },
   { id: 'audio', icon: Headphones },
+  { id: 'external-api', icon: Cloud },
   { id: 'content', icon: FileText },
   ...(isDesktop() ? [localMusicOption, cacheOption, accountsOption, accountOption, desktopOption] : []),
   { id: 'privacy', icon: EarthLock },
 ]
 
-export function SettingsOptions() {
+export function getSettingsOptions() {
+  return options
+}
+
+export function SettingsOptions({ onSelect }: { onSelect?: () => void }) {
   const { t } = useTranslation()
   const { currentPage, setCurrentPage } = useAppSettings()
 
@@ -65,7 +72,10 @@ export function SettingsOptions() {
             <SidebarMenuItem key={item.id}>
               <SidebarMenuButton
                 isActive={item.id === currentPage}
-                onClick={() => setCurrentPage(item.id)}
+                onClick={() => {
+                  setCurrentPage(item.id)
+                  onSelect?.()
+                }}
               >
                 <item.icon />
                 <span>{t(`settings.options.${item.id}`)}</span>

@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { BottomNav } from '@/app/components/mobile/bottom-nav'
 import { MainDrawerPage } from '@/app/components/drawer/page'
 import { FullscreenMode } from '@/app/components/fullscreen/page'
 import { Player } from '@/app/components/player/player'
@@ -35,6 +36,7 @@ export default function BaseLayout() {
         </MainSidebarInset>
         <MemoPlayer />
       </MainSidebarProvider>
+      <BottomNav />
       <MemoSongInfoDialog />
       <MemoRemovePlaylistDialog />
       <MemoMainDrawerPage />

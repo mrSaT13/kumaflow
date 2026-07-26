@@ -266,6 +266,7 @@ class AppleMusicService {
 
       // Добавляем страну для локализации
       url.searchParams.set('country', this.country)
+      url.searchParams.set('lang', 'en_us')
 
       Object.entries(params).forEach(([key, value]) => {
         url.searchParams.set(key, value)
@@ -369,21 +370,64 @@ class AppleMusicService {
 
     return response.results
       .filter((r: any) => r.kind === 'song')
-      .map((result: any) => ({
-        ...result,
-        wrapperType: result.wrapperType,
-        kind: result.kind,
-        artistId: result.artistId,
-        trackId: result.trackId,
-        artistName: result.artistName,
-        trackName: result.trackName,
-        collectionName: result.collectionName,
-        artworkUrl100: result.artworkUrl100,
-        previewUrl: result.previewUrl,
-        releaseDate: result.releaseDate,
-        primaryGenreName: result.primaryGenreName,
-        trackTimeMillis: result.trackTimeMillis,
-      }))
+      .map((result: any) => this.mapSongResult(result))
+  }
+
+  /**
+   * Поиск конкретного трека по артисту и названию
+   */
+  async searchSong(
+    artist: string,
+    title: string,
+    album?: string,
+    limit: number = 15,
+  ): Promise<iTunesResult[]> {
+    const queries = [
+      `${artist} ${title}`,
+      album ? `${artist} ${album} ${title}` : null,
+      title,
+    ].filter((q): q is string => !!q?.trim())
+
+    const seen = new Set<number>()
+    const results: iTunesResult[] = []
+
+    for (const term of queries) {
+      const response = await this.request<any>('/search', {
+        term,
+        entity: 'song',
+        limit: limit.toString(),
+      })
+
+      if (!response?.results) continue
+
+      for (const result of response.results) {
+        if (result.kind !== 'song' || seen.has(result.trackId)) continue
+        seen.add(result.trackId)
+        results.push(this.mapSongResult(result))
+      }
+
+      if (results.length >= limit) break
+    }
+
+    return results.slice(0, limit)
+  }
+
+  private mapSongResult(result: any): iTunesResult {
+    return {
+      ...result,
+      wrapperType: result.wrapperType,
+      kind: result.kind,
+      artistId: result.artistId,
+      trackId: result.trackId,
+      artistName: result.artistName,
+      trackName: result.trackName,
+      collectionName: result.collectionName,
+      artworkUrl100: result.artworkUrl100,
+      previewUrl: result.previewUrl,
+      releaseDate: result.releaseDate,
+      primaryGenreName: result.primaryGenreName,
+      trackTimeMillis: result.trackTimeMillis,
+    }
   }
 
   /**

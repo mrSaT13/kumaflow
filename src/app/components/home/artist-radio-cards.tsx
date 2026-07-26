@@ -176,8 +176,8 @@ export default function ArtistRadioCards() {
       >
         <CarouselContent className="-ml-4">
           {topArtists.map((artist) => (
-            <CarouselItem key={artist.id} className="pl-4 basis-1/6 sm:basis-1/5 md:basis-1/4 lg:basis-1/5 xl:basis-1/6">
-              <div className="h-48">
+            <CarouselItem key={artist.id} className="basis-[48%] pl-4 sm:basis-[36%] md:basis-[28%] lg:basis-[22%] xl:basis-[18%]">
+              <div className="aspect-square w-full">
                 <ArtistCollageCard
                   artistId={artist.id}
                   artistName={artist.name}

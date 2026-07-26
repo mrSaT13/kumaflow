@@ -1,25 +1,61 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { cn } from '@/lib/utils'
 
 interface SpectrogramProgressProps {
   progress: number
   duration: number
   onSeek: (value: number) => void
+  onSeekStart?: () => void
+  onSeekChange?: (value: number) => void
   className?: string
 }
 
-export function SpectrogramProgress({ progress, duration, onSeek, className }: SpectrogramProgressProps) {
+export function SpectrogramProgress({
+  progress,
+  duration,
+  onSeek,
+  onSeekStart,
+  onSeekChange,
+  className,
+}: SpectrogramProgressProps) {
+  const isDraggingRef = useRef(false)
+
   const progressPct = useMemo(() => {
     return duration > 0 ? progress / duration : 0
   }, [progress, duration])
 
-  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const seekFromClientX = (clientX: number, element: HTMLElement) => {
+    if (duration === 0) return 0
+
+    const rect = element.getBoundingClientRect()
+    const x = clientX - rect.left
+    const pct = Math.max(0, Math.min(1, x / rect.width))
+    return pct * duration
+  }
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (duration === 0) return
-    
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const pct = x / rect.width
-    onSeek(pct * duration)
+
+    isDraggingRef.current = true
+    e.currentTarget.setPointerCapture(e.pointerId)
+    onSeekStart?.()
+    onSeekChange?.(seekFromClientX(e.clientX, e.currentTarget))
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current || duration === 0) return
+
+    onSeekChange?.(seekFromClientX(e.clientX, e.currentTarget))
+  }
+
+  const finishSeek = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return
+
+    isDraggingRef.current = false
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+    onSeek(seekFromClientX(e.clientX, e.currentTarget))
   }
 
   // Генерируем столбики спектрограммы
@@ -51,8 +87,11 @@ export function SpectrogramProgress({ progress, duration, onSeek, className }: S
 
   return (
     <div
-      className={cn('relative w-full h-8 cursor-pointer flex items-end gap-px', className)}
-      onClick={handleClick}
+      className={cn('relative flex h-12 w-full cursor-pointer touch-none items-end gap-px', className)}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={finishSeek}
+      onPointerCancel={finishSeek}
     >
       {bars.map((bar) => (
         <div

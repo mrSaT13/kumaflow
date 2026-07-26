@@ -2,7 +2,58 @@
 
 Все изменения в проекте KumaFlow.
 
+---
 
+## [1.6.0-portrait] - 2026-06-13
+
+> **KumaFlow Portrait** — мобильный форк [mrSaT13/kumaflow](https://github.com/mrSaT13/kumaflow).
+> Репозиторий: [Habrahar/kumaflow_portrait](https://github.com/Habrahar/kumaflow_portrait)
+
+### 📱 Мобильный UI
+- Единый responsive-интерфейс вместо отдельной Mobile-страницы
+- Нижняя навигация, страницы Library и Profile
+- Touch-плеер: seek по прогрессу, адаптивные контролы и очередь
+- Мобильные списки треков (`songs-mobile-list`)
+- Настройки: карточный layout, боковая панель, поиск, категории
+- Homepage-v2: компактная ML-сетка 4×1, блок недавних альбомов
+- Splash и layout на `100dvh` для мобильных браузеров
+
+### 🔥 Тёплый старт
+- Warm session: пропуск splash при возврате в приложение
+- Heartbeat и idle-таймаут 10 мин при паузе/неактивности
+- Кэш ping в loginLoader / protectedLoader
+- Кэш playback-сессий Audiobookshelf (TTL 10 мин)
+
+### 🤖 Автогенерация ML-плейлистов
+- **Daily-mix:** каждый день после полночи, ~8 ч, без повторов с прошлым днём
+- **Time-of-day:** каждые 4 ч или при смене периода (утро/день/вечер/ночь), ~4 ч
+- Расписание в `ml-playlist-schedule.ts`
+
+### 🌊 Потоковая «Моя волна»
+- Мгновенный старт: первый трек сразу, без ожидания полного плейлиста
+- Догрузка очереди в фоне (до 5 треков вперёд), prefetch следующего URL
+- Состояние `isMyWaveActive`: повторный клик — пауза/продолжение, не сброс
+- Auto-DJ не вмешивается, пока активна волна
+- Сервисы: `my-wave-stream.ts`, `my-wave-utils.ts`, `my-wave-preload.ts`
+
+### 📻 Радио по треку
+- Мгновенное воспроизведение seed-трека, похожие — в фоне (Last.fm / Navidrome + жанр)
+- Работает из меню трека, альбома, Instant Mix; без блокирующих toast
+- Отдельный сервис `track-radio-service.ts` (не персонализация — «похожее на песню»)
+
+### 🧠 ML-рекомендации (общий пул)
+- Общие хелперы: `ml-recommendation-helpers.ts` (бан артистов, valence, время суток, пул кандидатов)
+- Daily Mix, Discover Weekly и generated-playlist-page на единой логике
+- Valence из лайков, адаптивные BPM/energy по времени суток
+
+### 📱 Прочее (Portrait)
+- Toast-уведомления скрыты на экранах ≤767px (десктоп без изменений)
+
+### 🔧 Прочее
+- `.gitignore` для `node_modules`
+- `package-lock.json`
+
+---
 
 ## [1.5.4] - 2026-03-24
 ## 🎉 Новые функции

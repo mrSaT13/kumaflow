@@ -25,7 +25,7 @@ import { useMainDrawerState } from '@/store/player.store'
 
 const SIDEBAR_STORAGE_KEY = 'main_sidebar_state'
 const SIDEBAR_WIDTH = '17.5rem'
-const SIDEBAR_WIDTH_MOBILE = '100%'
+const SIDEBAR_WIDTH_MOBILE = 'min(85vw, 340px)'
 const SIDEBAR_WIDTH_ICON = '4rem'
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b'
 
@@ -156,7 +156,9 @@ function MainSidebarProvider({
             } as React.CSSProperties
           }
           className={cn(
-            'group/sidebar-wrapper has-data-[variant=inset]:bg-background flex pt-header pb-player w-full h-full',
+            'group/sidebar-wrapper has-data-[variant=inset]:bg-background flex w-full h-full',
+            'pt-[env(safe-area-inset-top)] md:pt-[calc(var(--header-height)+env(safe-area-inset-top))]',
+            'pb-[calc(var(--player-height)+var(--bottomnav-height)+env(safe-area-inset-bottom))]',
             className,
           )}
           {...props}
@@ -337,7 +339,7 @@ function MainSidebarInset({
     <main
       data-slot="sidebar-inset"
       className={cn(
-        'bg-background relative flex w-[calc(100%-var(--sidebar-width))] flex-1 flex-col',
+        'bg-background relative flex w-full md:w-[calc(100%-var(--sidebar-width))] min-w-0 flex-1 flex-col',
         'md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0',
         'md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm',
         'md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2',

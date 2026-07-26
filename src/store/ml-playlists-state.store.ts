@@ -52,8 +52,9 @@ export const useMLPlaylistsState = createWithEqualityFn<MLPlaylistsState>()(
 
           addPlaylist: (playlist) => {
             set((state) => {
-              // Ищем существующий плейлист по ID (не по типу!)
-              const existingIndex = state.playlists.findIndex(p => p.id === playlist.id)
+              const existingIndex = state.playlists.findIndex(
+                (p) => p.id === playlist.id || p.type === playlist.type,
+              )
 
               if (existingIndex !== -1) {
                 // Обновляем существующий — сохраняем СТАРЫЙ ID и дату создания

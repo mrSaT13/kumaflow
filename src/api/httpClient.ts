@@ -5,6 +5,7 @@ import { CoverArt } from '@/types/coverArtType'
 import { AuthType } from '@/types/serverConfig'
 import { appName } from '@/utils/appName'
 import { saltWord } from '@/utils/salt'
+import { isValidServerConnection, normalizeServerUrl } from '@/utils/server-config'
 
 export type QueryType = Record<string, string | number | undefined>
 
@@ -47,7 +48,13 @@ function queryParams() {
 }
 
 export function getUrl(path: string, options?: QueryType) {
-  const serverUrl = useAppStore.getState().data.url
+  const { url: serverUrl, username, password, isServerConfigured } =
+    useAppStore.getState().data
+
+  if (!isValidServerConnection({ url: serverUrl, username, password, isServerConfigured })) {
+    throw new Error('Server URL or credentials are missing')
+  }
+
   const params = new URLSearchParams(queryParams())
 
   if (options) {
@@ -62,7 +69,7 @@ export function getUrl(path: string, options?: QueryType) {
 
   const queries = params.toString()
   const pathWithoutSlash = path.startsWith('/') ? path.substring(1) : path
-  let url = `${serverUrl}/rest/${pathWithoutSlash}`
+  let url = `${normalizeServerUrl(serverUrl!)}/rest/${pathWithoutSlash}`
   url += path.includes('?') ? '&' : '?'
   url += queries
 
@@ -75,18 +82,35 @@ async function browserFetch<T>(
 ): Promise<{ count: number; data: T } | undefined> {
   try {
     const response = await fetch(url, options)
+    const text = await response.text()
 
-    if (response.ok) {
-      const data = await response.json()
-      return {
-        count: parseInt(response.headers.get('x-total-count') || '0', 10),
-        data: data['subsonic-response'] as T,
-      }
+    if (!response.ok) {
+      console.error(
+        'browserFetch non-OK response:',
+        response.status,
+        url,
+        text.substring(0, 200),
+      )
+      return undefined
     }
 
-    return undefined
+    if (text.trimStart().startsWith('<')) {
+      console.error(
+        'Error on browserFetch request: server returned HTML instead of JSON.',
+        'Check server URL — it may point to a web page or reverse proxy.',
+        url,
+        text.substring(0, 200),
+      )
+      return undefined
+    }
+
+    const data = JSON.parse(text)
+    return {
+      count: parseInt(response.headers.get('x-total-count') || '0', 10),
+      data: data['subsonic-response'] as T,
+    }
   } catch (error) {
-    console.error('Error on browserFetch request', error)
+    console.error('Error on browserFetch request', url, error)
     return undefined
   }
 }
@@ -95,6 +119,11 @@ export async function httpClient<T>(
   path: string,
   options: FetchOptions,
 ): Promise<{ count: number; data: T } | undefined> {
+  const connection = useAppStore.getState().data
+  if (!isValidServerConnection(connection)) {
+    return undefined
+  }
+
   try {
     const url = getUrl(path, options.query)
     const init = omit(options, 'query')

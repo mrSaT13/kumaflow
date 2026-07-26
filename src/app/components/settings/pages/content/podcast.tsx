@@ -6,16 +6,10 @@ import { useTranslation } from 'react-i18next'
 import { useDebouncedCallback } from 'use-debounce'
 import { z } from 'zod'
 import {
-  Content,
-  ContentItem,
-  ContentItemForm,
-  ContentItemTitle,
-  ContentSeparator,
-  Header,
-  HeaderDescription,
-  HeaderTitle,
-  Root,
-} from '@/app/components/settings/section'
+  SettingsCard,
+  SettingsRow,
+  SettingsSection,
+} from '@/app/components/settings/settings-layout'
 import { Input } from '@/app/components/ui/input'
 import { Switch } from '@/app/components/ui/switch'
 import { cn } from '@/lib/utils'
@@ -93,19 +87,14 @@ export function PodcastContent() {
   })
 
   return (
-    <Root>
-      <Header>
-        <HeaderTitle>{t('settings.content.podcast.group')}</HeaderTitle>
-        <HeaderDescription>
-          {t('settings.content.podcast.description')}
-        </HeaderDescription>
-      </Header>
-      <Content>
-        <ContentItem>
-          <ContentItemTitle>
-            {t('settings.content.podcast.enabled.label')}
-          </ContentItemTitle>
-          <ContentItemForm>
+    <SettingsCard
+      title={t('settings.content.podcast.group')}
+      description={t('settings.content.podcast.description')}
+    >
+      <SettingsSection>
+        <SettingsRow
+          label={t('settings.content.podcast.enabled.label')}
+          children={
             <Switch
               {...register('active')}
               checked={watch('active')}
@@ -114,116 +103,124 @@ export function PodcastContent() {
                 trigger('active')
               }}
             />
-          </ContentItemForm>
-        </ContentItem>
+          }
+        />
 
         {watch('active') && (
-          <ContentItem>
-            <ContentItemTitle>
-              {t('settings.content.podcast.service.url')}
-              {errors.serviceUrl?.message && (
-                <ErrorMessage>{t(errors.serviceUrl.message)}</ErrorMessage>
-              )}
-            </ContentItemTitle>
-            <ContentItemForm>
-              <Input
-                {...register('serviceUrl')}
-                className={clsx(
-                  'h-8',
-                  errors.serviceUrl && 'border-destructive',
-                )}
-                onChange={(e) => {
-                  setValue('serviceUrl', e.target.value, {
-                    shouldValidate: true,
-                  })
-                }}
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                autoComplete="off"
-              />
-            </ContentItemForm>
-          </ContentItem>
-        )}
-
-        {watch('active') && (
-          <ContentItem>
-            <ContentItemTitle>
-              {t('settings.content.podcast.credentials.label')}
-              {errors.useDefaultUser?.message && (
-                <ErrorMessage>{t(errors.useDefaultUser.message)}</ErrorMessage>
-              )}
-            </ContentItemTitle>
-            <ContentItemForm>
-              <Switch
-                {...register('useDefaultUser')}
-                checked={watch('useDefaultUser')}
-                onCheckedChange={(checked) => {
-                  setValue('useDefaultUser', checked)
-                  trigger('useDefaultUser')
-                }}
-              />
-            </ContentItemForm>
-          </ContentItem>
-        )}
-
-        {watch('active') && !watch('useDefaultUser') && (
           <>
-            <ContentItem>
-              <ContentItemTitle>
-                {t('settings.content.podcast.credentials.user')}
-                {errors.customUser?.message && (
-                  <ErrorMessage>{t(errors.customUser.message)}</ErrorMessage>
-                )}
-              </ContentItemTitle>
-              <ContentItemForm>
+            <SettingsRow
+              label={
+                <>
+                  {t('settings.content.podcast.service.url')}
+                  {errors.serviceUrl?.message && (
+                    <ErrorMessage>{t(errors.serviceUrl.message)}</ErrorMessage>
+                  )}
+                </>
+              }
+              children={
                 <Input
-                  {...register('customUser')}
+                  {...register('serviceUrl')}
                   className={clsx(
-                    'h-8',
-                    errors.customUser && 'border-destructive',
+                    'h-9 w-full min-w-[180px] sm:w-52',
+                    errors.serviceUrl && 'border-destructive',
                   )}
                   onChange={(e) => {
-                    setValue('customUser', e.target.value, {
+                    setValue('serviceUrl', e.target.value, {
                       shouldValidate: true,
                     })
-                    trigger('useDefaultUser')
-                  }}
-                />
-              </ContentItemForm>
-            </ContentItem>
-            <ContentItem>
-              <ContentItemTitle>
-                {t('settings.content.podcast.credentials.url')}
-                {errors.customUrl?.message && (
-                  <ErrorMessage>{t(errors.customUrl.message)}</ErrorMessage>
-                )}
-              </ContentItemTitle>
-              <ContentItemForm>
-                <Input
-                  {...register('customUrl')}
-                  className={clsx(
-                    'h-8',
-                    errors.customUrl && 'border-destructive',
-                  )}
-                  onChange={(e) => {
-                    setValue('customUrl', e.target.value, {
-                      shouldValidate: true,
-                    })
-                    trigger('useDefaultUser')
                   }}
                   autoCorrect="off"
                   autoCapitalize="off"
                   spellCheck={false}
                   autoComplete="off"
                 />
-              </ContentItemForm>
-            </ContentItem>
+              }
+            />
+
+            <SettingsRow
+              label={
+                <>
+                  {t('settings.content.podcast.credentials.label')}
+                  {errors.useDefaultUser?.message && (
+                    <ErrorMessage>{t(errors.useDefaultUser.message)}</ErrorMessage>
+                  )}
+                </>
+              }
+              description="Использовать учётные данные Navidrome для подкастов"
+              children={
+                <Switch
+                  {...register('useDefaultUser')}
+                  checked={watch('useDefaultUser')}
+                  onCheckedChange={(checked) => {
+                    setValue('useDefaultUser', checked)
+                    trigger('useDefaultUser')
+                  }}
+                />
+              }
+            />
+
+            {!watch('useDefaultUser') && (
+              <>
+                <SettingsRow
+                  label={
+                    <>
+                      {t('settings.content.podcast.credentials.user')}
+                      {errors.customUser?.message && (
+                        <ErrorMessage>{t(errors.customUser.message)}</ErrorMessage>
+                      )}
+                    </>
+                  }
+                  children={
+                    <Input
+                      {...register('customUser')}
+                      className={clsx(
+                        'h-9 w-full min-w-[180px] sm:w-52',
+                        errors.customUser && 'border-destructive',
+                      )}
+                      onChange={(e) => {
+                        setValue('customUser', e.target.value, {
+                          shouldValidate: true,
+                        })
+                        trigger('useDefaultUser')
+                      }}
+                    />
+                  }
+                />
+                <SettingsRow
+                  label={
+                    <>
+                      {t('settings.content.podcast.credentials.url')}
+                      {errors.customUrl?.message && (
+                        <ErrorMessage>{t(errors.customUrl.message)}</ErrorMessage>
+                      )}
+                    </>
+                  }
+                  children={
+                    <Input
+                      {...register('customUrl')}
+                      className={clsx(
+                        'h-9 w-full min-w-[180px] sm:w-52',
+                        errors.customUrl && 'border-destructive',
+                      )}
+                      onChange={(e) => {
+                        setValue('customUrl', e.target.value, {
+                          shouldValidate: true,
+                        })
+                        trigger('useDefaultUser')
+                      }}
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      autoComplete="off"
+                    />
+                  }
+                />
+              </>
+            )}
           </>
         )}
-      </Content>
-      <ContentSeparator />
-    </Root>
+      </SettingsSection>
+    </SettingsCard>
   )
 }
 
@@ -233,7 +230,7 @@ function ErrorMessage({
   ...rest
 }: ComponentPropsWithoutRef<'p'>) {
   return (
-    <p {...rest} className={cn('text-destructive text-xs mt-1', className)}>
+    <p {...rest} className={cn('mt-1 text-xs text-destructive', className)}>
       {children}
     </p>
   )

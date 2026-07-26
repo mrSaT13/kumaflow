@@ -26,25 +26,29 @@ export function FullscreenMode() {
       <DrawerTitle className="sr-only">Big Player</DrawerTitle>
       <DrawerContent
         onAnimationEnd={handleDrawerAnimationEnd}
-        className="h-screen w-screen rounded-t-none border-none select-none cursor-default mt-0"
+        className="fixed inset-0 z-[60] h-[100dvh] w-screen max-h-[100dvh] rounded-none border-none select-none cursor-default mt-0"
+        overlayClassName="z-[60]"
         showHandle={false}
         aria-describedby={undefined}
       >
         <MemoFullscreenBackdrop />
         <FullscreenDragHandler />
-        <div className="absolute inset-0 flex flex-col p-0 2xl:p-8 pt-10 2xl:pt-12 w-full h-full gap-4 bg-black/0 z-10">
-          {/* First Row */}
-          <div className="w-full max-h-[calc(100%-180px)] min-h-[calc(100%-180px)] px-8 2xl:px-16 pt-4 2xl:pt-8">
-            <div className="min-h-[300px] h-full max-h-full">
-              <FullscreenTabs />
-            </div>
+
+        <div
+          className="absolute inset-0 z-10 flex h-full w-full flex-col bg-black/0"
+          style={{
+            paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)',
+            paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)',
+          }}
+        >
+          {/* Контент: табы + обложка/очередь/текст */}
+          <div className="min-h-0 flex-1 overflow-hidden px-4 md:px-8 2xl:px-16">
+            <FullscreenTabs />
           </div>
 
-          {/* Second Row */}
-          <div className="h-[150px] min-h-[150px] px-8 2xl:px-16 py-2">
-            <div className="flex items-center">
-              <FullscreenPlayer />
-            </div>
+          {/* Нижняя панель: прогресс и управление */}
+          <div className="shrink-0 px-4 pb-2 pt-2 md:px-8 2xl:px-16">
+            <FullscreenPlayer />
           </div>
         </div>
       </DrawerContent>

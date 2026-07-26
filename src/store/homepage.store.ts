@@ -47,7 +47,7 @@ const defaultSections: HomepageSection[] = [
 
 const defaultSettings: HomepageSettings = {
   sections: defaultSections,
-  newDesignEnabled: false,  // 🆕 По умолчанию старый дизайн
+  newDesignEnabled: true,
 }
 
 export const useHomepageSettingsStore = createWithEqualityFn<HomepageSettingsStore>()(

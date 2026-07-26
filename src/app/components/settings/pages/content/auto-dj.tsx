@@ -1,43 +1,37 @@
-import { useTranslation } from 'react-i18next'
 import { useAutoDJSettings, useAutoDJActions } from '@/store/auto-dj.store'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card'
+import {
+  SettingsCard,
+  SettingsRow,
+  SettingsSection,
+} from '@/app/components/settings/settings-layout'
 import { Switch } from '@/app/components/ui/switch'
 import { Label } from '@/app/components/ui/label'
 import { Slider } from '@/app/components/ui/slider'
 import { Badge } from '@/app/components/ui/badge'
 
 export function AutoDJContent() {
-  const { t } = useTranslation()
   const settings = useAutoDJSettings()
   const { setItemCount, setTiming, toggleEnabled } = useAutoDJActions()
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>🤖 Auto DJ</CardTitle>
-        <CardDescription>
-          Автоматически добавлять похожие треки в очередь воспроизведения
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Включить/Выключить */}
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <Label>Включить Auto DJ</Label>
-            <p className="text-sm text-muted-foreground">
-              Автоматически добавлять похожие треки когда очередь заканчивается
-            </p>
-          </div>
-          <Switch
-            checked={settings.enabled}
-            onCheckedChange={toggleEnabled}
-          />
-        </div>
+    <SettingsCard
+      title="Auto DJ"
+      description="Автоматически добавляет похожие треки в очередь воспроизведения"
+    >
+      <SettingsSection>
+        <SettingsRow
+          label="Включить Auto DJ"
+          description="Добавляет похожие треки, когда очередь заканчивается"
+          children={
+            <Switch checked={settings.enabled} onCheckedChange={toggleEnabled} />
+          }
+        />
+      </SettingsSection>
 
-        {/* Количество треков */}
+      <div className="space-y-5 pt-1">
         <div className="space-y-2">
-          <div className="flex justify-between">
-            <Label>Количество треков: {settings.itemCount}</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-sm">Количество треков</Label>
             <Badge variant="secondary">{settings.itemCount}</Badge>
           </div>
           <Slider
@@ -53,10 +47,9 @@ export function AutoDJContent() {
           </p>
         </div>
 
-        {/* Когда срабатывать */}
         <div className="space-y-2">
-          <div className="flex justify-between">
-            <Label>Срабатывает когда осталось: {settings.timing} трек(а)</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-sm">Срабатывает когда осталось</Label>
             <Badge variant="secondary">{settings.timing}</Badge>
           </div>
           <Slider
@@ -71,20 +64,18 @@ export function AutoDJContent() {
             Количество треков в очереди до срабатывания Auto DJ
           </p>
         </div>
+      </div>
 
-        {/* Информация */}
-        <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-          <h4 className="font-medium text-blue-600 mb-2">
-            ℹ️ Как это работает
-          </h4>
-          <ul className="text-sm text-muted-foreground space-y-1">
-            <li>• Когда очередь заканчивается, Auto DJ анализирует текущий трек</li>
-            <li>• Находит похожие треки на основе жанра и артиста</li>
-            <li>• Автоматически добавляет их в очередь</li>
-            <li>• Непрерывное воспроизведение без пауз!</li>
-          </ul>
-        </div>
-      </CardContent>
-    </Card>
+      <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3">
+        <p className="text-sm font-medium text-blue-600 dark:text-blue-400">
+          Как это работает
+        </p>
+        <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+          <li>• Анализирует текущий трек при окончании очереди</li>
+          <li>• Находит похожие треки по жанру и артисту</li>
+          <li>• Добавляет их в очередь без паузы</li>
+        </ul>
+      </div>
+    </SettingsCard>
   )
 }

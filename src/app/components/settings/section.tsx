@@ -47,7 +47,10 @@ export function ContentItem({
 }: SectionComponent) {
   return (
     <div
-      className={cn('flex items-center space-between min-h-8', className)}
+      className={cn(
+        'flex min-h-8 flex-col gap-3 py-2 sm:flex-row sm:items-center sm:justify-between',
+        className,
+      )}
       {...props}
     >
       {children}
@@ -87,7 +90,10 @@ export function ContentItemForm({
 }: SectionComponent) {
   return (
     <div
-      className={cn('w-2/5 max-w-52 flex items-center justify-end', className)}
+      className={cn(
+        'flex w-full items-center justify-start sm:w-auto sm:max-w-52 sm:justify-end',
+        className,
+      )}
       {...props}
     >
       {children}

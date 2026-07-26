@@ -24,6 +24,7 @@ export interface ISongList {
 
 export interface IPlayerState {
   isPlaying: boolean
+  isMyWaveActive: boolean
   loopState: LoopState
   isShuffleActive: boolean
   isSongStarred: boolean
@@ -144,6 +145,7 @@ export interface IPlayerActions {
   starSongInQueue: (id: string) => void
   starCurrentSong: () => Promise<void>
   setPlayingState: (status: boolean) => void
+  setMyWaveActive: (active: boolean) => void
   togglePlayPause: () => void
   toggleLoop: () => void
   toggleShuffle: () => void

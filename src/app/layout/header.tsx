@@ -16,15 +16,17 @@ export function Header() {
   }
 
   return (
-    <header className="w-full grid grid-cols-header h-header px-4 fixed top-0 right-0 left-0 z-20 bg-background border-b electron-drag">
-      <div className="flex items-center">
-        {isMacOS && !isFullscreen && <div className="w-[70px]" />}
-        <NavigationButtons />
-        <MainSidebarTrigger className="ml-2" />
+    <header className="w-full hidden md:grid grid-cols-header h-header px-4 fixed top-0 right-0 left-0 z-20 bg-background border-b electron-drag pt-[env(safe-area-inset-top)]">
+      <div className="flex items-center min-w-0">
+        {isMacOS && !isFullscreen && <div className="hidden md:block w-[70px]" />}
+        <div className="hidden md:flex">
+          <NavigationButtons />
+        </div>
+        <MainSidebarTrigger className="md:ml-2" />
       </div>
       <HeaderSongInfo />
-      <div className="flex justify-end items-center gap-2">
-        <UserAvatar size={32} className="pointer-events-auto" />
+      <div className="flex justify-end items-center gap-1 md:gap-2 min-w-0">
+        <UserAvatar size={32} className="pointer-events-auto hidden sm:flex" />
         
         {/* 🆕 Кнопка перезагрузки */}
         <TooltipProvider>

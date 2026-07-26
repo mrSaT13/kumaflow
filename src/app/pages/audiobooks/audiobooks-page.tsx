@@ -6,7 +6,7 @@ import { usePlayerActions } from '@/store/player.store'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/app/components/ui/button'
 import { AlertCircle, Settings } from 'lucide-react'
-import { useAppStore } from '@/store/app.store'
+import { openSettings } from '@/lib/settings-navigation'
 import styles from './audiobooks-page.module.css'
 
 interface Audiobook {
@@ -191,18 +191,7 @@ export default function AudiobooksPage() {
             </p>
             <Button
               onClick={() => {
-                // Открываем диалог настроек и переключаем на вкладку accounts
-                const { setOpenDialog, setCurrentPage } = useAppStore.getState().settings
-                setOpenDialog(true)
-                setCurrentPage('accounts')
-                // Прокрутка к секции Audiobookshelf
-                setTimeout(() => {
-                  const element = document.getElementById('audiobookshelf')
-                  if (element) {
-                    element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                    element.classList.add('animate-pulse')
-                  }
-                }, 500)
+                openSettings('accounts')
               }}
               className="gap-2"
             >

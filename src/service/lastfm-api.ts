@@ -13,6 +13,8 @@
  */
 
 import CryptoJS from 'crypto-js'
+import { fetchWithCorsProxy } from '@/utils/cors-proxy'
+import { isDesktop } from '@/utils/desktop'
 
 interface LastFmArtist {
   name: string
@@ -107,6 +109,140 @@ class LastFmService {
   private readonly CACHE_TTL: number = 7 * 24 * 60 * 60 * 1000 // 7 дней
   private readonly RATE_LIMIT_DELAY: number = 200 // 5 запросов/сек (консервативно)
   private lastRequestTime: number = 0
+  private lastApiError: string | null = null
+  private apiBlocked = false
+  private apiBlockedReason: string | null = null
+  private loggedErrors = new Set<string>()
+
+  getLastApiError(): string | null {
+    return this.lastApiError
+  }
+
+  isApiBlocked(): boolean {
+    return this.apiBlocked
+  }
+
+  getApiBlockedReason(): string | null {
+    return this.apiBlockedReason
+  }
+
+  private logOnce(key: string, level: 'warn' | 'error', ...args: unknown[]) {
+    if (this.loggedErrors.has(key)) return
+    this.loggedErrors.add(key)
+    console[level]('[Last.fm]', ...args)
+  }
+
+  private markApiBlocked(data: Record<string, unknown> | null, status?: number) {
+    if (this.apiBlocked) return
+
+    const code = data?.error
+    const denied =
+      status === 403 ||
+      code === 11 ||
+      code === '11' ||
+      (typeof data?.message === 'string' &&
+        data.message.toLowerCase().includes('access denied'))
+
+    if (!denied) return
+
+    this.apiBlocked = true
+    this.apiBlockedReason = String(data?.message ?? `HTTP ${status ?? code}`)
+    this.logOnce(
+      'api-blocked',
+      'warn',
+      `API недоступен: ${this.apiBlockedReason}. Дальнейшие запросы Last.fm пропущены.`,
+    )
+  }
+
+  private getApiBaseUrl(useHttp = false): string {
+    if (isDesktop()) {
+      return useHttp ? this.scrobbleUrl : this.baseUrl
+    }
+
+    if (import.meta.env.DEV) {
+      return '/lastfm-api'
+    }
+
+    return useHttp ? this.scrobbleUrl : this.baseUrl
+  }
+
+  private getRemoteApiUrl(useHttp = false): string {
+    return useHttp ? this.scrobbleUrl : this.baseUrl
+  }
+
+  private async parseResponseJson(response: Response): Promise<Record<string, unknown> | null> {
+    const text = await response.text()
+    if (!text) return null
+
+    try {
+      return JSON.parse(text) as Record<string, unknown>
+    } catch {
+      console.error('[Last.fm] Non-JSON response:', text.slice(0, 300))
+      return { raw: text }
+    }
+  }
+
+  private async postJsonWithFallback(
+    localUrl: string,
+    remoteUrl: string,
+    body: string,
+    method: string,
+  ): Promise<Record<string, unknown> | null> {
+    const init: RequestInit = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body,
+    }
+
+    const attempts: Array<{ label: string; fn: () => Promise<Response> }> = []
+
+    if (!isDesktop()) {
+      if (import.meta.env.DEV) {
+        attempts.push({ label: 'dev-proxy', fn: () => fetch(localUrl, init) })
+      } else {
+        attempts.push({ label: 'cors-proxy', fn: () => fetchWithCorsProxy(remoteUrl, init) })
+      }
+    }
+
+    for (const attempt of attempts) {
+      try {
+        const response = await attempt.fn()
+        const data = await this.parseResponseJson(response)
+
+        if (data?.error) {
+          this.lastApiError = String(data.message ?? `Last.fm error ${data.error}`)
+          console.error(
+            `[Last.fm] API error via ${attempt.label}:`,
+            data.error,
+            data.message ?? '',
+          )
+        } else {
+          this.lastApiError = null
+        }
+
+        if (!response.ok) {
+          this.lastApiError = this.lastApiError ?? `HTTP ${response.status}`
+          console.error(
+            `[Last.fm] POST HTTP ${response.status} via ${attempt.label} (${method}):`,
+            data,
+          )
+          continue
+        }
+
+        return data
+      } catch (error) {
+        console.warn(`[Last.fm] POST failed via ${attempt.label} (${method}):`, error)
+      }
+    }
+
+    return null
+  }
+
+  private shouldUseCorsProxy(): boolean {
+    return !isDesktop() && !import.meta.env.DEV
+  }
 
   /**
    * Инициализация сервиса с API ключом и секретом
@@ -115,6 +251,9 @@ class LastFmService {
     const oldKey = this.apiKey
     this.apiKey = apiKey
     this.apiSecret = apiSecret || ''
+    this.apiBlocked = false
+    this.apiBlockedReason = null
+    this.loggedErrors.clear()
     console.log('[Last.fm] Service initialized:', {
       apiKey: apiKey ? '***' + apiKey.slice(-8) : 'NONE',
       apiSecret: apiSecret ? '***' + apiSecret.slice(-8) : 'NONE',
@@ -164,70 +303,200 @@ class LastFmService {
   }
 
   /**
+   * Разбор ответа Last.fm (JSON или XML из Electron IPC)
+   */
+  private parseLastFmResponse(data: unknown): Record<string, unknown> | null {
+    if (!data || typeof data !== 'object') return null
+
+    const payload = data as Record<string, unknown>
+
+    if (payload.token || payload.session || payload.error) {
+      return payload
+    }
+
+    if (typeof payload.raw === 'string') {
+      const raw = payload.raw
+      try {
+        return JSON.parse(raw) as Record<string, unknown>
+      } catch {
+        if (payload.status === 'ok') return payload
+      }
+    }
+
+    return payload
+  }
+
+  /**
+   * GET-запрос с обходом CORS в браузере
+   */
+  private buildGetUrls(method: string, params: Record<string, string> = {}) {
+    const build = (base: string) => {
+      const url = base.startsWith('/')
+        ? new URL(base, window.location.origin)
+        : new URL(base)
+      url.searchParams.set('method', method)
+      url.searchParams.set('api_key', this.apiKey)
+      url.searchParams.set('format', 'json')
+      Object.entries(params).forEach(([key, value]) => {
+        url.searchParams.set(key, value)
+      })
+      return url.toString()
+    }
+
+    return {
+      local: build(this.getApiBaseUrl()),
+      remote: build(this.getRemoteApiUrl()),
+    }
+  }
+
+  private async fetchGetJson(
+    localUrl: string,
+    remoteUrl: string,
+    method: string,
+  ): Promise<Record<string, unknown> | null> {
+    if (this.apiBlocked) return null
+
+    const win = window as Window & {
+      api?: {
+        fetchExternal?: (url: string) => Promise<unknown>
+      }
+    }
+
+    try {
+      if (isDesktop() && win.api?.fetchExternal) {
+        const data = await win.api.fetchExternal(remoteUrl)
+        if (data && typeof data === 'object') {
+          const payload = data as Record<string, unknown>
+          if (payload.error) this.markApiBlocked(payload)
+          return payload.error ? null : payload
+        }
+        return null
+      }
+
+      const attempts: Array<{ label: string; fn: () => Promise<Response> }> = []
+      if (!isDesktop()) {
+        if (import.meta.env.DEV) {
+          // В dev используем только локальный прокси — никаких публичных CORS сервисов
+          attempts.push({ label: 'dev-proxy', fn: () => fetch(localUrl) })
+        } else {
+          attempts.push({ label: 'cors-proxy', fn: () => fetchWithCorsProxy(remoteUrl) })
+        }
+      }
+
+      for (const attempt of attempts) {
+        try {
+          const response = await attempt.fn()
+          const data = await this.parseResponseJson(response)
+
+          if (data?.error) {
+            this.markApiBlocked(data, response.status)
+            this.lastApiError = String(data.message ?? `Last.fm error ${data.error}`)
+          }
+
+          if (!response.ok) {
+            this.markApiBlocked(data, response.status)
+            continue
+          }
+
+          if (data?.error) return null
+          return data
+        } catch (error) {
+          this.logOnce(`get-${method}`, 'warn', `GET failed via ${attempt.label}:`, error)
+        }
+      }
+
+      return null
+    } catch (error) {
+      this.logOnce(`get-${method}-fatal`, 'error', 'fetchGetJson error:', error)
+      return null
+    }
+  }
+
+  /**
+   * Подписанный POST (auth, scrobble)
+   */
+  private async signedPostRequest(
+    method: string,
+    params: Record<string, string> = {},
+    options: { useHttp?: boolean; json?: boolean } = {},
+  ): Promise<Record<string, unknown> | null> {
+    const { useHttp = false, json = true } = options
+
+    if (!this.apiKey || !this.apiSecret) {
+      console.warn('[Last.fm] API key and secret required for signed POST:', method)
+      return null
+    }
+
+    await this.rateLimit()
+
+    const sigParams: Record<string, string> = {
+      api_key: this.apiKey,
+      method,
+      ...params,
+    }
+    const apiSig = this.generateSignature(sigParams)
+    const bodyParams: Record<string, string> = {
+      method,
+      api_key: this.apiKey,
+      api_sig: apiSig,
+      ...params,
+    }
+    if (json) {
+      bodyParams.format = 'json'
+    }
+    const body = new URLSearchParams(bodyParams)
+
+    const localUrl = this.getApiBaseUrl(useHttp)
+    const remoteUrl = this.getRemoteApiUrl(useHttp)
+    const win = window as Window & {
+      api?: {
+        lastFmScrobble?: (url: string, method: string, body: string) => Promise<unknown>
+      }
+    }
+
+    try {
+      if (isDesktop() && win.api?.lastFmScrobble) {
+        const data = await win.api.lastFmScrobble(remoteUrl, 'POST', body.toString())
+        return this.parseLastFmResponse(data)
+      }
+
+      return await this.postJsonWithFallback(localUrl, remoteUrl, body.toString(), method)
+    } catch (error) {
+      console.error(`[Last.fm] signedPostRequest error (${method}):`, error)
+      return null
+    }
+  }
+
+  /**
    * Шаг 1: Получить request token
    */
   async getToken(): Promise<string | null> {
-    await this.rateLimit()
+    const data = await this.signedPostRequest('auth.getToken')
 
-    try {
-      const url = new URL(this.baseUrl)
-      url.searchParams.set('method', 'auth.getToken')
-      url.searchParams.set('api_key', this.apiKey)
-      url.searchParams.set('format', 'json')
-      url.searchParams.set('api_sig', this.generateSignature({
-        method: 'auth.getToken',
-        api_key: this.apiKey,
-      }))
-
-      const response = await fetch(url.toString())
-      const data = await response.json()
-
-      if (data.token) {
-        console.log('[Last.fm] Got token:', data.token)
-        return data.token
-      }
-
-      console.error('[Last.fm] getToken error:', data)
-      return null
-    } catch (error) {
-      console.error('[Last.fm] getToken error:', error)
-      return null
+    if (typeof data?.token === 'string') {
+      console.log('[Last.fm] Got token:', data.token)
+      return data.token
     }
+
+    console.error('[Last.fm] getToken error:', data)
+    return null
   }
 
   /**
    * Шаг 2: Получить session key из token
    */
   async getSession(token: string): Promise<string | null> {
-    await this.rateLimit()
+    const data = await this.signedPostRequest('auth.getSession', { token })
+    const session = data?.session as { key?: string } | undefined
 
-    try {
-      const url = new URL(this.baseUrl)
-      url.searchParams.set('method', 'auth.getSession')
-      url.searchParams.set('api_key', this.apiKey)
-      url.searchParams.set('token', token)
-      url.searchParams.set('format', 'json')
-      url.searchParams.set('api_sig', this.generateSignature({
-        method: 'auth.getSession',
-        api_key: this.apiKey,
-        token,
-      }))
-
-      const response = await fetch(url.toString())
-      const data = await response.json()
-
-      if (data.session?.key) {
-        this.sessionKey = data.session.key
-        console.log('[Last.fm] Got session key:', this.sessionKey)
-        return this.sessionKey
-      }
-
-      console.error('[Last.fm] getSession error:', data)
-      return null
-    } catch (error) {
-      console.error('[Last.fm] getSession error:', error)
-      return null
+    if (session?.key) {
+      this.sessionKey = session.key
+      console.log('[Last.fm] Got session key:', this.sessionKey)
+      return this.sessionKey
     }
+
+    console.error('[Last.fm] getSession error:', data)
+    return null
   }
 
   /**
@@ -273,69 +542,14 @@ class LastFmService {
    * POST запрос к Last.fm API (для scrobbling/nowplaying)
    */
   private async postRequest(method: string, params: Record<string, string>): Promise<any> {
-    if (!this.apiKey) {
-      console.warn('[Last.fm] API key not set')
-      return null
-    }
-
-    await this.rateLimit()
-
-    try {
-      // Собираем ВСЕ параметры для signature (api_key, method, sk + остальные)
-      // format=json НЕ включаем в signature!
-      const sigParams: Record<string, string> = {
-        api_key: this.apiKey,
-        method,
-        ...params,
-      }
-
-      // Генерируем api_sig
-      const apiSig = this.generateSignature(sigParams)
-
-      // Собираем POST body (БЕЗ format=json - Last.fm требует только method + params + api_sig)
-      const body = new URLSearchParams({
-        method,
-        api_key: this.apiKey,
-        api_sig: apiSig,
-        ...params,
-      })
-
-      const url = this.scrobbleUrl
-
-      console.log('[Last.fm] POST URL:', url)
-      console.log('[Last.fm] POST body (first 150):', body.toString().substring(0, 150))
-      console.log('[Last.fm] api_sig:', apiSig)
-      console.log('[Last.fm] sigParams:', sigParams)
-
-      // Используем Electron IPC если доступен
-      if (window?.api?.lastFmScrobble) {
-        const data = await window.api.lastFmScrobble(url, 'POST', body.toString())
-        console.log('[Last.fm] IPC response:', data)
-        return data
-      } else {
-        // Fallback для браузера
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: body.toString(),
-        })
-
-        return await response.json()
-      }
-    } catch (error) {
-      console.error('[Last.fm] POST request error:', error)
-      return null
-    }
+    return this.signedPostRequest(method, params, { useHttp: true, json: false })
   }
 
   /**
    * GET запрос к Last.fm API
    */
   private async request<T>(method: string, params: Record<string, string> = {}): Promise<T | null> {
-    if (!this.apiKey) {
-      console.warn('[Last.fm] API key not set')
+    if (!this.apiKey || this.apiBlocked) {
       return null
     }
 
@@ -344,36 +558,15 @@ class LastFmService {
     const cached = this.cache.get(cacheKey)
     
     if (cached && cached.expires > Date.now()) {
-      console.log(`[Last.fm] Cache hit: ${method}`)
       return cached.data as T
     }
 
     await this.rateLimit()
 
     try {
-      const url = new URL(this.baseUrl)
-      url.searchParams.set('method', method)
-      url.searchParams.set('api_key', this.apiKey)
-      url.searchParams.set('format', 'json')
-      
-      Object.entries(params).forEach(([key, value]) => {
-        url.searchParams.set(key, value)
-      })
-
-      const response = await fetch(url.toString())
-      
-      if (!response.ok) {
-        if (response.status === 429) {
-          console.warn('[Last.fm] Rate limit exceeded, waiting...')
-          await new Promise(resolve => setTimeout(resolve, 1000))
-          return this.request<T>(method, params)
-        }
-        
-        console.error(`[Last.fm] HTTP error ${response.status}: ${method}`)
-        return null
-      }
-
-      const data = await response.json()
+      const { local, remote } = this.buildGetUrls(method, params)
+      const data = await this.fetchGetJson(local, remote, method)
+      if (!data) return null
       
       // Кэширование успешного ответа
       this.cache.set(cacheKey, {
@@ -383,9 +576,24 @@ class LastFmService {
 
       return data as T
     } catch (error) {
-      console.error(`[Last.fm] Request failed: ${method}`, error)
+      this.logOnce(`request-${method}`, 'error', `Request failed: ${method}`, error)
       return null
     }
+  }
+
+  static isQueryableArtist(artistName: string): boolean {
+    const normalized = artistName.trim().toLowerCase()
+    if (!normalized) return false
+    return ![
+      '[unknown artist]',
+      'unknown artist',
+      'various artists',
+      'разные исполнители',
+    ].includes(normalized)
+  }
+
+  isQueryableArtist(artistName: string): boolean {
+    return LastFmService.isQueryableArtist(artistName)
   }
 
   /**
@@ -708,12 +916,13 @@ class LastFmService {
    * @returns Массив тегов с весом
    */
   async getArtistTags(artistName: string, limit: number = 50): Promise<Array<{ name: string; count: number }>> {
+    if (!LastFmService.isQueryableArtist(artistName) || this.apiBlocked) {
+      return []
+    }
+
     try {
-      const tags = await this.getArtistTopTags(artistName, limit)
-      console.log('[Last.fm] Got', tags.length, 'tags for', artistName)
-      return tags
-    } catch (error) {
-      console.error('[Last.fm] getArtistTags error:', error)
+      return await this.getArtistTopTags(artistName, limit)
+    } catch {
       return []
     }
   }
@@ -727,6 +936,10 @@ class LastFmService {
    * @returns Массив тегов с весом
    */
   async getTrackTags(artistName: string, trackName: string, limit: number = 20): Promise<Array<{ name: string; count: number }>> {
+    if (!LastFmService.isQueryableArtist(artistName) || this.apiBlocked) {
+      return []
+    }
+
     await this.rateLimit()
 
     try {
@@ -748,8 +961,7 @@ class LastFmService {
         name: tag.name,
         count: tag.count ? parseInt(tag.count, 10) : 0,
       }))
-    } catch (error) {
-      console.error('[Last.fm] getTrackTags error:', error)
+    } catch {
       return []
     }
   }

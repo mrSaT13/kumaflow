@@ -3,7 +3,8 @@ import { X, Search, Music, Mic2, Radio } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { usePlayerActions } from '@/store/player.store'
-import { generateTrackRadio, generateArtistRadio, generateGenrePlaylist } from '@/service/ml-wave-service'
+import { playTrackRadio } from '@/service/track-radio-service'
+import { generateArtistRadio, generateGenrePlaylist } from '@/service/ml-wave-service'
 import { search } from '@/service/search'
 import { toast } from 'react-toastify'
 import { trackEvent } from '@/service/ml-event-tracker'
@@ -75,11 +76,16 @@ export function InstantMixModal({ open, onClose }: InstantMixModalProps) {
       let songs
 
       switch (selectedType) {
-        case 'track':
-          const trackRadio = await generateTrackRadio(selectedId, 25)
-          songs = trackRadio.songs
-          trackEvent('radio_started', { type: 'instant-mix-track', songId: selectedId })
+        case 'track': {
+          const track = searchResults.tracks?.find((t: any) => t.id === selectedId)
+          if (track) {
+            await playTrackRadio(track, 25)
+            trackEvent('radio_started', { type: 'instant-mix-track', songId: selectedId })
+            onClose()
+            return
+          }
           break
+        }
 
         case 'artist':
           const artistRadio = await generateArtistRadio(selectedId, 50)
@@ -96,10 +102,7 @@ export function InstantMixModal({ open, onClose }: InstantMixModalProps) {
 
       if (songs && songs.length > 0) {
         setSongList(songs, 0)
-        toast('🎵 Instant Mix запущен!', { type: 'success' })
         onClose()
-      } else {
-        toast('Не удалось найти похожие треки', { type: 'error' })
       }
     } catch (error) {
       console.error('Instant Mix error:', error)

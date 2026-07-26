@@ -4,63 +4,52 @@
  */
 
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useML } from '@/store/ml.store'
-import { usePlayerActions } from '@/store/player.store'
-import { generateMyWavePlaylist } from '@/service/ml-wave-service'
+import { useIsMyWaveActive, usePlayerStore } from '@/store/player.store'
+import { playMyWaveStream } from '@/service/my-wave-stream'
 import { toast } from 'react-toastify'
 import { Play, Settings } from 'lucide-react'
 import MyWaveSettings from './my-wave-settings'
 
 export default function HeroMyWave() {
-  const navigate = useNavigate()
   const [isGenerating, setIsGenerating] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
-  const { getProfile, ratings, profile } = useML()
-  const { setSongList } = usePlayerActions()
+  const { ratings, profile } = useML()
+  const isMyWaveActive = useIsMyWaveActive()
+  const isPlaying = usePlayerStore((s) => s.playerState.isPlaying)
 
-  const currentProfile = getProfile()
-
-  // Генерация плейлиста "Моя Волна"
   const handlePlayMyWave = async () => {
     if (isGenerating) return
+
+    if (isMyWaveActive) {
+      usePlayerStore.getState().actions.togglePlayPause()
+      return
+    }
 
     setIsGenerating(true)
 
     try {
-      // Загружаем настройки из localStorage
       const settingsRaw = JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
-      
-      // Проверяем есть ли реальные настройки
       const hasSettings = settingsRaw && Object.keys(settingsRaw).length > 0
       const settings = hasSettings ? settingsRaw : undefined
-      
-      console.log('[HeroMyWave] Using settings:', settings)
 
-      const playlist = await generateMyWavePlaylist(
-        profile.likedSongIds || [],
+      const likedIds = profile.likedSongIds || []
+
+      const { songs, alreadyActive } = await playMyWaveStream({
+        likedSongIds: likedIds,
         ratings,
-        50,
-        true,
-        settings  // Передаем настройки или undefined!
-      )
+        settings,
+      })
 
-      if (playlist.songs.length > 0) {
-        setSongList(
-          playlist.songs,
-          0,
-          false
-        )
-
-        toast.success('🎵 Моя Волна: плейлист готов!', {
-          autoClose: 2000,
-        })
-      } else {
-        toast.error('Не удалось сгенерировать плейлист', {
-          autoClose: 3000,
-        })
+      if (alreadyActive || songs.length > 0) {
+        if (!alreadyActive) {
+          toast.success('🎵 Моя Волна: поехали!', { autoClose: 2000 })
+        }
+        return
       }
+
+      toast.error('Не удалось сгенерировать плейлист', { autoClose: 3000 })
     } catch (error) {
       console.error('Ошибка генерации Моя Волна:', error)
       toast.error('Ошибка генерации плейлиста', {
@@ -95,12 +84,12 @@ export default function HeroMyWave() {
 
         <div className="hero-buttons">
           <button
-            className="hero-button primary"
+            className={`hero-button primary${isMyWaveActive ? ' active' : ''}`}
             onClick={handlePlayMyWave}
             disabled={isGenerating}
           >
             <Play className="w-5 h-5 fill-current" />
-            {isGenerating ? 'Генерация...' : 'Воспроизвести'}
+            {isGenerating ? 'Запуск...' : isMyWaveActive ? (isPlaying ? 'Слушаю' : 'Продолжить') : 'Воспроизвести'}
           </button>
 
           <button
@@ -243,6 +232,10 @@ export default function HeroMyWave() {
         .hero-button.primary:disabled {
           opacity: 0.7;
           cursor: not-allowed;
+        }
+
+        .hero-button.primary.active {
+          box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85);
         }
 
         .hero-button.secondary {

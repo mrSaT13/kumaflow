@@ -497,6 +497,14 @@ if (!instanceLock) {
 
           res.on('end', () => {
             console.log('[Last.fm IPC] Raw response:', data.substring(0, 300))
+
+            try {
+              const json = JSON.parse(data)
+              resolve(json)
+              return
+            } catch {
+              // XML fallback for scrobbling
+            }
             
             // Last.fm возвращает XML, парсим его
             try {

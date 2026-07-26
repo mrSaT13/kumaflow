@@ -122,6 +122,21 @@ export interface IKumaFlowAPI {
   getLocalCoverBlob: (filePath: string) => Promise<{ data: string; format: string } | null>
   streamLocalFile: (filePath: string) => Promise<string | null>
   getLocalCoverArt: (filePath: string) => Promise<string | null>
+  // Tag audit
+  checkFileAccessible: (filePath: string) => Promise<boolean>
+  resolveServerPath: (serverPath: string, pathPrefix?: string) => Promise<string>
+  readFileTags: (filePath: string) => Promise<{
+    title?: string
+    artist?: string
+    album?: string
+    genre?: string
+    year?: number
+    trackNumber?: number
+  } | null>
+  writeFileTags: (
+    filePath: string,
+    tags: { title?: string; artist?: string; album?: string; genre?: string; year?: number; trackNumber?: number },
+  ) => Promise<{ success: boolean; error?: string }>
   // Remote Control
   remoteControl: {
     start: () => Promise<any>

@@ -18,14 +18,15 @@ import {
 } from '@/app/hooks/use-home'
 import { ROUTES } from '@/routes/routesList'
 import { useML } from '@/store/ml.store'
-import { usePlayerActions } from '@/store/player.store'
+import { usePlayerActions, useIsMyWaveActive, usePlayerStore } from '@/store/player.store'
 import { useMLPlaylists } from '@/store/ml-playlists.store'
-import { generateMyWavePlaylist } from '@/service/ml-wave-service'
+import { playMyWaveStream } from '@/service/my-wave-stream'
 import { generateCSSGradient } from '@/utils/genreColors'
 import { getGenres } from '@/service/subsonic-api'
 import { toast } from 'react-toastify'
 import { useQuery } from '@tanstack/react-query'
 import { useHomepageSettings } from '@/store/homepage.store'
+import { useIsMobile } from '@/app/hooks/use-mobile'
 import NewHomepage from '@/app/pages/homepage-v2'  // 🆕 Новый дизайн
 
 // Градиенты для жанров
@@ -78,7 +79,9 @@ export default function Home() {
 
 function HomeDesignRouter() {
   const settings = useHomepageSettings()
-  if (settings.newDesignEnabled) {
+  const isMobile = useIsMobile()
+
+  if (settings.newDesignEnabled || isMobile) {
     return <NewHomepage />
   }
   return <OldHomepage />
@@ -88,11 +91,12 @@ function HomeDesignRouter() {
 function OldHomepage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [isPlayingMyWave, setIsPlayingMyWave] = useState(false)
   const [isGeneratingGenre, setIsGeneratingGenre] = useState<string | null>(null)
   const [isGeneratingMyWave, setIsGeneratingMyWave] = useState(false)
   const { getProfile, ratings } = useML()
   const { setSongList } = usePlayerActions()
+  const isMyWaveActive = useIsMyWaveActive()
+  const isPlaying = usePlayerStore((s) => s.playerState.isPlaying)
   const { settings: playlistSettings } = useMLPlaylists()
   const homepageSettings = useHomepageSettings()
 
@@ -164,27 +168,23 @@ function OldHomepage() {
   const handleMyWavePlay = async () => {
     if (isGeneratingMyWave) return
 
-    setIsPlayingMyWave(!isPlayingMyWave)
+    if (isMyWaveActive) {
+      usePlayerStore.getState().actions.togglePlayPause()
+      return
+    }
+
     setIsGeneratingMyWave(true)
 
     try {
-      // Генерация плейлиста на основе ML
       const profile = getProfile()
-      const likedSongIds = profile.likedSongIds || []  // ИСПРАВЛЕНО: проверка на undefined
+      const likedSongIds = profile.likedSongIds || []
 
-      console.log('Генерация "Моя волна"...')
-      console.log('Лайкнутые треки:', likedSongIds.length)
-      console.log('Все оценки:', Object.keys(ratings).length)
+      const { songs, alreadyActive } = await playMyWaveStream({
+        likedSongIds,
+        ratings,
+      })
 
-      // Генерируем плейлист
-      const playlist = await generateMyWavePlaylist(likedSongIds, ratings, trackCount, true)
-
-      console.log('Сгенерировано треков:', playlist.songs.length)
-
-      if (playlist.songs.length > 0) {
-        // Запускаем воспроизведение
-        setSongList(playlist.songs, 0)
-
+      if (alreadyActive || songs.length > 0) {
         console.log('✅ "Моя волна" запущена!')
       } else {
         console.warn('⚠️ Не удалось сгенерировать плейлист')
@@ -306,21 +306,21 @@ function OldHomepage() {
               text-transparent bg-clip-text bg-gradient-to-r from-yellow-600 via-orange-600 to-pink-600
               shadow-xl transition-all duration-300
               ${isGeneratingMyWave ? 'opacity-75 cursor-not-allowed' : ''}
-              ${isPlayingMyWave && !isGeneratingMyWave ? 'scale-105 ring-4 ring-white/50' : 'hover:scale-105'}
+              ${isMyWaveActive && !isGeneratingMyWave ? 'scale-105 ring-4 ring-white/50' : 'hover:scale-105'}
             `}
           >
             <span className="flex items-center gap-3">
               {isGeneratingMyWave ? (
                 <>
                   <span className="text-2xl animate-spin">⏳</span>
-                  Генерация...
+                  Запуск...
                 </>
               ) : (
                 <>
-                  <span className={`text-2xl ${isPlayingMyWave ? 'animate-pulse' : ''}`}>
-                    {isPlayingMyWave ? '🔊' : '▶'}
+                  <span className={`text-2xl ${isMyWaveActive && isPlaying ? 'animate-pulse' : ''}`}>
+                    {isMyWaveActive ? (isPlaying ? '🔊' : '⏸') : '▶'}
                   </span>
-                  Моя волна
+                  {isMyWaveActive ? (isPlaying ? 'Слушаю' : 'Моя волна') : 'Моя волна'}
                 </>
               )}
             </span>

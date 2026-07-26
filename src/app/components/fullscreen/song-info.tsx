@@ -16,28 +16,28 @@ export function SongInfo() {
   const currentSong = usePlayerStore((state) => state.songlist.currentSong)
 
   return (
-    <div className="flex items-center justify-start h-full min-h-full max-h-full gap-4 2xl:gap-6 flex-1 pt-2 overflow-hidden">
+    <div className="flex h-full min-h-0 max-h-full flex-1 flex-col items-center justify-start gap-4 overflow-hidden pt-1 md:flex-row md:items-center md:justify-start md:pt-2 2xl:gap-6">
       <MemoFullscreenSongImage />
 
-      <div className="flex flex-col w-[66%] max-w-full h-full max-h-[450px] 2xl:max-h-[550px] justify-end text-left overflow-hidden relative">
-        {/* Кнопка объяснений в правом верхнем углу */}
+      <div className="relative flex h-auto w-full max-w-full flex-col justify-end overflow-hidden text-center md:h-full md:max-h-[450px] md:w-[66%] md:text-left 2xl:max-h-[550px]">
+        {/* Кнопка объяснений */}
         <div className="absolute top-0 right-0 z-10">
           <MemoFullscreenSongExplanation />
         </div>
-        
+
         <MarqueeTitle gap="mr-6">
-          <h2 className="scroll-m-20 text-4xl 2xl:text-5xl font-bold tracking-tight py-2 2xl:py-3 text-shadow-md">
+          <h2 className="scroll-m-20 py-1 text-2xl font-bold tracking-tight text-shadow-md sm:text-3xl md:py-2 md:text-4xl 2xl:py-3 2xl:text-5xl">
             {currentSong.title}
           </h2>
         </MarqueeTitle>
-        <div className="text-base 2xl:text-lg flex gap-1 text-foreground/70 truncate maskImage-marquee-fade-finished">
+        <div className="flex flex-wrap items-center justify-center gap-1 truncate text-sm text-foreground/70 maskImage-marquee-fade-finished md:justify-start md:text-base 2xl:text-lg">
           <p className="truncate text-shadow-lg text-foreground">
             {currentSong.album}
           </p>
           <Dot className="text-foreground/70" />
           <ArtistNames song={currentSong} />
         </div>
-        <div className="flex gap-2 mt-2 2xl:mt-3 mb-[1px] flex-wrap">
+        <div className="mb-[1px] mt-2 flex flex-wrap justify-center gap-2 md:justify-start 2xl:mt-3">
           {currentSong.genre && (
             <Badge variant="neutral">{currentSong.genre}</Badge>
           )}

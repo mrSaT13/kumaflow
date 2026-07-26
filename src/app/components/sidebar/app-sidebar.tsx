@@ -13,10 +13,11 @@ import { NavMain } from './nav-main'
 import { NavPlaylists } from './nav-playlists'
 
 export function AppSidebar({
+  className,
   ...props
 }: React.ComponentProps<typeof MainSidebar>) {
   return (
-    <MainSidebar collapsible="icon" {...props}>
+    <MainSidebar collapsible="icon" className={className} {...props}>
       <MobileCloseButton />
       <MainSidebarHeader>
         <CommandMenu />

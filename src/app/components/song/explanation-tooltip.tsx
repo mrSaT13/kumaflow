@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { explainRecommendation, type Explanation } from '@/service/explainable-ai'
+import { useIsMobile } from '@/app/hooks/use-mobile'
+import { explainRecommendation } from '@/service/explainable-ai'
 import { useML } from '@/store/ml.store'
 import type { ISong } from '@/types/responses/song'
 import { Info } from 'lucide-react'
@@ -10,15 +11,20 @@ interface ExplanationTooltipProps {
 }
 
 export function ExplanationTooltip({ song, children }: ExplanationTooltipProps) {
+  const isMobile = useIsMobile()
   const [showTooltip, setShowTooltip] = useState(false)
-  
+
   const { getProfile, ratings } = useML()
-  
+
   const explanations = useMemo(() => {
     const profile = getProfile()
     return explainRecommendation(song, profile, ratings)
   }, [song, getProfile, ratings])
-  
+
+  if (isMobile || explanations.length === 0) {
+    return <>{children}</>
+  }
+
   return (
     <div 
       className="relative inline-block"

@@ -1,10 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import { ProgressSlider } from '@/app/components/ui/slider'
+import { useProgressSeek } from '@/app/hooks/use-progress-seek'
 import {
-  usePlayerActions,
   usePlayerDuration,
-  usePlayerProgress,
-  usePlayerRef,
   usePlayerSonglist,
 } from '@/store/player.store'
 import { usePlaybackSettings } from '@/store/playback.store'
@@ -13,75 +11,44 @@ import { QualityBadge } from '@/app/components/player/quality-badge'
 import { DotProgress } from './dot-progress'
 import { SpectrogramProgress } from './spectrogram-progress'
 
-let isSeeking = false
-
 export function FullscreenProgress() {
-  const progress = usePlayerProgress()
-  const [localProgress, setLocalProgress] = useState(progress)
-  const audioPlayerRef = usePlayerRef()
   const currentDuration = usePlayerDuration()
-  const { setProgress } = usePlayerActions()
   const { currentSong } = usePlayerSonglist()
   const progressBarType = usePlaybackSettings((state) => state.settings.progressBarType)
+  const {
+    progress,
+    displayProgress,
+    beginSeek,
+    updateSeek,
+    commitSeek,
+    handlePointerUp,
+  } = useProgressSeek(currentDuration)
 
-  // Переключение времени: всего / оставшееся
   const [showRemaining, setShowRemaining] = useState(false)
 
-  const updateAudioCurrentTime = useCallback(
-    (value: number) => {
-      isSeeking = false
-      if (audioPlayerRef) {
-        audioPlayerRef.currentTime = value
-      }
-    },
-    [audioPlayerRef],
-  )
-
-  const handleSeeking = useCallback((amount: number) => {
-    isSeeking = true
-    setLocalProgress(amount)
-  }, [])
-
-  const handleSeeked = useCallback(
-    (amount: number) => {
-      updateAudioCurrentTime(amount)
-      setProgress(amount)
-      setLocalProgress(amount)
-    },
-    [setProgress, updateAudioCurrentTime],
-  )
-
-  const handleSeekedFallback = useCallback(() => {
-    if (localProgress !== progress) {
-      updateAudioCurrentTime(localProgress)
-      setProgress(localProgress)
-    }
-  }, [localProgress, progress, setProgress, updateAudioCurrentTime])
-
   const currentTime = useMemo(
-    () => convertSecondsToTime(isSeeking ? localProgress : progress),
-    [isSeeking, localProgress, progress]
+    () => convertSecondsToTime(displayProgress),
+    [displayProgress],
   )
 
-  // Оставшееся или общее время
   const songDuration = useMemo(() => {
     const time = showRemaining
-      ? currentDuration - progress  // Оставшееся время
-      : currentDuration             // Общее время
+      ? currentDuration - progress
+      : currentDuration
     return convertSecondsToTime(time)
   }, [currentDuration, progress, showRemaining])
 
-  // Обработчик клика для переключения
   const handleDurationClick = useCallback(() => {
-    setShowRemaining(prev => !prev)
+    setShowRemaining((prev) => !prev)
   }, [])
 
-  // Рендерим нужный тип прогресс бара
   const renderProgressBar = () => {
     const commonProps = {
-      progress: isSeeking ? localProgress : progress,
+      progress: displayProgress,
       duration: currentDuration,
-      onSeek: handleSeeked,
+      onSeek: commitSeek,
+      onSeekStart: beginSeek,
+      onSeekChange: updateSeek,
     }
 
     switch (progressBarType) {
@@ -95,41 +62,42 @@ export function FullscreenProgress() {
           <ProgressSlider
             variant="secondary"
             defaultValue={[0]}
-            value={isSeeking ? [localProgress] : [progress]}
+            value={[displayProgress]}
             tooltipTransformer={convertSecondsToTime}
             max={currentDuration}
             step={1}
-            className="w-full h-4"
-            onValueChange={([value]) => handleSeeking(value)}
-            onValueCommit={([value]) => handleSeeked(value)}
-            onPointerUp={handleSeekedFallback}
-            onMouseUp={handleSeekedFallback}
+            trackHeight={10}
+            className="h-12 w-full touch-pan-x"
+            onPointerDown={beginSeek}
+            onValueChange={([value]) => updateSeek(value)}
+            onValueCommit={([value]) => commitSeek(value)}
+            onPointerUp={handlePointerUp}
+            onMouseUp={handlePointerUp}
           />
         )
     }
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <div className="min-w-[50px] max-w-[60px] text-right drop-shadow-lg">
+    <div className="flex items-center gap-2 md:gap-3">
+      <div className="min-w-[42px] max-w-[50px] shrink-0 text-right text-sm drop-shadow-lg md:min-w-[50px] md:max-w-[60px]">
         {currentTime}
       </div>
 
-      <div className="flex-1">
+      <div className="min-w-0 flex-1 py-1">
         {renderProgressBar()}
       </div>
 
       <div
-        className="min-w-[50px] max-w-[60px] text-left drop-shadow-lg cursor-pointer hover:text-primary/80 transition-colors"
+        className="min-w-[42px] max-w-[50px] shrink-0 cursor-pointer text-left text-sm drop-shadow-lg transition-colors hover:text-primary/80 md:min-w-[50px] md:max-w-[60px]"
         onClick={handleDurationClick}
         title={showRemaining ? 'Показать общее время' : 'Показать оставшееся время'}
       >
         {showRemaining ? '-' : ''}{songDuration}
       </div>
 
-      {/* Quality Badge */}
       {currentSong && (
-        <div className="ml-2">
+        <div className="ml-1 hidden shrink-0 sm:block">
           <QualityBadge song={currentSong} />
         </div>
       )}

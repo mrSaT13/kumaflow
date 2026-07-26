@@ -56,6 +56,14 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
+function getSongTitle(song: ISong) {
+  return song.title || (song as { songTitle?: string; name?: string }).songTitle || (song as { name?: string }).name || 'Без названия'
+}
+
+function getSongArtist(song: ISong) {
+  return song.artist || (song as { artistName?: string; performer?: string }).artistName || (song as { performer?: string }).performer || 'Неизвестный артист'
+}
+
 export default function MLPlaylistViewPage() {
   const navigate = useNavigate()
   const { playlistId } = useParams<{ playlistId: string }>()
@@ -262,14 +270,45 @@ export default function MLPlaylistViewPage() {
       <div
         ref={setNodeRef}
         style={style}
-        className={`flex items-center gap-3 p-3 hover:bg-accent/50 transition-all duration-300 ${
+        className={`group transition-all duration-300 ${
           removingSongId === song.id
             ? 'opacity-0 translate-x-4'
             : 'opacity-100 translate-x-0'
-        } group`}
+        } ${isDragging ? 'bg-accent/30' : ''}`}
         {...attributes}
       >
-        {/* Drag handle - всегда виден */}
+        {/* Мобильная раскладка */}
+        <div
+          className="flex min-w-0 items-center gap-2 px-3 py-3 active:bg-accent/50 md:hidden"
+          onClick={() => setSongList(playlist!.songs, index)}
+        >
+          <span className="w-5 shrink-0 text-center text-xs text-muted-foreground">
+            {index + 1}
+          </span>
+          <img
+            src={getSimpleCoverArtUrl(song.albumId || song.id, 'album', '100')}
+            alt={getSongTitle(song)}
+            className="size-11 shrink-0 rounded object-cover"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement
+              target.src = '/default_album_art.png'
+            }}
+          />
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <div className="truncate text-[15px] font-medium leading-tight">
+              {getSongTitle(song)}
+            </div>
+            <div className="truncate text-sm text-muted-foreground">
+              {getSongArtist(song)}
+            </div>
+          </div>
+          <span className="shrink-0 pl-1 text-xs tabular-nums text-muted-foreground">
+            {formatDuration(song.duration)}
+          </span>
+        </div>
+
+        {/* Десктопная раскладка */}
+        <div className="hidden items-center gap-3 p-3 hover:bg-accent/50 md:flex">
         <button
           className="text-muted-foreground hover:text-primary cursor-move"
           {...listeners}
@@ -287,33 +326,31 @@ export default function MLPlaylistViewPage() {
             'album',
             '100',
           )}
-          alt={song.title}
-          className="w-12 h-12 rounded object-cover"
+          alt={getSongTitle(song)}
+          className="w-12 h-12 rounded object-cover shrink-0"
           onError={(e) => {
             const target = e.target as HTMLImageElement
             target.src = '/default_album_art.png'
           }}
         />
-        <div className="flex-1 min-w-0">
-          <div className="font-medium truncate">{song.title}</div>
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="font-medium truncate">{getSongTitle(song)}</div>
           <div className="text-sm text-muted-foreground truncate">
-            {song.artist}
+            {getSongArtist(song)}
           </div>
         </div>
-        <div className="hidden md:block text-sm text-muted-foreground">
+        <div className="hidden lg:block text-sm text-muted-foreground max-w-[180px] truncate">
           {song.album}
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground w-12 text-right">
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-sm text-muted-foreground w-12 text-right tabular-nums">
             {formatDuration(song.duration)}
           </span>
-          {/* Кнопка лайка */}
           <Button
             variant="ghost"
             size="icon"
             onClick={(e) => {
               e.stopPropagation()
-              // TODO: Логика лайка
               console.log('Like track:', song.id)
             }}
             className={`opacity-0 group-hover:opacity-100 transition-opacity ${
@@ -327,7 +364,7 @@ export default function MLPlaylistViewPage() {
             variant="ghost"
             size="icon"
             onClick={() => {
-              setSongList(playlist.songs, index)
+              setSongList(playlist!.songs, index)
             }}
             className="opacity-0 group-hover:opacity-100 transition-opacity"
             title="Воспроизвести"
@@ -343,6 +380,7 @@ export default function MLPlaylistViewPage() {
           >
             <Trash2 className="w-4 h-4 text-red-500" />
           </Button>
+        </div>
         </div>
       </div>
     )
@@ -665,7 +703,7 @@ export default function MLPlaylistViewPage() {
       </div>
 
       {/* Информация о плейлисте */}
-      <div className="container mx-auto px-4 -mt-20 relative z-10">
+      <div className="container mx-auto px-3 pb-8 md:px-4 -mt-20 relative z-10 overflow-x-hidden">
         <div className="flex flex-col md:flex-row md:items-end gap-6 mb-8">
           {/* Большая обложка (первая из коллажа) */}
           <div className="w-48 h-48 md:w-52 md:h-52 rounded-lg shadow-2xl overflow-hidden flex-shrink-0 mx-auto md:mx-0">
@@ -824,7 +862,7 @@ export default function MLPlaylistViewPage() {
         </div>
 
         {/* Список треков */}
-        <Card className="bg-card/50 backdrop-blur-sm">
+        <Card className="overflow-hidden bg-card/50 backdrop-blur-sm">
           <CardContent className="p-0">
             {playlist.songs.length > 0 ? (
               <DndContext

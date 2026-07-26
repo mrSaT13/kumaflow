@@ -5,11 +5,12 @@
 
 import { 
   Database, Music, Mic2, Trash2, Play, Shuffle, RefreshCw, 
-  Search, SortAsc, SortDesc, GripVertical, Download,
-  BarChart3, Heart, Clock, Disc3
+  Search, SortAsc, SortDesc, GripVertical,
+  BarChart3, Heart, Clock, Disc3, ChevronLeft
 } from 'lucide-react'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card'
@@ -157,8 +158,75 @@ function SortableTrackRow({ track, index, onPlay, onRemove, formatDuration, form
   )
 }
 
+interface CacheTrackCardProps {
+  track: ISong
+  onPlay: (track: ISong) => void
+  onRemove: (trackId: string) => void
+  formatDuration: (seconds: number) => string
+}
+
+function CacheTrackCard({ track, onPlay, onRemove, formatDuration }: CacheTrackCardProps) {
+  return (
+    <div className="flex items-center gap-3 border-b px-4 py-3 last:border-b-0 active:bg-accent/40">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-10 shrink-0"
+        onClick={() => onPlay(track)}
+      >
+        <Play className="size-4" />
+      </Button>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[15px] font-medium">{track.title}</p>
+        <p className="truncate text-sm text-muted-foreground">{track.artist}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {[track.album, formatDuration(track.duration || 0)].filter(Boolean).join(' · ')}
+        </p>
+      </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-10 shrink-0 text-muted-foreground hover:text-destructive"
+        onClick={() => onRemove(track.id)}
+      >
+        <Trash2 className="size-4" />
+      </Button>
+    </div>
+  )
+}
+
+interface CacheArtistCardProps {
+  artist: IArtist
+  onRemove: (artistId: string) => void
+}
+
+function CacheArtistCard({ artist, onRemove }: CacheArtistCardProps) {
+  return (
+    <div className="flex items-center gap-3 border-b px-4 py-3 last:border-b-0 active:bg-accent/40">
+      <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/10">
+        <Mic2 className="size-5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[15px] font-medium">{artist.name}</p>
+        <p className="text-xs text-muted-foreground">
+          {artist.albumCount || 0} альб. · {artist.songCount || 0} треков
+        </p>
+      </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-10 shrink-0 text-muted-foreground hover:text-destructive"
+        onClick={() => onRemove(artist.id)}
+      >
+        <Trash2 className="size-4" />
+      </Button>
+    </div>
+  )
+}
+
 export default function CachePage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { setSongList, play } = usePlayerActions()
   
   const [stats, setStats] = useState({
@@ -373,38 +441,54 @@ export default function CachePage() {
   }, [cachedTracks, searchQuery, sortBy, sortOrder])
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Заголовок с прогрессом */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <Database className="w-8 h-8" />
-              Управление кешем
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Просмотр и управление закешированными данными
-            </p>
+    <div className="w-full pb-6 md:container md:mx-auto md:space-y-6 md:p-6">
+      <div className="sticky top-0 z-10 border-b bg-background/95 px-4 py-4 backdrop-blur-md md:static md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/profile')}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full transition-colors active:bg-accent/60 md:hidden"
+              aria-label="Назад"
+            >
+              <ChevronLeft className="size-5" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <h1 className="flex items-center gap-2 truncate text-xl font-bold md:text-3xl">
+                <Database className="size-5 shrink-0 md:size-8" />
+                Кэш
+              </h1>
+              <p className="mt-0.5 hidden text-sm text-muted-foreground md:block">
+                Просмотр и управление закешированными данными
+              </p>
+            </div>
           </div>
+
           <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => loadCache()}
               disabled={isRefreshing}
-              className={isRefreshing ? 'animate-pulse' : ''}
+              className={`flex-1 md:flex-none ${isRefreshing ? 'animate-pulse' : ''}`}
             >
-              <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Обновить
+              <RefreshCw className={`size-4 md:mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="hidden md:inline">Обновить</span>
             </Button>
-            <Button variant="destructive" onClick={handleClearCache}>
-              <Trash2 className="w-4 h-4 mr-2" />
-              Очистить весь кеш
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleClearCache}
+              className="flex-1 md:flex-none"
+            >
+              <Trash2 className="size-4 md:mr-2" />
+              <span className="hidden md:inline">Очистить весь кеш</span>
+              <span className="md:hidden">Очистить</span>
             </Button>
           </div>
         </div>
+      </div>
 
-        {/* Прогресс бар кеширования */}
+      <div className="space-y-4 px-4 pt-4 md:space-y-6 md:px-0 md:pt-0">
         {cachingProgress.isCaching && (
           <Card className="border-primary/50">
             <CardContent className="pt-4">
@@ -423,94 +507,105 @@ export default function CachePage() {
             </CardContent>
           </Card>
         )}
-      </div>
 
       {/* Статистика */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         <Card className={isRefreshing ? 'border-primary/50' : ''}>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              Треков в кеше
-              {isRefreshing && <RefreshCw className="w-3 h-3 animate-spin" />}
+          <CardHeader className="pb-2 md:pb-3">
+            <CardTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground md:text-sm">
+              Треков
+              {isRefreshing && <RefreshCw className="size-3 animate-spin" />}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{stats.tracks}</div>
+          <CardContent className="pt-0 md:pt-0">
+            <div className="text-2xl font-bold md:text-3xl">{stats.tracks}</div>
           </CardContent>
         </Card>
         <Card className={isRefreshing ? 'border-primary/50' : ''}>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              Артистов в кеше
-              {isRefreshing && <RefreshCw className="w-3 h-3 animate-spin" />}
+          <CardHeader className="pb-2 md:pb-3">
+            <CardTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground md:text-sm">
+              Артистов
+              {isRefreshing && <RefreshCw className="size-3 animate-spin" />}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{stats.artists}</div>
+          <CardContent className="pt-0 md:pt-0">
+            <div className="text-2xl font-bold md:text-3xl">{stats.artists}</div>
           </CardContent>
         </Card>
         <Card className={isRefreshing ? 'border-primary/50' : ''}>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              Размер кеша
-              {isRefreshing && <RefreshCw className="w-3 h-3 animate-spin" />}
+          <CardHeader className="pb-2 md:pb-3">
+            <CardTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground md:text-sm">
+              Размер
+              {isRefreshing && <RefreshCw className="size-3 animate-spin" />}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{formatBytes(stats.totalSize)}</div>
-            <p className="text-xs text-muted-foreground mt-1">
+          <CardContent className="pt-0 md:pt-0">
+            <div className="text-2xl font-bold md:text-3xl">{formatBytes(stats.totalSize)}</div>
+            <p className="mt-1 text-xs text-muted-foreground">
               {formatBytes(audioSize)} аудио
             </p>
           </CardContent>
         </Card>
         <Card className={isRefreshing ? 'border-primary/50' : ''}>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              Всего элементов
-              {isRefreshing && <RefreshCw className="w-3 h-3 animate-spin" />}
+          <CardHeader className="pb-2 md:pb-3">
+            <CardTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground md:text-sm">
+              Всего
+              {isRefreshing && <RefreshCw className="size-3 animate-spin" />}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{stats.totalItems}</div>
+          <CardContent className="pt-0 md:pt-0">
+            <div className="text-2xl font-bold md:text-3xl">{stats.totalItems}</div>
           </CardContent>
         </Card>
       </div>
 
       {/* Табы и управление */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'tracks' | 'artists')} className="space-y-4">
-        <div className="flex justify-between items-center">
-          <TabsList>
-            <TabsTrigger value="tracks" className="flex items-center gap-2">
-              <Music className="w-4 h-4" />
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <TabsList className="grid h-auto w-full grid-cols-2 md:w-auto">
+            <TabsTrigger value="tracks" className="flex items-center gap-2 text-xs md:text-sm">
+              <Music className="size-4" />
               Треки ({cachedTracks.length})
             </TabsTrigger>
-            <TabsTrigger value="artists" className="flex items-center gap-2">
-              <Mic2 className="w-4 h-4" />
+            <TabsTrigger value="artists" className="flex items-center gap-2 text-xs md:text-sm">
+              <Mic2 className="size-4" />
               Артисты ({cachedArtists.length})
             </TabsTrigger>
           </TabsList>
 
           {activeTab === 'tracks' && (
             <div className="flex gap-2">
-              <Button onClick={handlePlayAll} disabled={cachedTracks.length === 0}>
-                <Play className="w-4 h-4 mr-2" />
-                Воспроизвести все
+              <Button
+                onClick={handlePlayAll}
+                disabled={cachedTracks.length === 0}
+                className="flex-1 md:flex-none"
+                size="sm"
+              >
+                <Play className="size-4 md:mr-2" />
+                <span className="hidden sm:inline">Воспроизвести все</span>
+                <span className="sm:hidden">Все</span>
               </Button>
-              <Button variant="outline" onClick={handleShuffle} disabled={cachedTracks.length === 0}>
-                <Shuffle className="w-4 h-4 mr-2" />
-                Перемешать
+              <Button
+                variant="outline"
+                onClick={handleShuffle}
+                disabled={cachedTracks.length === 0}
+                className="flex-1 md:flex-none"
+                size="sm"
+              >
+                <Shuffle className="size-4 md:mr-2" />
+                <span className="hidden sm:inline">Перемешать</span>
+                <span className="sm:hidden">Shuffle</span>
               </Button>
             </div>
           )}
         </div>
 
         <TabsContent value="tracks" className="space-y-4">
-          {/* Поиск и сортировка */}
           <Card>
             <CardContent className="pt-4">
-              <div className="flex gap-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Поиск треков..."
                     value={searchQuery}
@@ -518,149 +613,178 @@ export default function CachePage() {
                     className="pl-10"
                   />
                 </div>
-                <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder="Сортировать" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="title">Название</SelectItem>
-                    <SelectItem value="artist">Артист</SelectItem>
-                    <SelectItem value="album">Альбом</SelectItem>
-                    <SelectItem value="duration">Длительность</SelectItem>
-                    <SelectItem value="bpm">BPM</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                >
-                  {sortOrder === 'asc' ? <SortAsc className="w-4 h-4" /> : <SortDesc className="w-4 h-4" />}
-                </Button>
+                <div className="flex gap-2">
+                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+                    <SelectTrigger className="w-full sm:w-40">
+                      <SelectValue placeholder="Сортировать" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="title">Название</SelectItem>
+                      <SelectItem value="artist">Артист</SelectItem>
+                      <SelectItem value="album">Альбом</SelectItem>
+                      <SelectItem value="duration">Длительность</SelectItem>
+                      <SelectItem value="bpm">BPM</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  >
+                    {sortOrder === 'asc' ? <SortAsc className="size-4" /> : <SortDesc className="size-4" />}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Таблица треков с drag-and-drop */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Music className="w-5 h-5" />
-                Закешированные треки
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {filteredAndSortedTracks.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <Table className="w-full min-w-[1200px]">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-10"></TableHead>
-                          <TableHead className="w-12"></TableHead>
-                          <TableHead className="min-w-[200px]">Название</TableHead>
-                          <TableHead className="min-w-[150px]">Альбом</TableHead>
-                          <TableHead className="w-20">Длительность</TableHead>
-                          <TableHead className="min-w-[100px]">Жанр</TableHead>
-                          <TableHead className="w-20">BPM</TableHead>
-                          <TableHead className="min-w-[120px]">Настроение</TableHead>
-                          <TableHead className="w-20 text-right">Действия</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                      <SortableContext
-                        items={filteredAndSortedTracks.map(t => t.id)}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        {filteredAndSortedTracks.map((track, index) => (
-                          <SortableTrackRow
-                            key={track.id}
-                            track={track}
-                            index={index}
-                            onPlay={handlePlayTrack}
-                            onRemove={handleRemoveTrack}
-                            formatDuration={formatDuration}
-                            formatBytes={formatBytes}
-                          />
-                        ))}
-                      </SortableContext>
-                    </TableBody>
-                  </Table>
-                </DndContext>
+          {filteredAndSortedTracks.length > 0 ? (
+            <>
+              <div className="overflow-hidden rounded-2xl border bg-background-foreground md:hidden">
+                {filteredAndSortedTracks.map((track) => (
+                  <CacheTrackCard
+                    key={track.id}
+                    track={track}
+                    onPlay={handlePlayTrack}
+                    onRemove={handleRemoveTrack}
+                    formatDuration={formatDuration}
+                  />
+                ))}
               </div>
-              ) : (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Music className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Треки в кеше отсутствуют</p>
-                  <p className="text-sm mt-2">
-                    Используйте кнопку ⬇️ в таблице треков для сохранения
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+
+              <Card className="hidden md:block">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Music className="size-5" />
+                    Закешированные треки
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <Table className="w-full min-w-[1200px]">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-10"></TableHead>
+                            <TableHead className="w-12"></TableHead>
+                            <TableHead className="min-w-[200px]">Название</TableHead>
+                            <TableHead className="min-w-[150px]">Альбом</TableHead>
+                            <TableHead className="w-20">Длительность</TableHead>
+                            <TableHead className="min-w-[100px]">Жанр</TableHead>
+                            <TableHead className="w-20">BPM</TableHead>
+                            <TableHead className="min-w-[120px]">Настроение</TableHead>
+                            <TableHead className="w-20 text-right">Действия</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <SortableContext
+                            items={filteredAndSortedTracks.map((t) => t.id)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            {filteredAndSortedTracks.map((track, index) => (
+                              <SortableTrackRow
+                                key={track.id}
+                                track={track}
+                                index={index}
+                                onPlay={handlePlayTrack}
+                                onRemove={handleRemoveTrack}
+                                formatDuration={formatDuration}
+                                formatBytes={formatBytes}
+                              />
+                            ))}
+                          </SortableContext>
+                        </TableBody>
+                      </Table>
+                    </DndContext>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <div className="rounded-2xl border py-12 text-center text-muted-foreground">
+              <Music className="mx-auto mb-4 size-12 opacity-50" />
+              <p>Треки в кеше отсутствуют</p>
+              <p className="mt-2 text-sm">
+                Лайкайте треки — они сохранятся в кэш автоматически
+              </p>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="artists" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Mic2 className="w-5 h-5" />
-                Закешированные артисты
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {cachedArtists.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Артист</TableHead>
-                      <TableHead>Альбомов</TableHead>
-                      <TableHead>Треков</TableHead>
-                      <TableHead className="text-right">Действия</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {cachedArtists.map((artist) => (
-                      <TableRow key={artist.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                              <Mic2 className="w-5 h-5" />
-                            </div>
-                            <div className="font-medium">{artist.name}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{artist.albumCount || 0}</TableCell>
-                        <TableCell className="text-muted-foreground">{artist.songCount || 0}</TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveArtist(artist.id)}
-                            className="text-muted-foreground hover:text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
+          {cachedArtists.length > 0 ? (
+            <>
+              <div className="overflow-hidden rounded-2xl border bg-background-foreground md:hidden">
+                {cachedArtists.map((artist) => (
+                  <CacheArtistCard
+                    key={artist.id}
+                    artist={artist}
+                    onRemove={handleRemoveArtist}
+                  />
+                ))}
+              </div>
+
+              <Card className="hidden md:block">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Mic2 className="size-5" />
+                    Закешированные артисты
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Артист</TableHead>
+                        <TableHead>Альбомов</TableHead>
+                        <TableHead>Треков</TableHead>
+                        <TableHead className="text-right">Действия</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Mic2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Артисты в кеше отсутствуют</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {cachedArtists.map((artist) => (
+                        <TableRow key={artist.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className="flex size-10 items-center justify-center rounded-full bg-primary/10">
+                                <Mic2 className="size-5" />
+                              </div>
+                              <div className="font-medium">{artist.name}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{artist.albumCount || 0}</TableCell>
+                          <TableCell className="text-muted-foreground">{artist.songCount || 0}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemoveArtist(artist.id)}
+                              className="text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <div className="rounded-2xl border py-12 text-center text-muted-foreground">
+              <Mic2 className="mx-auto mb-4 size-12 opacity-50" />
+              <p>Артисты в кеше отсутствуют</p>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   )
 }

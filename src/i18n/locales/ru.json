@@ -714,6 +714,7 @@
       "appearance": "Внешний вид",
       "language": "Язык и Регион",
       "audio": "Проигрыватель и Звук",
+      "external-api": "Внешние API",
       "content": "Содержимое",
       "local-music": "Локальная музыка",
       "cache": "Кеш",

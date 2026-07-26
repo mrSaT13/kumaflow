@@ -6,6 +6,7 @@ import { shallow } from 'zustand/shallow'
 import { createWithEqualityFn } from 'zustand/traditional'
 import { pingServer } from '@/api/pingServer'
 import { queryServerInfo } from '@/api/queryServerInfo'
+import { invalidateAppSession } from '@/service/app-session'
 import { AuthType, IAppContext, IServerConfig } from '@/types/serverConfig'
 import { isDesktop } from '@/utils/desktop'
 import { discordRpc } from '@/utils/discordRpc'
@@ -19,6 +20,7 @@ import {
   hasValidConfig,
 } from '@/utils/salt'
 import { useAccountsStore } from '@/store/accounts.store'
+import { isValidServerConnection } from '@/utils/server-config'
 
 const {
   SERVER_URL,
@@ -63,6 +65,20 @@ function getServerConfigFromAccount() {
  * Обновить данные сервера в store
  */
 function updateServerConfig(set: any, get: any, serverConfig: ReturnType<typeof getServerConfigFromAccount>) {
+  if (!isValidServerConnection({
+    url: serverConfig.url,
+    username: serverConfig.username,
+    password: serverConfig.password,
+    isServerConfigured: true,
+  })) {
+    console.warn('[AppStore] Skipping incomplete account config:', {
+      url: serverConfig.url || '(empty)',
+      username: serverConfig.username || '(empty)',
+      hasPassword: !!serverConfig.password,
+    })
+    return
+  }
+
   console.log('[AppStore] Updating server config:', serverConfig.username)
   
   // Обновляем через set с merge
@@ -367,6 +383,13 @@ export const useAppStore = createWithEqualityFn<IAppContext>()(
             setOpenDialog: (value) => {
               set((state) => {
                 state.settings.openDialog = value
+                state.settings.mobileView = 'categories'
+              })
+            },
+            mobileView: 'categories',
+            setMobileView: (view) => {
+              set((state) => {
+                state.settings.mobileView = view
               })
             },
             currentPage: 'appearance',
@@ -384,6 +407,9 @@ export const useAppStore = createWithEqualityFn<IAppContext>()(
             },
             setUrl: (value) => {
               set((state) => {
+                if (state.data.url !== value) {
+                  invalidateAppSession()
+                }
                 state.data.url = value
               })
             },

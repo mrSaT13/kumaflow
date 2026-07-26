@@ -201,22 +201,44 @@ export function AudioPlayer({
       if (!audio) return
 
       try {
-        if (isPlaying) {
-          if (isSong) await resumeContext()
-          await audio.play()
+        if (!isPlaying) {
+          audio.pause()
+          return
+        }
 
-          // Кэшируем текущий трек пока он играет (для бесшовного переключения)
+        if (isSong) {
+          await resumeContext()
+
+          if (audio.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA) {
+            await new Promise<void>((resolve, reject) => {
+              const cleanup = () => {
+                audio.removeEventListener('canplay', onCanPlay)
+                audio.removeEventListener('error', onError)
+              }
+              const onCanPlay = () => {
+                cleanup()
+                resolve()
+              }
+              const onError = () => {
+                cleanup()
+                reject(new Error('Audio load failed'))
+              }
+              audio.addEventListener('canplay', onCanPlay, { once: true })
+              audio.addEventListener('error', onError, { once: true })
+              audio.load()
+            })
+          }
+        }
+
+        await audio.play()
+
+        if (isSong) {
           const { currentSong } = usePlayerStore.getState().songlist
           if (currentSong?.id && !currentSong.isLocal) {
-            // Кэшируем в фоне без ожидания
             cacheService.cacheAudioFile(currentSong.id).catch((err) => {
               console.warn('[Audio] Failed to cache current track:', err)
             })
           }
-
-          // Отправляем Now Playing в Navidrome и Last.fm
-          console.log('[Audio] Current song:', currentSong)
-          console.log('[Audio] Artist:', currentSong?.artist, 'Title:', currentSong?.title)
 
           if (currentSong?.id && currentSong.artist && currentSong.title) {
             const { scrobble } = await import('@/service/scrobble')
@@ -227,11 +249,13 @@ export function AudioPlayer({
               album: currentSong.album,
               duration: currentSong.duration,
             })
-          } else {
-            console.log('[Audio] Cannot send Now Playing: missing artist or title', currentSong)
           }
-        } else {
-          audio.pause()
+
+          const { isMyWaveActive } = usePlayerStore.getState().playerState
+          if (isMyWaveActive) {
+            const { preloadNextMyWaveTrack } = await import('@/service/my-wave-preload')
+            preloadNextMyWaveTrack()
+          }
         }
       } catch (error) {
         logger.error('Audio playback failed', error)
@@ -239,7 +263,7 @@ export function AudioPlayer({
       }
     }
     if (isSong || isPodcast) handleSong()
-  }, [audioRef, handleSongError, isPlaying, isSong, isPodcast, resumeContext])
+  }, [audioRef, handleSongError, isPlaying, isSong, isPodcast, resumeContext, props.src])
 
   // ✅ Crossfade - плавные переходы между треками
   // Обработчик для crossfade - срабатывает когда трек заканчивается

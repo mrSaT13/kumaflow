@@ -5,6 +5,7 @@ import { useExternalApi } from '@/store/external-api.store'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { toast } from 'react-toastify'
+import { isDesktop } from '@/utils/desktop'
 
 /**
  * Компонент авторизации Last.fm
@@ -67,7 +68,14 @@ export function LastFmAuth() {
       const token = await lastFmService.getToken()
 
       if (!token) {
-        toast.error('Не удалось получить токен авторизации')
+        const detail = lastFmService.getLastApiError()
+        toast.error(
+          detail
+            ? `Last.fm: ${detail}`
+            : isDesktop()
+              ? 'Не удалось получить токен. Проверьте API Key и Secret.'
+              : 'Не удалось получить токен. Полностью перезапусти npm run dev и проверь Key/Secret.',
+        )
         setIsAuthorizing(false)
         return
       }
@@ -162,7 +170,7 @@ export function LastFmAuth() {
         </p>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-sm font-medium">Last.fm Авторизация</h3>
           <p className="text-sm text-muted-foreground">
@@ -172,7 +180,7 @@ export function LastFmAuth() {
                 ? '🔑 Токен получен. Авторизуйтесь в браузере и нажмите "Готово"'
                 : isAuthorizing
                   ? '⏳ Получение токена...'
-                  : 'Требуется для scrobbling и Now Playing'}
+                  : 'Нужно только для scrobbling. Для жанров/тегов достаточно API Key.'}
           </p>
         </div>
         {isAuthorized ? (

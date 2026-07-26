@@ -47,7 +47,8 @@ import {
 } from 'lucide-react'
 import { useGetArtist, useGetArtistInfo, useGetTopSongs } from '@/app/hooks/use-artist'
 import { usePlayerActions } from '@/store/player.store'
-import { generateArtistRadio, generateTrackRadio, generateVibeMix } from '@/service/ml-wave-service'
+import { playTrackRadio } from '@/service/track-radio-service'
+import { generateArtistRadio, generateVibeMix } from '@/service/ml-wave-service'
 import { getRandomSongs } from '@/service/subsonic-api'
 import { toast } from 'react-toastify'
 import { getSimpleCoverArtUrl } from '@/api/httpClient'
@@ -806,10 +807,12 @@ export default function NewArtistPage() {
   const handlePlayTrackRadio = async (song: any) => {
     setIsTrackRadioGenerating(true)
     try {
-      const result = await generateTrackRadio(song.id, 25)
-      if (result.songs.length > 0) { setSongList([song, ...result.songs], 0); toast.success(`▶️ Радио трека: ${song.title}`, { autoClose: 2000 }) }
-    } catch (error) { toast.error('Не удалось запустить радио') }
-    finally { setIsTrackRadioGenerating(false) }
+      await playTrackRadio(song, 25)
+    } catch (error) {
+      console.error('Failed to start track radio:', error)
+    } finally {
+      setIsTrackRadioGenerating(false)
+    }
   }
 
   const handleVibeSimilarity = async (song: any) => {

@@ -68,6 +68,8 @@ export interface IAppUpdate {
 interface IAppSettings {
   openDialog: boolean
   setOpenDialog: (value: boolean) => void
+  mobileView: 'categories' | 'content' | 'search'
+  setMobileView: (view: 'categories' | 'content' | 'search') => void
   currentPage: SettingsOptions
   setCurrentPage: (page: SettingsOptions) => void
 }

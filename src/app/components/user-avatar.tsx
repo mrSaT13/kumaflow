@@ -35,7 +35,7 @@ import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { useAccounts, useAccountsActions, useCurrentAccount } from '@/store/accounts.store'
-import { useAppSettings } from '@/store/app.store'
+import { openSettings } from '@/lib/settings-navigation'
 import { isMacOS } from '@/utils/desktop'
 
 interface UserAvatarProps {
@@ -49,7 +49,6 @@ export function UserAvatar({ size = 32, className }: UserAvatarProps) {
   const setLogoutDialogState = useAppStore(
     (state) => state.actions.setLogoutDialogState,
   )
-  const { setCurrentPage, setOpenDialog } = useAppSettings()
   const [open, setOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
@@ -349,8 +348,7 @@ export function UserAvatar({ size = 32, className }: UserAvatarProps) {
           
           {/* Настройки аккаунта */}
           <DropdownMenuItem onClick={() => { 
-            setCurrentPage('account')
-            setOpenDialog(true)
+            openSettings('account')
             setOpen(false)
           }}>
             <Settings className="mr-2 h-4 w-4" />

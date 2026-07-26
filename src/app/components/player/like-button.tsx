@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react'
-import clsx from 'clsx'
-import { Heart, ThumbsDown } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
+import { Heart } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { SimpleTooltip } from '@/app/components/ui/simple-tooltip'
+import { cn } from '@/lib/utils'
 import { useML } from '@/store/ml.store'
 import {
   usePlayerActions,
@@ -12,98 +10,44 @@ import {
 } from '@/store/player.store'
 
 interface PlayerLikeButtonProps {
-  disabled: boolean
+  disabled?: boolean
+  className?: string
 }
 
-export function PlayerLikeButton({ disabled }: PlayerLikeButtonProps) {
-  const { t } = useTranslation()
-  const isSongStarred = usePlayerSongStarred()
-  const { title: song, artist } = usePlayerStore(
-    (state) => state.songlist.currentSong,
-  )
-  const { starCurrentSong, playNextSong } = usePlayerActions()
-  const { ratings, rateSong } = useML()
-
+export function PlayerLikeButton({ disabled, className }: PlayerLikeButtonProps) {
+  const isLiked = usePlayerSongStarred()
+  const { starCurrentSong } = usePlayerActions()
+  const { rateSong } = useML()
   const currentSong = usePlayerStore((state) => state.songlist.currentSong)
-  const currentRating = currentSong?.id ? ratings[currentSong.id]?.like : null
-
-  // Исправляем controlled/uncontrolled warning
-  const [mountedRating, setMountedRating] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    setMountedRating(currentRating)
-  }, [currentRating])
-
-  const translationLabel = `player.tooltips.${isSongStarred ? 'dislike' : 'like'}`
-  const likeTooltip = t(translationLabel, { song, artist })
 
   const handleLike = () => {
+    if (!currentSong?.id) return
     starCurrentSong()
-    // ML: Запоминаем лайк
-    if (currentSong?.id) {
-      rateSong(currentSong.id, !isSongStarred, {
-        title: currentSong.title,
-        artist: currentSong.artist,
-        artistId: currentSong.artistId,
-        genre: currentSong.genre,
-        album: currentSong.album,
-      })
-    }
-  }
-
-  const handleDislike = () => {
-    // ML: Запоминаем дизлайк и переключаем на следующий трек
-    if (currentSong?.id) {
-      rateSong(currentSong.id, false, {
-        title: currentSong.title,
-        artist: currentSong.artist,
-        artistId: currentSong.artistId,
-        genre: currentSong.genre,
-        album: currentSong.album,
-      })
-    }
-    // Переключаем на следующий трек
-    playNextSong()
+    rateSong(currentSong.id, !isLiked, {
+      title: currentSong.title,
+      artist: currentSong.artist,
+      artistId: currentSong.artistId,
+      genre: currentSong.genre,
+      album: currentSong.album,
+    })
   }
 
   return (
-    <div className="flex items-center gap-1">
-      <SimpleTooltip text={likeTooltip}>
-        <Button
-          variant="ghost"
-          className="rounded-full w-10 h-10 p-3 text-secondary-foreground"
-          disabled={disabled}
-          onClick={handleLike}
-          data-testid="player-like-button"
-        >
-          <Heart
-            className={clsx(
-              'w-5 h-5',
-              mountedRating === true && 'text-green-500 fill-green-500',
-              isSongStarred && mountedRating !== true && 'text-red-500 fill-red-500',
-            )}
-            data-testid="player-like-icon"
-          />
-        </Button>
-      </SimpleTooltip>
-
-      <SimpleTooltip text={t('player.tooltips.dislike', { song, artist })}>
-        <Button
-          variant="ghost"
-          className="rounded-full w-10 h-10 p-3 text-secondary-foreground"
-          disabled={disabled}
-          onClick={handleDislike}
-          data-testid="player-dislike-button"
-        >
-          <ThumbsDown
-            className={clsx(
-              'w-5 h-5',
-              mountedRating === false && 'text-red-500 fill-red-500',
-            )}
-            data-testid="player-dislike-icon"
-          />
-        </Button>
-      </SimpleTooltip>
-    </div>
+    <SimpleTooltip text={isLiked ? 'Удалить из любимых' : 'Добавить в любимые'}>
+      <Button
+        variant="ghost"
+        size="icon"
+        disabled={disabled}
+        onClick={handleLike}
+        data-testid="player-button-like"
+        className={cn(
+          'rounded-full shrink-0 [&_svg]:size-6',
+          isLiked && 'text-red-500',
+          className,
+        )}
+      >
+        <Heart className={isLiked ? 'fill-red-500 text-red-500' : 'text-secondary-foreground'} />
+      </Button>
+    </SimpleTooltip>
   )
 }

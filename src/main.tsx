@@ -13,9 +13,11 @@ import '@/i18n'
 import App from '@/App'
 
 import { queryClient } from '@/lib/queryClient'
+import { initMyWaveStreamObserver } from '@/service/my-wave-stream'
 import { blockFeatures } from '@/utils/browser'
 
 blockFeatures()
+initMyWaveStreamObserver()
 
 createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>

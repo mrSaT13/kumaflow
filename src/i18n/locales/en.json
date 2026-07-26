@@ -613,6 +613,7 @@
       "appearance": "Appearance",
       "language": "Language & Region",
       "audio": "Player & Audio",
+      "external-api": "External APIs",
       "content": "Content",
       "local-music": "Local Music",
       "cache": "Cache",

@@ -10,10 +10,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useML, useMLStore } from '@/store/ml.store'
-import { usePlayerActions } from '@/store/player.store'
+import { usePlayerActions, useIsMyWaveActive, usePlayerStore } from '@/store/player.store'
 import { useMLPlaylists } from '@/store/ml-playlists.store'
 import { useMLPlaylistsStateActions } from '@/store/ml-playlists-state.store'
-import { generateMyWavePlaylist } from '@/service/ml-wave-service'
+import { playMyWaveStream } from '@/service/my-wave-stream'
 import { generateCSSGradient } from '@/utils/genreColors'
 import { getGenres, getSongsByGenre, getRandomSongs, getStarredArtists } from '@/service/subsonic-api'
 import { getSimpleCoverArtUrl } from '@/api/httpClient'
@@ -34,13 +34,16 @@ import {
   Activity,
   History,
   Star,
-  Calendar,
   Music2,
 } from 'lucide-react'
 import { useThemeStore } from '@/store/theme.store'
 import { Theme } from '@/types/themeContext'
 import { myWaveDiscoveryTracker } from '@/service/mywave-discoveries'
 import { useAppStore } from '@/store/app.store'
+import { useGetRecentlyPlayed } from '@/app/hooks/use-home'
+import { ROUTES } from '@/routes/routesList'
+import { subsonic } from '@/service/subsonic'
+import type { Albums } from '@/types/responses/album'
 
 // ==================== ХУКИ ====================
 
@@ -168,10 +171,53 @@ interface MLPlaylistCardProps {
   icon: React.ReactNode
   tags?: string[]
   onClick: () => void
-  onPlay?: () => void  // Опциональная кнопка Play
+  onPlay?: () => void
+  variant?: 'default' | 'compact'
 }
 
-function MLPlaylistCard({ title, description, gradient, icon, tags, onClick, onPlay }: MLPlaylistCardProps) {
+function MLPlaylistCard({
+  title,
+  description,
+  gradient,
+  icon,
+  tags,
+  onClick,
+  onPlay,
+  variant = 'default',
+}: MLPlaylistCardProps) {
+  if (variant === 'compact') {
+    return (
+      <div
+        className={`relative overflow-hidden rounded-xl bg-gradient-to-br ${gradient} text-white group`}
+      >
+        <button
+          type="button"
+          onClick={onClick}
+          className="flex h-[88px] w-full flex-col items-center justify-center gap-1 p-2 text-center sm:h-[96px]"
+        >
+          <div className="opacity-90 [&_svg]:size-5 sm:[&_svg]:size-6">{icon}</div>
+          <h3 className="w-full text-[10px] font-semibold leading-tight line-clamp-2 sm:text-[11px]">
+            {title}
+          </h3>
+        </button>
+
+        {onPlay && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onPlay()
+            }}
+            className="absolute bottom-1.5 right-1.5 z-10 rounded-full bg-white/30 p-1.5 backdrop-blur-sm transition-colors hover:bg-white/45 sm:bottom-2 sm:right-2 sm:p-2"
+            aria-label={`Слушать ${title}`}
+          >
+            <Play className="size-3.5 fill-white sm:size-4" />
+          </button>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className={`relative rounded-2xl overflow-hidden aspect-square bg-gradient-to-br ${gradient} text-white text-left group`}>
       {/* Основная карточка - клик для открытия */}
@@ -276,9 +322,9 @@ function ViralArtistsSection({ onArtistClick }: { onArtistClick: (artistId: stri
     return (
       <div className="flex gap-4 overflow-x-auto pb-4">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex-shrink-0 w-[140px] flex flex-col items-center">
-            <div className="w-[120px] h-[120px] rounded-full bg-gray-200 animate-pulse" />
-            <div className="mt-3 w-20 h-3 rounded-full bg-gray-200" />
+          <div key={i} className="flex w-[168px] shrink-0 flex-col items-center sm:w-[200px]">
+            <div className="h-[156px] w-[156px] animate-pulse rounded-full bg-gray-200 sm:h-[188px] sm:w-[188px]" />
+            <div className="mt-3 h-3 w-24 rounded-full bg-gray-200" />
           </div>
         ))}
       </div>
@@ -337,9 +383,9 @@ function InStyleArtistsSection({
     return (
       <div className="flex gap-4 overflow-x-auto pb-4">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex-shrink-0 w-[140px] flex flex-col items-center">
-            <div className="w-[120px] h-[120px] rounded-full bg-gray-200 animate-pulse" />
-            <div className="mt-3 w-20 h-3 rounded-full bg-gray-200" />
+          <div key={i} className="flex w-[168px] shrink-0 flex-col items-center sm:w-[200px]">
+            <div className="h-[156px] w-[156px] animate-pulse rounded-full bg-gray-200 sm:h-[188px] sm:w-[188px]" />
+            <div className="mt-3 h-3 w-24 rounded-full bg-gray-200" />
           </div>
         ))}
       </div>
@@ -383,9 +429,11 @@ function ArtistCircle({ artist, onClick, discoveryInfo }: ArtistCircleProps) {
     : artist.artistImageUrl
 
   return (
-    <div className="flex-shrink-0 w-[210px] group flex flex-col items-center relative">
-      {/* Круглая картинка - клик для радио */}
-      <button onClick={onClick} className="w-[200px] h-[200px] rounded-full overflow-hidden shadow-md group-hover:shadow-xl transition-all hover:scale-105 bg-gradient-to-br from-gray-300 to-gray-400 relative">
+    <div className="flex w-[168px] shrink-0 flex-col items-center sm:w-[200px] md:w-[220px] group relative">
+      <button
+        onClick={onClick}
+        className="relative h-[156px] w-[156px] overflow-hidden rounded-full bg-gradient-to-br from-gray-300 to-gray-400 shadow-md transition-all hover:scale-105 hover:shadow-xl sm:h-[188px] sm:w-[188px] md:h-[208px] md:w-[208px]"
+      >
         {coverUrl ? (
           <img
             src={coverUrl}
@@ -402,17 +450,15 @@ function ArtistCircle({ artist, onClick, discoveryInfo }: ArtistCircleProps) {
             <Mic2 size={32} />
           </div>
         )}
-        {/* Play overlay */}
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <Play className="w-8 h-8 text-white fill-white" />
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+          <Play className="h-10 w-10 fill-white text-white sm:h-12 sm:w-12" />
         </div>
       </button>
       
-      {/* Имя артиста - кликабельная ссылка */}
-      <div className="mt-3 text-center w-[170px]">
+      <div className="mt-3 w-full px-1 text-center">
         <Link
           to={`/library/artists/${artist.id}`}
-          className="text-sm font-semibold truncate w-full px-1 block transition-colors cursor-pointer"
+          className="block w-full truncate px-1 text-sm font-semibold transition-colors sm:text-base"
           style={{ color: 'var(--theme-accent)' }}
           title={artist.name}
           onClick={(e) => e.stopPropagation()}  // Не вызывать радио при клике на имя
@@ -449,6 +495,88 @@ function SectionHeader({ title, action, onAction }: SectionHeaderProps) {
         </button>
       )}
     </div>
+  )
+}
+
+function RecentAlbumsSection() {
+  const navigate = useNavigate()
+  const { setSongList } = usePlayerActions()
+  const { data, isLoading } = useGetRecentlyPlayed()
+  const albums = data?.list || []
+
+  const handlePlayAlbum = async (album: Albums) => {
+    try {
+      const response = await subsonic.albums.getOne(album.id)
+      if (response?.song?.length) {
+        setSongList(response.song, 0)
+        toast.success(`▶️ ${album.name}`, { autoClose: 2000 })
+      }
+    } catch (error) {
+      console.error('[RecentAlbums] Failed to play album:', error)
+      toast.error('Не удалось запустить альбом')
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex gap-4 overflow-x-auto pb-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="w-[132px] shrink-0 sm:w-[152px]">
+            <div className="aspect-square animate-pulse rounded-xl bg-gray-200" />
+            <div className="mt-2 h-3 w-full rounded bg-gray-200" />
+            <div className="mt-1 h-2 w-2/3 rounded bg-gray-200" />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (albums.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed py-8 text-center">
+        <Disc className="mx-auto mb-2 h-10 w-10 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Пока нет недавно прослушанных альбомов</p>
+      </div>
+    )
+  }
+
+  return (
+    <ScrollContainer>
+      {albums.map((album) => (
+        <div key={album.id} className="group w-[132px] shrink-0 sm:w-[152px]">
+          <button
+            type="button"
+            onClick={() => handlePlayAlbum(album)}
+            className="relative aspect-square w-full overflow-hidden rounded-xl shadow-md transition-all hover:scale-[1.03] hover:shadow-lg"
+          >
+            <img
+              src={getSimpleCoverArtUrl(album.coverArt, 'album', '300')}
+              alt={album.name}
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement
+                target.src = '/default_album_art.png'
+              }}
+            />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 group-active:opacity-100">
+              <Play className="h-9 w-9 fill-white text-white" />
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate(ROUTES.ALBUM.PAGE(album.id))}
+            className="mt-2 block w-full truncate text-left text-sm font-semibold transition-colors hover:underline"
+            style={{ color: 'var(--theme-foreground)' }}
+            title={album.name}
+          >
+            {album.name}
+          </button>
+          <p className="truncate text-xs text-muted-foreground" title={album.artist}>
+            {album.artist}
+          </p>
+        </div>
+      ))}
+    </ScrollContainer>
   )
 }
 
@@ -524,13 +652,14 @@ export default function NewHomepage() {
   const [myWaveArtists, setMyWaveArtists] = useState<any[]>([])
   const { getProfile, ratings } = useML()
   const { setSongList } = usePlayerActions()
+  const isMyWaveActive = useIsMyWaveActive()
+  const isPlaying = usePlayerStore((s) => s.playerState.isPlaying)
   // Берём названия из сохранённых плейлистов (если есть)
   const { getPlaylist } = useMLPlaylistsStateActions()
   const dailyMixPL = getPlaylist('daily-mix')
   const discoverPL = getPlaylist('discover-weekly')
   const myWavePL = getPlaylist('my-wave')
   const moodMixPL = getPlaylist('mood')
-  const timeMixPL = getPlaylist('time-of-day')
 
   // Функция воспроизведения ML плейлиста
   const handlePlayMLPlaylist = async (type: string) => {
@@ -698,15 +827,27 @@ export default function NewHomepage() {
 
   const handleMyWavePlay = async () => {
     if (isGenerating) return
+
+    if (isMyWaveActive) {
+      usePlayerStore.getState().actions.togglePlayPause()
+      return
+    }
+
     setIsGenerating('mywave')
 
     try {
       const likedSongIds = profile.likedSongs || []
-      const playlist = await generateMyWavePlaylist(likedSongIds, ratings, trackCount, true)
+      const { songs, alreadyActive } = await playMyWaveStream({
+        likedSongIds,
+        ratings,
+      })
 
-      if (playlist.songs.length > 0) {
-        setSongList(playlist.songs, 0)
-        toast.success('Моя волна запущена!', { type: 'success' })
+      if (alreadyActive || songs.length > 0) {
+        if (!alreadyActive) {
+          toast.success('Моя волна запущена!', { type: 'success' })
+        }
+      } else {
+        toast.error('Не удалось запустить Мою волну')
       }
     } catch (error) {
       console.error('Ошибка генерации "Моя волна":', error)
@@ -816,9 +957,11 @@ export default function NewHomepage() {
             </div>
 
             <div className="relative z-10 p-8 sm:p-10 flex flex-col sm:flex-row items-center sm:items-start gap-8">
-              <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-3xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-2xl"
-                style={{ animation: 'pulse-glow 3s ease-in-out infinite' }}>
-                <Activity className="w-14 h-14 sm:w-16 sm:h-16 text-white" />
+              <div
+                className="flex h-28 w-28 shrink-0 items-center justify-center rounded-3xl bg-white/25 shadow-2xl backdrop-blur-md sm:h-36 sm:w-36"
+                style={{ animation: 'pulse-glow 3s ease-in-out infinite' }}
+              >
+                <Activity className="h-14 w-14 text-white drop-shadow-lg sm:h-16 sm:w-16" />
               </div>
 
               <div className="flex-1 text-center sm:text-left">
@@ -831,13 +974,24 @@ export default function NewHomepage() {
                   <button
                     onClick={handleMyWavePlay}
                     disabled={!!isGenerating}
-                    className="px-5 py-3.5 rounded-xl font-semibold bg-white text-gray-900 hover:bg-gray-50 active:scale-95 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative group"
+                    className="inline-flex min-w-[156px] items-center justify-center gap-2.5 rounded-xl bg-white px-6 py-3.5 font-semibold text-gray-900 shadow-lg transition-all duration-200 hover:bg-gray-50 hover:shadow-xl active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
                     title="Запустить Мою волну"
                   >
                     {isGenerating === 'mywave' ? (
-                      <div className="w-5 h-5 border-2 border-gray-400 border-t-gray-900 rounded-full animate-spin" />
+                      <>
+                        <div className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-gray-300 border-t-gray-900" />
+                        <span>Запуск...</span>
+                      </>
+                    ) : isMyWaveActive ? (
+                      <>
+                        <Play className="h-5 w-5 shrink-0 fill-gray-900 text-gray-900" />
+                        <span>{isPlaying ? 'Слушаю' : 'Продолжить'}</span>
+                      </>
                     ) : (
-                      <Play className="w-5 h-5 fill-gray-900" />
+                      <>
+                        <Play className="h-5 w-5 shrink-0 fill-gray-900 text-gray-900" />
+                        <span>Слушать</span>
+                      </>
                     )}
                   </button>
 
@@ -901,56 +1055,61 @@ export default function NewHomepage() {
           </div>
         </div>
 
-        {/* ML Рекомендации (вместо "Свели в AI-сет") */}
+        {/* ML Рекомендации — 1 строка × 4 колонки */}
         <div>
           <SectionHeader title="ML Рекомендации" action="Все" onAction={() => navigate('/ml/for-you')} />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-4 grid-rows-1 gap-2 sm:gap-3">
             <MLPlaylistCard
-              title={dailyMixPL?.name || "Дейли Микс"}
-              description={dailyMixPL?.description || "Обновляется каждый день на основе ваших вкусов"}
+              variant="compact"
+              title={dailyMixPL?.name || 'Дейли Микс'}
+              description={dailyMixPL?.description || 'Обновляется каждый день на основе ваших вкусов'}
               gradient={CARD_GRADIENTS.ml}
-              icon={<Zap className="w-10 h-10" />}
+              icon={<Zap className="w-7 h-7" />}
               tags={topGenres.slice(0, 2)}
               onClick={() => navigate('/ml/playlist/daily-mix')}
               onPlay={() => handlePlayMLPlaylist('daily-mix')}
             />
             <MLPlaylistCard
-              title={discoverPL?.name || "Открытия недели"}
-              description={discoverPL?.description || "Новая музыка каждую неделю"}
+              variant="compact"
+              title={discoverPL?.name || 'Открытия недели'}
+              description={discoverPL?.description || 'Новая музыка каждую неделю'}
               gradient={CARD_GRADIENTS.workout}
-              icon={<Star className="w-10 h-10" />}
+              icon={<Star className="w-7 h-7" />}
               tags={['новинки', 'открытия']}
               onClick={() => navigate('/ml/playlist/discover-weekly')}
               onPlay={() => handlePlayMLPlaylist('discover-weekly')}
             />
             <MLPlaylistCard
-              title={myWavePL?.name || "Моя Волна"}
-              description={myWavePL?.description || "Персональная музыкальная лента"}
+              variant="compact"
+              title={myWavePL?.name || 'Моя Волна'}
+              description={myWavePL?.description || 'Персональная музыкальная лента'}
               gradient={CARD_GRADIENTS.myWave}
-              icon={<Activity className="w-10 h-10" />}
+              icon={<Activity className="w-7 h-7" />}
               tags={['персональное', 'волна']}
               onClick={() => navigate('/ml/playlist/my-wave')}
               onPlay={() => handlePlayMLPlaylist('my-wave')}
             />
             <MLPlaylistCard
-              title={moodMixPL?.name || "Муд Микс"}
-              description={moodMixPL?.description || "Подборка под ваше настроение"}
+              variant="compact"
+              title={moodMixPL?.name || 'Муд Микс'}
+              description={moodMixPL?.description || 'Подборка под ваше настроение'}
               gradient={CARD_GRADIENTS.relax}
-              icon={<Disc className="w-10 h-10" />}
+              icon={<Disc className="w-7 h-7" />}
               tags={['настроение', 'vibe']}
               onClick={() => navigate('/ml/playlist/mood')}
               onPlay={() => handlePlayMLPlaylist('mood')}
             />
-            <MLPlaylistCard
-              title={timeMixPL?.name || "Время Микс"}
-              description={timeMixPL?.description || "Музыка для времени суток"}
-              gradient={CARD_GRADIENTS.work}
-              icon={<Calendar className="w-10 h-10" />}
-              tags={['время', 'контекст']}
-              onClick={() => navigate('/ml/playlist/time-of-day')}
-              onPlay={() => handlePlayMLPlaylist('time-of-day')}
-            />
           </div>
+        </div>
+
+        {/* Недавно прослушанные альбомы */}
+        <div>
+          <SectionHeader
+            title="Недавно прослушанные альбомы"
+            action="Все"
+            onAction={() => navigate(ROUTES.ALBUMS.RECENTLY_PLAYED)}
+          />
+          <RecentAlbumsSection />
         </div>
 
         {/* Встречали в Моей волне (артисты из истории с лайками) */}

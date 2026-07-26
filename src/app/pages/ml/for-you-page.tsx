@@ -1914,7 +1914,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
   const currentPlaylists = playlistsByTab[activeTab]
 
   return (
-    <div className="w-full px-8 py-6 space-y-6">
+    <div className="w-full px-4 md:px-8 py-6 space-y-6">
       <div className="space-y-2">
         <h1 className="text-2xl font-bold">
           {activeTab === 'for-you' && '✨ Для вас'}

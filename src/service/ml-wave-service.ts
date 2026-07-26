@@ -11,6 +11,18 @@ import { getSonicFingerprintRecommendations } from '@/service/sonic-fingerprint'
 import { moodDriftDetector } from '@/service/mood-drift-detector'
 import { trackScorer } from '@/service/track-scorer'
 import { behaviorTracker } from '@/service/behavior-tracker'
+import {
+  ML_SIMILAR_GENRE_MAP,
+  buildCandidateCacheKey,
+  buildFastMyWaveCandidatePool,
+  buildMLRecommendationCandidatePool,
+  buildUserAudioProfile,
+  collectDiscoverSimilarTracks,
+  createBannedArtistFilter,
+  getAudioProfileRanges,
+  getGenreWeight,
+  songMatchesAudioRanges,
+} from '@/service/ml-recommendation-helpers'
 import type { ISong } from '@/types/responses/song'
 import type { IAlbum } from '@/types/responses/album'
 import type { IArtist } from '@/types/responses/artist'
@@ -294,12 +306,19 @@ function applySessionContext(songs: ISong[], ratings: Record<string, any>): ISon
 /**
  * Генерация плейлиста "Моя волна" на основе ML данных + Vibe Similarity
  */
+export interface GenerateMyWaveOptions {
+  skipCache?: boolean
+  lightMode?: boolean
+}
+
 export async function generateMyWavePlaylist(
   likedSongIds: string[],
   ratings: Record<string, any>,
   limit: number = 25,
   excludeDisliked: boolean = true,
-  settings?: MyWaveSettings
+  settings?: MyWaveSettings,
+  excludeSongIds?: Iterable<string>,
+  options?: GenerateMyWaveOptions,
 ): Promise<MLWavePlaylist> {
   // === MOOD DRIFT DETECTION ===
   // Проверяем есть ли сдвиг настроения от последовательных пропусков
@@ -323,17 +342,22 @@ export async function generateMyWavePlaylist(
     : 'my-wave'
   
   // Проверяем кэш ТОЛЬКО если есть настройки
-  const cached = hasSettings ? playlistCache.get(cacheKey) : null
-  if (cached) {
-    console.log('[MyWave] Using cached playlist for key:', cacheKey)
-    return {
-      songs: cached,
-      source: 'cached',
+  if (!options?.skipCache) {
+    const cached = hasSettings ? playlistCache.get(cacheKey) : null
+    if (cached) {
+      console.log('[MyWave] Using cached playlist for key:', cacheKey)
+      return {
+        songs: cached,
+        source: 'cached',
+      }
     }
   }
 
   let songs: ISong[] = []  // ИСПРАВЛЕНО: let вместо const
   const usedSongIds = new Set<string>()
+  if (excludeSongIds) {
+    for (const id of excludeSongIds) usedSongIds.add(id)
+  }
 
   // Получаем забаненных артистов
   const { useMLStore } = await import('@/store/ml.store')
@@ -407,12 +431,13 @@ export async function generateMyWavePlaylist(
   // 1. СНАЧАЛА фильтруем лайкнутые по настройкам
   if (filteredLikedIds.length > 0 && myWaveSettings && Object.keys(myWaveSettings).length > 0) {
     console.log('[MyWave] Filtering liked songs by settings...')
-    
+
     const { analyzeTrack } = await import('./vibe-similarity')
-    
-    // Получаем все лайкнутые треки (без аудиокниг)
+    const isCalmMode = myWaveSettings.mood === 'calm' || myWaveSettings.activity === 'sleep'
+    const relaxArtists = ['relax', 'asmr', 'meditation', 'sleep', 'calm']
+
     const allLikedSongs = await Promise.all(
-      filteredLikedIds.map(id => subsonic.songs.getSong(id).catch(() => null))
+      filteredLikedIds.slice(0, 40).map(id => subsonic.songs.getSong(id).catch(() => null))
     )
     
     // Фильтруем по настройкам
@@ -427,13 +452,8 @@ export async function generateMyWavePlaylist(
       const features = analyzeTrack(song)
       const artist = (song.artist || '').toLowerCase()
 
-      // ПРИОРИТЕТ: Артисты "relax/asmr" для calm/sleep
-      const isCalmMode = myWaveSettings.mood === 'calm' || myWaveSettings.activity === 'sleep'
-      const relaxArtists = ['relax', 'asmr', 'meditation', 'sleep', 'calm']
-      
-      // Если артист relax/asmr - мягкий фильтр
       if (isCalmMode && relaxArtists.some(a => artist.includes(a))) {
-        return features.energy <= 0.6  // Мягкий фильтр для relax артистов
+        return features.energy <= 0.6
       }
 
       // Фильтр по настроению - МЯГКИЙ!
@@ -503,21 +523,31 @@ export async function generateMyWavePlaylist(
     })
   }
 
+  // Быстрый пул кандидатов (один раз на всю генерацию)
+  let waveCandidatePool: ISong[] | null = null
+  const loadWaveCandidates = async (): Promise<ISong[]> => {
+    if (waveCandidatePool) return waveCandidatePool
+    waveCandidatePool = await buildFastMyWaveCandidatePool({
+      likedSongIds: filteredLikedIds,
+      seedSongIds: vibeSeedTracks.map((s) => s.id),
+      preferredGenres: mlState.profile.preferredGenres || {},
+      preferredArtists: mlState.profile.preferredArtists || {},
+      excludeIds: usedSongIds,
+      isBannedArtist,
+    })
+    return waveCandidatePool
+  }
+
   // 2. VIBE SIMILARITY: Находим треки похожие на лайкнутые по аудио-признакам
-  // ВАЖНО: Учитываем настройки при поиске похожих треков!
   if (songs.length > 0 && limit > songs.length) {
     console.log('[MyWave] Using Vibe Similarity to find similar tracks...')
 
-    // Загружаем все треки для анализа
-    console.log('[MyWave] Loading all songs for vibe analysis...')
-    const allSongs = await getRandomSongs(200)
-    
-    // СНАЧАЛА фильтруем allSongs по настройкам!
-    let filteredAllSongs = allSongs
+    const candidatePoolForVibe = await loadWaveCandidates()
+    let filteredAllSongs = candidatePoolForVibe
     if (myWaveSettings && Object.keys(myWaveSettings).length > 0) {
       const { analyzeTrack } = await import('./vibe-similarity')
       
-      filteredAllSongs = allSongs.filter(song => {
+      filteredAllSongs = candidatePoolForVibe.filter(song => {
         const features = analyzeTrack(song)
         const artist = (song.artist || '').toLowerCase()
 
@@ -559,7 +589,7 @@ export async function generateMyWavePlaylist(
         return true
       })
       
-      console.log(`[MyWave] Filtered allSongs from ${allSongs.length} to ${filteredAllSongs.length} by settings`)
+      console.log(`[MyWave] Filtered candidate pool from ${candidatePoolForVibe.length} to ${filteredAllSongs.length} by settings`)
       
       // Обновляем vibeSeedTracks если ещё не определены
       if (vibeSeedTracks.length === 0) {
@@ -606,46 +636,11 @@ export async function generateMyWavePlaylist(
     console.log(`[MyWave] Found ${allSongsForVibe.length} tracks via Vibe Similarity`)
   }
 
-  // 3. === SCORING: Если мало треков, используем P(like|t) формулу вместо случайного выбора ===
+  // 3. SCORING: добираем оставшиеся треки
   if (songs.length < limit) {
     console.log('[MyWave] Using P(like|t) Scoring to fill remaining tracks...')
 
-    // Собираем кандидатов из жанров и случайных треков
-    const candidatePool: ISong[] = []
-    const candidateIds = new Set<string>(usedSongIds)
-
-    // Получаем топ жанры из лайкнутых
-    const genreCount: Record<string, number> = {}
-    songs.forEach(song => {
-      if (song.genre) {
-        genreCount[song.genre] = (genreCount[song.genre] || 0) + 1
-      }
-    })
-
-    const topGenres = Object.entries(genreCount)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([genre]) => genre)
-
-    // Для каждого топ жанра берем кандидатов
-    for (const genre of topGenres) {
-      const songsByGenre = await getSongsByGenre(genre, 30)
-      for (const song of songsByGenre) {
-        if (!candidateIds.has(song.id) && !isBannedArtist(song)) {
-          candidatePool.push(song)
-          candidateIds.add(song.id)
-        }
-      }
-    }
-
-    // Добавляем случайных кандидатов для разнообразия
-    const randomCandidates = await getRandomSongs(50)
-    for (const song of randomCandidates) {
-      if (!candidateIds.has(song.id) && !isBannedArtist(song)) {
-        candidatePool.push(song)
-        candidateIds.add(song.id)
-      }
-    }
+    const candidatePool = await loadWaveCandidates()
 
     // Подготавливаем контекст для скоринга
     const currentHour = new Date().getHours()
@@ -695,6 +690,16 @@ export async function generateMyWavePlaylist(
     const stats = trackScorer.getScoringStats(scoredCandidates)
     console.log(`[MyWave] Scoring stats: avg=${stats.avgScore.toFixed(2)}, max=${stats.maxScore.toFixed(2)}, diversity_penalty=${stats.avgDiversityPenalty.toFixed(2)}`)
     console.log(`[MyWave] Added ${scoredCandidates.filter(s => s.totalScore > 0.2).length} tracks via P(like|t) Scoring`)
+  }
+
+  if (songs.length === 0) {
+    console.warn('[MyWave] Empty playlist, emergency fallback')
+    const fallback = await getRandomSongs(Math.min(limit, 10))
+    for (const song of fallback) {
+      if (!isBannedArtist(song) && !usedSongIds.has(song.id)) {
+        songs.push(song)
+      }
+    }
   }
 
   // 5. === ENERGY CURVE PER MOOD: Умная сортировка по настроению ===
@@ -751,44 +756,35 @@ export async function generateMyWavePlaylist(
 
   let finalSongs = orchestratedPlaylist.slice(0, limit)
 
-  // 🆕 Rediscovery Queue: каждую 3-ю сессию добавляем 1 забытый трек
-  const sessionCount = parseInt(localStorage.getItem('kumaflow:session-count') || '0')
-  if (sessionCount % 3 === 0 && finalSongs.length > 5) {
-    console.log('[MyWave] 🔄 Rediscovery: 3rd session, adding forgotten track')
-    const forgottenTrack = await getRediscoveryTrack(ratings)
-    if (forgottenTrack && !usedSongIds.has(forgottenTrack.id)) {
-      // Заменяем последний трек на rediscovery
-      finalSongs[finalSongs.length - 1] = forgottenTrack
-      console.log(`[MyWave] 🔄 Rediscovery track: ${forgottenTrack.title}`)
+  if (!options?.lightMode) {
+    // 🆕 Rediscovery Queue: каждую 3-ю сессию добавляем 1 забытый трек
+    const sessionCount = parseInt(localStorage.getItem('kumaflow:session-count') || '0')
+    if (sessionCount % 3 === 0 && finalSongs.length > 5) {
+      console.log('[MyWave] 🔄 Rediscovery: 3rd session, adding forgotten track')
+      const forgottenTrack = await getRediscoveryTrack(ratings)
+      if (forgottenTrack && !usedSongIds.has(forgottenTrack.id)) {
+        finalSongs[finalSongs.length - 1] = forgottenTrack
+        console.log(`[MyWave] 🔄 Rediscovery track: ${forgottenTrack.title}`)
+      }
     }
+
+    localStorage.setItem('kumaflow:session-count', String(sessionCount + 1))
+    finalSongs = applySessionContext(finalSongs, ratings)
+    finalSongs = trackScorer.applyGenreCurveSorting(finalSongs)
+
+    playlistCache.set(cacheKey, finalSongs, usedSongIds, {
+      source: 'mixed',
+      vibeSimilarity: true,
+      orchestrated: true,
+      settings: myWaveSettings,
+    })
+
+    const { generateNameFromSongs } = await import('@/service/playlist-naming')
+    const myWaveNameResult = generateNameFromSongs('myWave', finalSongs)
+    ;(finalSongs as any).playlistName = myWaveNameResult.name
+    ;(finalSongs as any).playlistAlternatives = myWaveNameResult.alternatives
+    console.log(`[MyWave] 🎵 Generated name: ${myWaveNameResult.name}`)
   }
-  
-  // Увеличиваем счётчик сессий
-  localStorage.setItem('kumaflow:session-count', String(sessionCount + 1))
-
-  // 🆕 Session Context: адаптируем порядок в зависимости от позиции
-  finalSongs = applySessionContext(finalSongs, ratings)
-
-  // 🆕 Genre-Aware Curves: применяем жанровую сортировку
-  finalSongs = trackScorer.applyGenreCurveSorting(finalSongs)
-
-  // Сохраняем в кэш
-  playlistCache.set(cacheKey, finalSongs, usedSongIds, {
-    source: 'mixed',
-    vibeSimilarity: true,
-    orchestrated: true,
-    settings: myWaveSettings,
-  })
-
-  // Генерируем умное название для My Wave
-  const { generateNameFromSongs } = await import('@/service/playlist-naming')
-  const myWaveNameResult = generateNameFromSongs('myWave', finalSongs)
-
-  // Добавляем название к результату
-  ;(finalSongs as any).playlistName = myWaveNameResult.name
-  ;(finalSongs as any).playlistAlternatives = myWaveNameResult.alternatives
-
-  console.log(`[MyWave] 🎵 Generated name: ${myWaveNameResult.name}`)
 
   return {
     songs: finalSongs,
@@ -1011,28 +1007,39 @@ export async function generateDailyMix(
   preferredGenres: Record<string, number>,
   preferredArtists: Record<string, number>,
   ratings: Record<string, any>,
-  limit: number = 25
+  limit: number = 25,
+  options?: {
+    force?: boolean
+    excludeSongIds?: string[]
+  }
 ): Promise<{ playlist: MLWavePlaylist; metadata: MLPlaylistMetadata }> {
   // Проверяем кэш
   const today = new Date().toISOString().split('T')[0]
   const cacheKey = `daily-mix-${today}`
-  const cached = playlistCache.get(cacheKey)
-  if (cached) {
-    console.log('[DailyMix v2] Using cached playlist')
-    const now = new Date()
-    return {
-      playlist: { songs: cached, source: 'cached' },
-      metadata: {
-        id: cacheKey, type: 'daily-mix', name: 'Ежедневный микс',
-        description: `Персональный микс на ${now.toLocaleDateString('ru-RU')}`,
-        createdAt: now.toISOString(),
-        expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
-      },
+  if (!options?.force) {
+    const cached = playlistCache.get(cacheKey)
+    if (cached) {
+      console.log('[DailyMix v2] Using cached playlist')
+      const now = new Date()
+      return {
+        playlist: { songs: cached, source: 'cached' },
+        metadata: {
+          id: cacheKey, type: 'daily-mix', name: 'Ежедневный микс',
+          description: `Персональный микс на ${now.toLocaleDateString('ru-RU')}`,
+          createdAt: now.toISOString(),
+          expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+        },
+      }
     }
   }
 
   const songs: ISong[] = []
   const usedSongIds = new Set<string>()
+
+  options?.excludeSongIds?.forEach((id) => usedSongIds.add(id))
+  if (options?.excludeSongIds?.length) {
+    console.log(`[DailyMix v2] 🚫 Excluding ${options.excludeSongIds.length} tracks from previous day`)
+  }
 
   // Исключаем дизлайкнутые треки
   const dislikedSongIds = new Set<string>(
@@ -1189,7 +1196,20 @@ export async function generateDailyMix(
     console.log(`[DailyMix v2] 🎵 VIBE SIMILAR: Finding ${vibeCount} tracks similar to forgotten...`)
 
     const seedTracks = songs.slice(0, 3) // Первые 3 забытых
-    const allSongs = await getRandomSongs(300)
+    const dailyProfile = await buildUserAudioProfile(likedSongIds)
+    const allSongs = await buildMLRecommendationCandidatePool({
+      preferredGenres,
+      preferredArtists,
+      likedSongIds,
+      validLikedSongs: dailyProfile.validLikedSongs,
+      collaborativeTrackIds: [],
+      discoveryEnabled: discoveryEnabledDaily,
+      effectiveNovelty: effectiveNoveltyDaily,
+      excludeIds: usedSongIds,
+      isBannedArtist,
+      targetSize: 450,
+      cacheKey: buildCandidateCacheKey('daily-mix', likedSongIds, preferredGenres, preferredArtists),
+    })
     const vibeUsedIds = new Set<string>()
 
     for (const seed of seedTracks) {
@@ -1448,83 +1468,64 @@ export async function generateDiscoverWeekly(
   // ============================================
   // 0. АНАЛИЗ АУДИО-ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ
   // ============================================
-  let userAvgEnergy = 0.5
-  let userAvgBPM = 100
-  const userMoodCounts: Record<string, number> = {}
+  const { useMLPlaylistsStore: useMLPlaylistsStoreDiscover } = await import('@/store/ml-playlists.store')
+  const mlPlaylistsStateDiscover = useMLPlaylistsStoreDiscover.getState()
+  const timeAdaptivityEnabled = mlPlaylistsStateDiscover.settings.timeAdaptivity ?? false
 
-  if (likedSongIds.length > 0) {
-    const likedResults = await Promise.all(
-      likedSongIds.slice(0, 50).map(id => subsonic.songs.getSong(id).catch(() => null))
-    )
-    const validLiked = likedResults.filter((s): s is ISong => s != null)
+  const userAudioProfile = await buildUserAudioProfile(likedSongIds)
+  const audioRanges = getAudioProfileRanges(userAudioProfile, { timeAdaptivityEnabled })
+  const userAvgEnergy = userAudioProfile.avgEnergy
+  const userAvgBPM = userAudioProfile.avgBPM
+  const userTopMoods = userAudioProfile.topMoods
+  const energyMin = audioRanges.energyMin
+  const energyMax = audioRanges.energyMax
+  const bpmMin = audioRanges.bpmMin
+  const bpmMax = audioRanges.bpmMax
 
-    let totalEnergy = 0, countEnergy = 0
-    let totalBPM = 0, countBPM = 0
+  console.log(
+    `[DiscoverWeekly v2] 🎵 User Profile: Energy=${userAvgEnergy.toFixed(2)}, BPM=${userAvgBPM.toFixed(0)}, ` +
+    `Valence=${userAudioProfile.avgValence.toFixed(2)}, Top Moods=${userTopMoods.join(', ')}`,
+  )
 
-    validLiked.forEach(song => {
-      if (song.energy !== undefined) { totalEnergy += song.energy; countEnergy++ }
-      if (song.bpm && song.bpm > 0) { totalBPM += song.bpm; countBPM++ }
-      if (song.moods) {
-        song.moods.forEach(m => { userMoodCounts[m.toUpperCase()] = (userMoodCounts[m.toUpperCase()] || 0) + 1 })
-      }
-    })
-
-    if (countEnergy > 0) userAvgEnergy = totalEnergy / countEnergy
-    if (countBPM > 0) userAvgBPM = totalBPM / countBPM
-  }
-
-  const userTopMoods = Object.entries(userMoodCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([mood]) => mood)
-
-  const energyMin = Math.max(0, userAvgEnergy - 0.3)
-  const energyMax = Math.min(1, userAvgEnergy + 0.3)
-  const bpmMin = userAvgBPM * 0.7
-  const bpmMax = userAvgBPM * 1.3
-
-  console.log(`[DiscoverWeekly v2] 🎵 User Profile: Energy=${userAvgEnergy.toFixed(2)}, BPM=${userAvgBPM.toFixed(0)}, Top Moods=${userTopMoods.join(', ')}`)
-
-  // Функция проверки соответствия трека профилю
   const matchesUserProfile = (song: ISong): boolean => {
-    // 🔒 ФИЛЬТР BANNED ARTISTS
     if (isBannedArtist(song)) return false
-    if (song.energy && (song.energy < energyMin || song.energy > energyMax)) return false
-    if (song.bpm && song.bpm > 0 && (song.bpm < bpmMin || song.bpm > bpmMax)) return false
-    if (song.moods && song.moods.length > 0 && userTopMoods.length > 0) {
-      const hasMatchingMood = song.moods.some(m => userTopMoods.includes(m.toUpperCase()))
-      if (!hasMatchingMood && Math.random() > 0.5) return false
-    }
-    return true
+    return songMatchesAudioRanges(song, audioRanges)
   }
 
   // ============================================
-  // 1. NICHE ЖАНРЫ (70%): Соседние жанры/подстили
+  // 1. ITEM-ITEM SIMILARITY (40%): похожие на лайки, но не слышанные
   // ============================================
-  const nicheCount = Math.floor(limit * 0.7)
+  const similarTarget = Math.floor(limit * 0.4)
+  console.log(`[DiscoverWeekly v2] 🔗 SIMILAR: Finding up to ${similarTarget} tracks similar to likes...`)
 
-  console.log(`[DiscoverWeekly v2] 🎼 NICHE: Finding ${nicheCount} tracks from similar genres...`)
+  const similarCandidates = await collectDiscoverSimilarTracks(
+    likedSongIds,
+    usedSongIds,
+    isBannedArtist,
+    similarTarget * 4,
+    matchesUserProfile,
+  )
 
-  // Мапа соседних жанров
-  const similarGenreMap: Record<string, string[]> = {
-    'rock': ['post-rock', 'shoegaze', 'math rock', 'indie rock', 'alternative', 'grunge'],
-    'pop': ['synthpop', 'dream pop', 'indie pop', 'electropop', 'chamber pop'],
-    'electronic': ['ambient', 'IDM', 'glitch', 'downtempo', 'trip-hop', 'house'],
-    'hip-hop': ['lo-fi hip hop', 'boom bap', 'jazz rap', 'conscious hip hop', 'trap'],
-    'jazz': ['smooth jazz', 'bebop', 'fusion', 'acid jazz', 'free jazz'],
-    'classical': ['neoclassical', 'contemporary classical', 'romantic', 'baroque'],
-    'metal': ['progressive metal', 'post-metal', 'black metal', 'doom metal'],
-    'folk': ['indie folk', 'folk rock', 'americana', 'celtic'],
-    'r&b': ['neo soul', 'contemporary r&b', 'funk', 'motown'],
-    'indie': ['indie rock', 'indie pop', 'shoegaze', 'post-punk'],
+  for (const song of similarCandidates) {
+    if (songs.length >= similarTarget) break
+    songs.push(song)
+    usedSongIds.add(song.id)
   }
+  console.log(`[DiscoverWeekly v2] 🔗 SIMILAR: Added ${songs.length} tracks`)
+
+  // ============================================
+  // 2. NICHE ЖАНРЫ (35%): Соседние жанры/подстили
+  // ============================================
+  const nicheCount = similarTarget + Math.floor(limit * 0.35)
+
+  console.log(`[DiscoverWeekly v2] 🎼 NICHE: Finding tracks from similar genres (target ${nicheCount})...`)
 
   // Находим соседние жанры
   const userGenres = new Set(Object.keys(preferredGenres))
   const nicheGenres = new Set<string>()
 
   for (const genre of userGenres) {
-    const similar = similarGenreMap[genre.toLowerCase()] || []
+    const similar = ML_SIMILAR_GENRE_MAP[genre.toLowerCase()] || []
     similar.forEach(g => {
       if (!userGenres.has(g)) {
         nicheGenres.add(g)
@@ -1560,15 +1561,27 @@ export async function generateDiscoverWeekly(
   console.log(`[DiscoverWeekly v2] 🎼 NICHE: Added ${songs.length} tracks`)
 
   // ============================================
-  // 2. VIBE SIMILARITY К НИШЕВЫМ (10%)
+  // 3. VIBE SIMILARITY К НИШЕВЫМ (15%)
   // ============================================
-  const vibeCount = Math.floor(limit * 0.1)
+  const vibeTarget = nicheCount + Math.floor(limit * 0.15)
 
-  if (songs.length > 0 && vibeCount > 0) {
-    console.log(`[DiscoverWeekly v2] 🎵 VIBE: Finding ${vibeCount} tracks similar to niche...`)
+  if (songs.length > 0 && songs.length < vibeTarget) {
+    console.log(`[DiscoverWeekly v2] 🎵 VIBE: Finding tracks similar to niche...`)
 
-    const seedTracks = songs.slice(0, 3) // Первые 3 нишевых
-    const allSongs = await getRandomSongs(300)
+    const seedTracks = songs.slice(0, 5)
+    const allSongs = await buildMLRecommendationCandidatePool({
+      preferredGenres,
+      likedSongIds,
+      preferredArtists: {},
+      validLikedSongs: userAudioProfile.validLikedSongs,
+      collaborativeTrackIds: [],
+      discoveryEnabled: true,
+      effectiveNovelty: 0.3,
+      excludeIds: usedSongIds,
+      isBannedArtist,
+      targetSize: 400,
+      cacheKey: buildCandidateCacheKey('discover-weekly', likedSongIds, preferredGenres, {}),
+    })
     const vibeUsedIds = new Set<string>()
 
     for (const seed of seedTracks) {
@@ -1579,7 +1592,7 @@ export async function generateDiscoverWeekly(
           vibeUsedIds.add(track.id)
           usedSongIds.add(track.id)
         }
-        if (songs.length >= nicheCount + vibeCount) break
+        if (songs.length >= vibeTarget) break
       }
     }
     console.log(`[DiscoverWeekly v2] 🎵 VIBE: Total now ${songs.length} tracks`)
@@ -1657,7 +1670,7 @@ export async function generateDiscoverWeekly(
       id: `discover-weekly-${now.toISOString().split('T')[0]}`,
       type: 'discover-weekly',
       name: 'Открытия недели',
-      description: 'Нишевые жанры + сюрпризы (70% niche + 10% vibe + 20% surprise)',
+      description: 'Похожие на ваши лайки + нишевые жанры (40% similar + 35% niche + 15% vibe)',
       createdAt: now.toISOString(),
       expiresAt: expiresAt.toISOString(),
     },
@@ -1791,98 +1804,15 @@ export async function generateSimilarArtistsPlaylist(
 }
 
 /**
- * Генерация радио трека (Instant Mix)
- * Использует getSimilarSongs из Subsonic API + Vibe Similarity + Оркестратор
+ * Генерация радио трека — similar + genre fallback
  */
 export async function generateTrackRadio(
   songId: string,
   limit: number = 25,
-  excludeRecentlyPlayed: string[] = []
+  excludeRecentlyPlayed: string[] = [],
 ): Promise<MLWavePlaylist> {
-  const songs: ISong[] = []
-  const usedSongIds = new Set<string>(excludeRecentlyPlayed)
-
-  try {
-    // 1. Получаем текущий трек как seed
-    const currentSong = await subsonic.songs.getSong(songId)
-    if (!currentSong) {
-      throw new Error('Track not found')
-    }
-
-    songs.push(currentSong)
-    usedSongIds.add(songId)
-
-    // 2. Запрашиваем похожие треки через Subsonic API
-    const similarSongs = await getSimilarSongs(songId, limit * 2)
-
-    // 3. VIBE SIMILARITY: Фильтруем по аудио-признакам
-    console.log('[TrackRadio] 🎵 VIBE SIMILARITY: Filtering by audio features...')
-    
-    const targetFeatures = analyzeTrack(currentSong)
-    const vibeSimilar = similarSongs
-      .filter(song => !usedSongIds.has(song.id))
-      .map(song => ({
-        song,
-        similarity: vibeSimilarity(targetFeatures, analyzeTrack(song)),
-      }))
-      .filter(({ similarity }) => similarity >= 0.65)
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, Math.floor(limit * 0.6)) // 60% похожие по вайбу
-
-    for (const { song } of vibeSimilar) {
-      if (!usedSongIds.has(song.id)) {
-        songs.push(song)
-        usedSongIds.add(song.id)
-      }
-    }
-
-    // 4. Добавляем остальные похожие треки
-    for (const song of similarSongs) {
-      if (songs.length >= limit) break
-      if (!usedSongIds.has(song.id)) {
-        songs.push(song)
-        usedSongIds.add(song.id)
-      }
-    }
-
-    // 5. Если мало треков, добавляем по жанру текущего трека
-    if (songs.length < limit && currentSong?.genre) {
-      const genreSongs = await getSongsByGenre(currentSong.genre, limit - songs.length + 5)
-      const shuffled = genreSongs.sort(() => Math.random() - 0.5)
-      for (const song of shuffled) {
-        if (songs.length >= limit) break
-        if (!usedSongIds.has(song.id)) {
-          songs.push(song)
-          usedSongIds.add(song.id)
-        }
-      }
-    }
-
-    // ============================================
-    // 6. ОРКЕСТРАТОР: Плавные переходы + мосты
-    // ============================================
-    console.log('[TrackRadio] 🎼 ORCHESTRATOR: Creating smooth transitions...')
-    
-    const allSongsForBridges = await getRandomSongs(50)
-    const orchestrated = orchestratePlaylistWithBridges(
-      songs.slice(0, limit),
-      allSongsForBridges,
-      { addBridges: true, bridgeCount: 1 }
-    )
-
-    return {
-      songs: orchestrated,
-      source: 'similar',
-    }
-  } catch (error) {
-    console.error('Failed to generate track radio:', error)
-    // Возвращаем случайные треки при ошибке
-    const randomSongs = await getRandomSongs(limit)
-    return {
-      songs: randomSongs,
-      source: 'mixed',
-    }
-  }
+  const { generateTrackRadioPlaylist } = await import('./track-radio-service')
+  return generateTrackRadioPlaylist(songId, limit, excludeRecentlyPlayed)
 }
 
 /**
@@ -2084,7 +2014,7 @@ export async function generateArtistRadio(
  * 1. Анализ предпочтений (жанры, артисты)
  * 2. История прослушиваний
  * 3. Время суток
- * 4. Случайные открытия
+ * 4. Целевой пул кандидатов + scoring
  */
 export async function generateMLRecommendations(
   likedSongIds: string[],
@@ -2106,22 +2036,7 @@ export async function generateMLRecommendations(
   const bannedArtists = mlState.profile.bannedArtists || []
   console.log('[ML Recommendations v2] 🔒 Banned artists:', bannedArtists)
 
-  // Функция фильтрации по banned artists
-  const isBannedArtist = (song: ISong): boolean => {
-    if (!song.artistId && !song.artist) return false
-    if (song.artistId && bannedArtists.includes(song.artistId)) {
-      console.log(`[ML Recommendations v2] ❌ BANNED artist ID: ${song.artist} (${song.artistId})`)
-      return true
-    }
-    // Дополнительная проверка по имени артиста (если artistId не доступен)
-    if (!song.artistId && bannedArtists.some(id =>
-      song.artist && song.artist.toLowerCase().includes(id.toLowerCase())
-    )) {
-      console.log(`[ML Recommendations v2] ❌ BANNED artist name: ${song.artist}`)
-      return true
-    }
-    return false
-  }
+  const isBannedArtist = createBannedArtistFilter(bannedArtists)
 
   // Исключаем дизлайкнутые
   const dislikedSongIds = Object.entries(ratings || {})
@@ -2143,71 +2058,26 @@ export async function generateMLRecommendations(
     .map(([id]) => id)
   recentlyPlayedIds.forEach(id => usedSongIds.add(id))
 
-  console.log(`[ML Recommendations v2] Excluding ${dislikedSongIds.size} disliked, ${recentlyPlayedIds.size} recently played (30 days)`)
+  console.log(`[ML Recommendations v2] Excluding ${dislikedSongIds.length} disliked, ${recentlyPlayedIds.length} recently played (30 days)`)
 
-  // Импорт vibe-similarity
-  const { analyzeTrack, vibeSimilarity, detectMood } = await import('./vibe-similarity')
+  const { analyzeTrack, vibeSimilarity } = await import('./vibe-similarity')
 
-  // ============================================
-  // 0. АУДИО-ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ (СКОЛЬЗЯЩЕЕ ОКНО)
-  // ============================================
   console.log('[ML Recommendations v2] 🎵 Building user audio profile with sliding window...')
+  const userAudioProfile = await buildUserAudioProfile(likedSongIds)
+  const validLikedSongs = userAudioProfile.validLikedSongs
 
-  let totalEnergy = 0, countEnergy = 0, totalWeightEnergy = 0
-  let totalBPM = 0, countBPM = 0, totalWeightBPM = 0
-  const userMoodCounts: Record<string, number> = {}
-  const validLikedSongs: { song: ISong; weight: number }[] = []
+  const { useMLPlaylistsStore } = await import('@/store/ml-playlists.store')
+  const mlPlaylistsState = useMLPlaylistsStore.getState()
+  const discoveryEnabled = mlPlaylistsState.settings.discoveryEnabled ?? false
+  const userNoveltyFactor = mlPlaylistsState.settings.noveltyFactor ?? 0.2
+  const timeAdaptivityEnabled = mlPlaylistsState.settings.timeAdaptivity ?? false
+  const audioRanges = getAudioProfileRanges(userAudioProfile, { timeAdaptivityEnabled })
 
-  if (likedSongIds.length > 0) {
-    const recentLikedIds = likedSongIds.slice(0, 50)
-    const mediumLikedIds = likedSongIds.slice(50, 100)
-    const oldLikedIds = likedSongIds.slice(100)
-
-    const allLikedIds = [
-      ...recentLikedIds.map(id => ({ id, weight: 1.0 })),
-      ...mediumLikedIds.map(id => ({ id, weight: 0.7 })),
-      ...oldLikedIds.slice(0, 50).map(id => ({ id, weight: 0.3 }))
-    ]
-
-    const likedResults = await Promise.all(
-      allLikedIds.map(({ id }) => subsonic.songs.getSong(id).catch(() => null))
-    )
-
-    likedResults.forEach((song, idx) => {
-      if (!song) return
-      const weight = allLikedIds[idx]?.weight || 1.0
-      validLikedSongs.push({ song, weight })
-
-      if (song.energy !== undefined) {
-        totalEnergy += song.energy * weight
-        totalWeightEnergy += weight
-        countEnergy++
-      }
-      if (song.bpm && song.bpm > 0) {
-        totalBPM += song.bpm * weight
-        totalWeightBPM += weight
-        countBPM++
-      }
-      if (song.moods) {
-        song.moods.forEach(m => { userMoodCounts[m.toUpperCase()] = (userMoodCounts[m.toUpperCase()] || 0) + 1 })
-      }
-    })
-  }
-
-  const userAudioProfile = {
-    avgBPM: totalWeightBPM > 0 ? totalBPM / totalWeightBPM : 100,
-    avgEnergy: totalWeightEnergy > 0 ? totalEnergy / totalWeightEnergy : 0.5,
-    avgValence: 0.6,
-    topMoods: Object.entries(userMoodCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([mood]) => mood),
-    recentRatio: validLikedSongs.length > 0
-      ? validLikedSongs.filter(({ weight }) => weight >= 1.0).length / validLikedSongs.length
-      : 0
-  }
-
-  console.log(`[ML Recommendations v2] 🎵 User Audio Profile (weighted): avgBPM='${userAudioProfile.avgBPM.toFixed(0)}', avgEnergy='${userAudioProfile.avgEnergy.toFixed(2)}', topMoods=[${userAudioProfile.topMoods.join(', ')}], recentRatio='${userAudioProfile.recentRatio.toFixed(2)}'`)
+  console.log(
+    `[ML Recommendations v2] 🎵 User Audio Profile: avgBPM=${userAudioProfile.avgBPM.toFixed(0)}, ` +
+    `avgEnergy=${userAudioProfile.avgEnergy.toFixed(2)}, avgValence=${userAudioProfile.avgValence.toFixed(2)}, ` +
+    `topMoods=[${userAudioProfile.topMoods.join(', ')}], timeAdaptivity=${timeAdaptivityEnabled}`,
+  )
 
   // ============================================
   // 🔒 ТИП ПОЛЬЗОВАТЕЛЯ (нужно ДО discovery настроек!)
@@ -2217,15 +2087,6 @@ export async function generateMLRecommendations(
   const isCompleteNovice = totalLikes < 20 || totalPlays < 50
   const isExperiencedUser = totalLikes > 50 || totalPlays > 200
 
-  // ============================================
-  // 🔒 ЗАГРУЖАЕМ НАСТРОЙКИ ОТКРЫТИЙ (ПОСЛЕ типа пользователя!)
-  // ============================================
-  const { useMLPlaylistsStore } = await import('@/store/ml-playlists.store')
-  const mlPlaylistsState = useMLPlaylistsStore.getState()
-  const discoveryEnabled = mlPlaylistsState.settings.discoveryEnabled ?? false
-  const userNoveltyFactor = mlPlaylistsState.settings.noveltyFactor ?? 0.2
-
-  // Если discovery ВЫКЛ — novelty = 0, collaborative = 0
   const effectiveNovelty = discoveryEnabled ? userNoveltyFactor : 0.0
   const allowCollaborative = discoveryEnabled && !isCompleteNovice
 
@@ -2315,29 +2176,32 @@ export async function generateMLRecommendations(
   // ============================================
   // ФИЛЬТРАЦИЯ КАНДИДАТОВ
   // ============================================
-  const bpmMin = userAudioProfile.avgBPM * 0.7
-  const bpmMax = userAudioProfile.avgBPM * 1.3
-  const energyMin = Math.max(0, userAudioProfile.avgEnergy - 0.3)
-  const energyMax = Math.min(1, userAudioProfile.avgEnergy + 0.3)
+  const bpmMin = audioRanges.bpmMin
+  const bpmMax = audioRanges.bpmMax
+  const energyMin = audioRanges.energyMin
+  const energyMax = audioRanges.energyMax
 
   console.log(`[ML Recommendations v2] Filters: BPM ${bpmMin.toFixed(0)}-${bpmMax.toFixed(0)}, Energy ${energyMin.toFixed(2)}-${energyMax.toFixed(2)}`)
 
-  const allSongs = await getRandomSongs(500)
+  const candidateCacheKey = buildCandidateCacheKey('ml-recs', likedSongIds, preferredGenres, preferredArtists)
+  const allSongs = await buildMLRecommendationCandidatePool({
+    preferredGenres,
+    preferredArtists,
+    likedSongIds,
+    validLikedSongs,
+    collaborativeTrackIds,
+    discoveryEnabled,
+    effectiveNovelty,
+    excludeIds: usedSongIds,
+    isBannedArtist,
+    cacheKey: candidateCacheKey,
+  })
   console.log(`[ML Recommendations v2] Available songs: ${allSongs.length} total`)
 
   const filteredSongs = allSongs.filter(s => {
     if (usedSongIds.has(s.id)) return false
-    // 🔒 ФИЛЬТР BANNED ARTISTS — КРИТИЧНО!
-    if (isBannedArtist(s)) {
-      return false
-    }
-    if (s.bpm && s.bpm > 0 && (s.bpm < bpmMin || s.bpm > bpmMax)) return false
-    if (s.energy !== undefined && (s.energy < energyMin || s.energy > energyMax)) return false
-    if (s.moods && s.moods.length > 0 && userAudioProfile.topMoods.length > 0) {
-      const hasMatchingMood = s.moods.some(m => userAudioProfile.topMoods.includes(m.toUpperCase()))
-      if (!hasMatchingMood && Math.random() > 0.5) return false
-    }
-    return true
+    if (isBannedArtist(s)) return false
+    return songMatchesAudioRanges(s, audioRanges)
   })
 
   console.log(`[ML Recommendations v2] ✅ Filtered to ${filteredSongs.length} candidates`)
@@ -2386,7 +2250,8 @@ export async function generateMLRecommendations(
       audioSimilarity = vibeSimilarity(features, avgLiked)
     }
 
-    const genreWeight = preferredGenres[song.genre?.toLowerCase()] || 0
+    const genreKey = song.genre?.toLowerCase() || ''
+    const genreWeight = getGenreWeight(preferredGenres, genreKey || song.genre)
     const genreScore = genreWeight / maxGenreWeight
 
     const artistWeight = preferredArtists[song.artistId] || 0
@@ -2806,13 +2671,13 @@ export interface TimeOfDayMix {
 /**
  * Получить текущее время суток
  */
-function getTimeOfDay(): 'morning' | 'day' | 'evening' | 'night' {
-  const hour = new Date().getHours()
-  
-  if (hour >= 5 && hour < 12) return 'morning'    // 5:00 - 12:00
-  if (hour >= 12 && hour < 17) return 'day'       // 12:00 - 17:00
-  if (hour >= 17 && hour < 22) return 'evening'   // 17:00 - 22:00
-  return 'night'                                   // 22:00 - 5:00
+export function getTimeOfDay(date = new Date()): 'morning' | 'day' | 'evening' | 'night' {
+  const hour = date.getHours()
+
+  if (hour >= 5 && hour < 12) return 'morning'
+  if (hour >= 12 && hour < 17) return 'day'
+  if (hour >= 17 && hour < 22) return 'evening'
+  return 'night'
 }
 
 /**
@@ -2904,12 +2769,7 @@ export async function generateTimeOfDayMix(
   limit: number = 25
 ): Promise<TimeOfDayMix> {
   const hour = new Date().getHours()
-  let timeOfDay: 'morning' | 'day' | 'evening' | 'night'
-
-  if (hour >= 6 && hour < 12) timeOfDay = 'morning'
-  else if (hour >= 12 && hour < 18) timeOfDay = 'day'
-  else if (hour >= 18 && hour < 23) timeOfDay = 'evening'
-  else timeOfDay = 'night'
+  const timeOfDay = getTimeOfDay()
 
   const config = TIME_ENERGY_CURVE[timeOfDay]
 
@@ -2961,8 +2821,7 @@ export async function generateTimeOfDayMix(
 
   Object.entries(ratings).forEach(([songId, rating]) => {
     if (rating.playCount && rating.playCount > 0 && rating.lastPlayed) {
-      const playedHour = new Date(rating.lastPlayed).getHours()
-      const playedTod = getTimeOfDay(playedHour)
+      const playedTod = getTimeOfDay(new Date(rating.lastPlayed))
       if (!userTimeHistory[playedTod]) userTimeHistory[playedTod] = new Set()
       userTimeHistory[playedTod].add(songId)
     }

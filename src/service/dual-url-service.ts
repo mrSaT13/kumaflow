@@ -8,7 +8,9 @@
  * - Интервал проверки: 30 секунд
  */
 
-import { useAccountsStore } from '@/store/accounts.store'
+import { useAccountsStore, type Account } from '@/store/accounts.store'
+import { invalidateAppSession } from '@/service/app-session'
+import { validateSubsonicUrl } from '@/utils/validate-subsonic-url'
 import { useAppStore } from '@/store/app.store'
 
 export class DualUrlService {
@@ -99,29 +101,7 @@ export class DualUrlService {
    * Тестирование URL
    */
   private async testUrl(url: string): Promise<boolean> {
-    try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), this.TIMEOUT)
-
-      const response = await fetch(`${url}/rest/ping.view`, {
-        method: 'GET',
-        signal: controller.signal,
-        mode: 'cors',
-      })
-
-      clearTimeout(timeoutId)
-      
-      if (response.ok) {
-        console.log('[DualUrl] URL test success:', url)
-        return true
-      } else {
-        console.warn('[DualUrl] URL test failed (non-OK response):', url, response.status)
-        return false
-      }
-    } catch (error) {
-      console.warn('[DualUrl] URL test failed (error):', url, error)
-      return false
-    }
+    return validateSubsonicUrl(url, this.TIMEOUT)
   }
 
   /**
@@ -185,6 +165,11 @@ export class DualUrlService {
       return
     }
 
+    if (!newUrl?.trim()) {
+      console.warn('[DualUrl] Refusing to switch to empty URL')
+      return
+    }
+
     console.log('[DualUrl] Updating server URL:', {
       from: account.serverUrl,
       to: newUrl,
@@ -198,6 +183,7 @@ export class DualUrlService {
     // Обновляем app store (для httpClient)
     const { actions } = useAppStore.getState()
     actions.setUrl(newUrl)
+    invalidateAppSession()
 
     // Принудительно обновляем localStorage
     this.saveAppStore(newUrl, account.username)

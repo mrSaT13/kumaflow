@@ -16,7 +16,7 @@ import { useSongColor } from '@/store/player.store'
 import { usePlayerStore } from '@/store/player.store'
 import { buttonsStyle } from './controls'
 
-export function FullscreenSettings() {
+export function FullscreenSettings({ compact = false }: { compact?: boolean }) {
   const { useSongColorOnBigPlayer } = useSongColor()
 
   const handleShareTrack = () => {
@@ -30,15 +30,15 @@ export function FullscreenSettings() {
           variant="ghost"
           size="icon"
           className={clsx(
-            buttonsStyle.secondary,
+            compact ? buttonsStyle.secondaryCompact : buttonsStyle.secondary,
             'data-[state=open]:scale-110',
           )}
           style={{ ...buttonsStyle.style }}
         >
-          <SlidersHorizontal className={buttonsStyle.secondaryIcon} />
+          <SlidersHorizontal className={compact ? buttonsStyle.secondaryIconCompact : buttonsStyle.secondaryIcon} />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="start" side="top">
+      <PopoverContent className="z-[70] w-80 p-0" align="start" side="top">
         <div className="flex flex-col">
           <ShareTrackOption onShare={handleShareTrack} />
           <Separator />

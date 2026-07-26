@@ -8,6 +8,9 @@
   * {
     @apply border-border;
   }
+  html {
+    background-color: #060e23;
+  }
   body {
     @apply bg-background text-foreground;
   }
@@ -39,6 +42,28 @@
     );
 
     --windows-red: 5 75% 44%;
+
+    /* На десктопе нижней навигации нет */
+    --bottomnav-height: 0px;
+  }
+
+  @media (max-width: 767px) {
+    :root {
+      --player-height: 112px;
+      --bottomnav-height: 72px;
+    }
+
+    html,
+    body,
+    #root {
+      max-width: 100vw;
+      overflow-x: hidden;
+    }
+
+    /* Контент главной области не должен вылезать за края экрана */
+    #scroll-viewport > div {
+      max-width: 100%;
+    }
   }
 }
 

@@ -21,6 +21,7 @@ import { behaviorTracker } from '@/service/behavior-tracker'
 import { moodDriftDetector } from '@/service/mood-drift-detector'
 import { timeAwareHistory } from '@/service/time-aware-history'
 import { myWaveDiscoveryTracker } from '@/service/mywave-discoveries'
+import { isMyWavePlaylistName } from '@/service/my-wave-utils'
 
 const miniStores = {
   songlist: 'player_songlist',
@@ -50,6 +51,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
           },
           playerState: {
             isPlaying: false,
+            isMyWaveActive: false,
             loopState: LoopState.Off,
             isShuffleActive: false,
             isSongStarred: false,
@@ -203,6 +205,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 state.songlist.podcastList = []
                 state.songlist.sharedTracksInfo = sharedTracksInfo
                 state.songlist.currentPlaylistName = playlistName
+                state.playerState.isMyWaveActive = isMyWavePlaylistName(playlistName)
               })
 
               if (shuffle) {
@@ -253,10 +256,8 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               timeAwareHistory.logPlay(song.id)
 
               // === MY WAVE DISCOVERIES: Если играет из Моей волны — логируем артиста ===
-              const { currentListName } = get().songlist
-              const isMyWave = currentListName?.toLowerCase().includes('моя волна') || 
-                               currentListName?.toLowerCase().includes('mywave') || 
-                               currentListName?.toLowerCase().includes('my wave')
+              const { currentPlaylistName } = get().songlist
+              const isMyWave = isMyWavePlaylistName(currentPlaylistName)
               
               if (isMyWave && (song.artistId || song.artist)) {
                 const artistId = song.artistId || song.artist
@@ -276,6 +277,8 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                   state.songlist.currentSongIndex = 0
                   state.playerState.isShuffleActive = false
                   state.playerState.isPlaying = true
+                  state.playerState.isMyWaveActive = false
+                  state.songlist.currentPlaylistName = undefined
                   state.songlist.radioList = []
                   state.songlist.podcastList = []
                 })
@@ -360,9 +363,11 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               get().actions.clearPlayerState()
               set((state) => {
                 state.playerState.mediaType = 'radio'
+                state.playerState.isMyWaveActive = false
                 state.songlist.radioList = list
                 state.songlist.currentSongIndex = index
                 state.playerState.isPlaying = true
+                state.songlist.currentPlaylistName = undefined
               })
             },
             setPlayPodcast: (list, index, progress) => {
@@ -383,10 +388,12 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               get().actions.clearPlayerState()
               set((state) => {
                 state.playerState.mediaType = 'podcast'
+                state.playerState.isMyWaveActive = false
                 state.songlist.podcastList = list
                 state.songlist.currentSongIndex = index
                 state.playerState.isPlaying = true
                 state.songlist.podcastListProgresses[index] = progress
+                state.songlist.currentPlaylistName = undefined
               })
             },
             setUpdatePodcastProgress: (progress) => {
@@ -467,6 +474,11 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
             setPlayingState: (status) => {
               set((state) => {
                 state.playerState.isPlaying = status
+              })
+            },
+            setMyWaveActive: (active) => {
+              set((state) => {
+                state.playerState.isMyWaveActive = active
               })
             },
             togglePlayPause: () => {
@@ -581,6 +593,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 state.songlist.currentSongIndex = 0
                 state.playerState.mediaType = 'song'
                 state.playerState.isPlaying = false
+                state.playerState.isMyWaveActive = false
                 state.playerState.loopState = LoopState.Off
                 state.playerState.isShuffleActive = false
                 state.playerState.mainDrawerState = false
@@ -588,6 +601,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 state.playerState.lyricsState = false
                 state.playerState.currentDuration = 0
                 state.playerState.audioPlayerRef = null
+                state.songlist.currentPlaylistName = undefined
                 state.settings.colors.currentSongColor = null
               })
             },
@@ -1225,6 +1239,9 @@ useAppStore.subscribe(
 )
 
 export const usePlayerActions = () => usePlayerStore((state) => state.actions)
+
+export const useIsMyWaveActive = () =>
+  usePlayerStore((state) => state.playerState.isMyWaveActive)
 
 export const usePlayerSonglist = () =>
   usePlayerStore((state) => {

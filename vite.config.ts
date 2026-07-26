@@ -2,10 +2,11 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 import { defineConfig } from 'vite'
 import { createManualChunks } from './src/manual-chunks'
+import { lastfmProxyPlugin } from './vite.lastfm-proxy'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), lastfmProxyPlugin()],
   base: './',
   resolve: {
     alias: {

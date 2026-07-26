@@ -18,7 +18,7 @@ import {
 } from '@/app/components/ui/table'
 import { useLocalMusicStore } from '@/store/local-music.store'
 import { usePlayerActions } from '@/store/player.store'
-import { useAppStore } from '@/store/app.store'
+import { openSettings } from '@/lib/settings-navigation'
 
 export default function LocalLibrary() {
   const navigate = useNavigate()
@@ -122,17 +122,7 @@ export default function LocalLibrary() {
         <p className="text-muted-foreground">
           Добавьте папку с музыкой в настройках
         </p>
-        <Button onClick={() => {
-          const { setOpenDialog, setCurrentPage } = useAppStore.getState().settings
-          setOpenDialog(true)
-          setCurrentPage('local-music')
-          setTimeout(() => {
-            const element = document.getElementById('local-music')
-            if (element) {
-              element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            }
-          }, 500)
-        }}>Открыть настройки</Button>
+        <Button onClick={() => openSettings('local-music')}>Открыть настройки</Button>
       </div>
     )
   }

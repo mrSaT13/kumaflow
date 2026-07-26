@@ -1,19 +1,26 @@
 import { Link } from 'react-router-dom'
 import { CoverImage } from '@/app/components/table/cover-image'
 import { ExplanationTooltip } from '@/app/components/song/explanation-tooltip'
+import { useIsMobile } from '@/app/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 import { ROUTES } from '@/routes/routesList'
 import { useMainDrawerState } from '@/store/player.store'
 import { ISong } from '@/types/responses/song'
 
 export function TableSongTitle({ song }: { song: ISong }) {
+  const isMobile = useIsMobile()
   // Для аудиокниг используем прямой URL обложки
   const isAudiobook = (song as any).isAudiobook
   const coverUrl = (song as any).coverUrl
 
   return (
     <ExplanationTooltip song={song}>
-      <div className="flex w-full gap-2 items-center cursor-help">
+      <div
+        className={cn(
+          'flex w-full gap-2 items-center',
+          !isMobile && 'cursor-help',
+        )}
+      >
         {isAudiobook && coverUrl ? (
           <img
             src={coverUrl}

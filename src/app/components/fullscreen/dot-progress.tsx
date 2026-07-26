@@ -1,54 +1,88 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { cn } from '@/lib/utils'
 
 interface DotProgressProps {
   progress: number
   duration: number
   onSeek: (value: number) => void
+  onSeekStart?: () => void
+  onSeekChange?: (value: number) => void
   className?: string
 }
 
-export function DotProgress({ progress, duration, onSeek, className }: DotProgressProps) {
+export function DotProgress({
+  progress,
+  duration,
+  onSeek,
+  onSeekStart,
+  onSeekChange,
+  className,
+}: DotProgressProps) {
+  const isDraggingRef = useRef(false)
+
   const progressPct = useMemo(() => {
     return duration > 0 ? (progress / duration) * 100 : 0
   }, [progress, duration])
 
-  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const seekFromClientX = (clientX: number, element: HTMLElement) => {
+    if (duration === 0) return 0
+
+    const rect = element.getBoundingClientRect()
+    const x = clientX - rect.left
+    const pct = Math.max(0, Math.min(1, x / rect.width))
+    return pct * duration
+  }
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (duration === 0) return
-    
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const pct = x / rect.width
-    onSeek(pct * duration)
+
+    isDraggingRef.current = true
+    e.currentTarget.setPointerCapture(e.pointerId)
+    onSeekStart?.()
+    onSeekChange?.(seekFromClientX(e.clientX, e.currentTarget))
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current || duration === 0) return
+
+    onSeekChange?.(seekFromClientX(e.clientX, e.currentTarget))
+  }
+
+  const finishSeek = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return
+
+    isDraggingRef.current = false
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+    onSeek(seekFromClientX(e.clientX, e.currentTarget))
   }
 
   return (
     <div
-      className={cn('relative w-full h-12 cursor-pointer group', className)}
-      onClick={handleClick}
+      className={cn('group relative h-14 w-full cursor-pointer touch-none', className)}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={finishSeek}
+      onPointerCancel={finishSeek}
     >
-      {/* Линия трека */}
-      <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-white/20 -translate-y-1/2 rounded-full" />
-      
-      {/* Заполненная часть */}
-      <div 
-        className="absolute top-1/2 left-0 h-0.5 bg-primary -translate-y-1/2 rounded-full transition-all duration-100"
+      <div className="absolute top-1/2 left-0 right-0 h-1.5 -translate-y-1/2 rounded-full bg-white/20" />
+
+      <div
+        className="absolute top-1/2 left-0 h-1.5 -translate-y-1/2 rounded-full bg-primary transition-all duration-100"
         style={{ width: `${progressPct}%` }}
       />
-      
-      {/* Точка прогресса */}
+
       <div
-        className="absolute top-1/2 w-4 h-4 bg-primary rounded-full shadow-lg shadow-primary/50 -translate-x-1/2 -translate-y-1/2 transition-all duration-100 group-hover:scale-125"
+        className="absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-lg shadow-primary/50 transition-all duration-100 group-hover:scale-125"
         style={{ left: `${progressPct}%` }}
       >
-        {/* Пульсация */}
-        <div className="absolute inset-0 bg-primary rounded-full animate-ping opacity-75" />
+        <div className="absolute inset-0 animate-ping rounded-full bg-primary opacity-75" />
       </div>
-      
-      {/* Tooltip при наведении */}
-      <div className="absolute -top-8 left-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-        <div 
-          className="absolute bg-black/80 text-white text-xs px-2 py-1 rounded -translate-x-1/2"
+
+      <div className="pointer-events-none absolute -top-8 left-0 right-0 opacity-0 transition-opacity group-hover:opacity-100">
+        <div
+          className="absolute -translate-x-1/2 rounded bg-black/80 px-2 py-1 text-xs text-white"
           style={{ left: `${progressPct}%` }}
         >
           {formatTime(progress)}

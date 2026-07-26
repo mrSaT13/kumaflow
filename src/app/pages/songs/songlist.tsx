@@ -1,12 +1,17 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
+import { ChevronLeft, Search } from 'lucide-react'
+import { FormEvent, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ShadowHeader } from '@/app/components/album/shadow-header'
 import { InfinitySongListFallback } from '@/app/components/fallbacks/song-fallbacks'
 import { HeaderTitle } from '@/app/components/header-title'
 import { ClearFilterButton } from '@/app/components/search/clear-filter-button'
 import { ExpandableSearchInput } from '@/app/components/search/expandable-input'
+import { SongsMobileList } from '@/app/components/song/songs-mobile-list'
 import { DataTableList } from '@/app/components/ui/data-table-list'
+import { Input } from '@/app/components/ui/input'
+import { useIsMobile } from '@/app/hooks/use-mobile'
 import { useTotalSongs } from '@/app/hooks/use-total-songs'
 import { songsColumns } from '@/app/tables/songs-columns'
 import { getArtistAllSongs, songsSearch } from '@/queries/songs'
@@ -18,8 +23,48 @@ import { SearchParamsHandler } from '@/utils/searchParamsHandler'
 
 const DEFAULT_OFFSET = 100
 
+function SongsMobileSearch({ placeholder }: { placeholder: string }) {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { getSearchParam } = new SearchParamsHandler(searchParams)
+  const query = getSearchParam<string>(AlbumsSearchParams.Query, '')
+  const [value, setValue] = useState(query)
+
+  useEffect(() => {
+    setValue(query)
+  }, [query])
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    const trimmed = value.trim()
+
+    if (trimmed) {
+      const params = new URLSearchParams()
+      params.append(AlbumsSearchParams.MainFilter, AlbumsFilters.Search)
+      params.append(AlbumsSearchParams.Query, trimmed)
+      setSearchParams(params)
+      return
+    }
+
+    setSearchParams(new URLSearchParams())
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="relative">
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={placeholder}
+        className="h-10 pl-9"
+      />
+    </form>
+  )
+}
+
 export default function SongList() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const isMobile = useIsMobile()
   const { setSongList } = usePlayerActions()
   const [searchParams] = useSearchParams()
   const { getSearchParam } = new SearchParamsHandler(searchParams)
@@ -71,8 +116,7 @@ export default function SongList() {
   const columnsToShow: ColumnFilter[] = [
     'index',
     'title',
-    'like', // Столбец с лайками
-    // 'artist',
+    'like',
     'album',
     'duration',
     'playCount',
@@ -84,6 +128,41 @@ export default function SongList() {
   const title = filterByArtist
     ? t('songs.list.byArtist', { artist: artistName })
     : t('sidebar.songs')
+
+  if (isMobile) {
+    return (
+      <div className="w-full pb-6">
+        <div className="sticky top-0 z-10 border-b bg-background/95 px-4 py-4 backdrop-blur-md">
+          <div className="mb-3 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('/library')}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full transition-colors active:bg-accent/60"
+              aria-label="Назад"
+            >
+              <ChevronLeft className="size-5" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-xl font-bold">{title}</h1>
+              {!songCountIsLoading && songCount > 0 && (
+                <p className="text-sm text-muted-foreground">{songCount}</p>
+              )}
+            </div>
+            {filterByArtist && <ClearFilterButton />}
+          </div>
+          <SongsMobileSearch placeholder={t('songs.list.search.placeholder')} />
+        </div>
+
+        <SongsMobileList
+          songs={songlist}
+          onPlaySong={handlePlaySong}
+          fetchNextPage={fetchNextPage}
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="w-full h-content">

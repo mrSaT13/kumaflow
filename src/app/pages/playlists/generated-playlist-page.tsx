@@ -22,7 +22,17 @@ import { Card, CardHeader, CardContent } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
 import { ScrollArea } from '@/app/components/ui/scroll-area'
 import { Badge } from '@/app/components/ui/badge'
-import { mlService } from '@/service/ml-service'
+import {
+  generateDailyMix,
+  generateDiscoverWeekly,
+  generateMyWavePlaylist,
+  generateActivityMix,
+  generateMoodMix,
+  generateTimeOfDayMix,
+  generateGenrePlaylist,
+  generateSimilarArtistsPlaylist,
+} from '@/service/ml-wave-service'
+import { useMLStore } from '@/store/ml.store'
 import { usePlayerActions } from '@/store/player.store'
 import { toast } from 'react-toastify'
 import { analyzeTrack } from '@/service/vibe-similarity'
@@ -51,25 +61,45 @@ export default function GeneratedPlaylistPage() {
     queryKey: ['generated-playlist', playlistType, playlistId],
     queryFn: async () => {
       if (!playlistType) throw new Error('No playlist type')
-      
-      // Генерируем плейлист заново или берём из кэша
+
+      const { profile, ratings } = useMLStore.getState()
+      const likedSongIds = profile.likedSongs || []
+      const preferredGenres = profile.preferredGenres || {}
+      const preferredArtists = profile.preferredArtists || {}
+
       switch (playlistType) {
-        case 'daily-mix':
-          return await mlService.generateDailyMix()
-        case 'discover-weekly':
-          return await mlService.generateDiscoverWeekly()
-        case 'my-wave':
-          return await mlService.generateMyWavePlaylist()
-        case 'activity':
-          return await mlService.generateActivityMix('workout')
-        case 'mood':
-          return await mlService.generateMoodMix('energetic')
-        case 'time-of-day':
-          return await mlService.generateTimeOfDayMix()
-        case 'genre':
-          return await mlService.generateGenrePlaylist(playlistId || 'rock')
-        case 'artist-radio':
-          return await mlService.generateArtistRadio(playlistId || '')
+        case 'daily-mix': {
+          const result = await generateDailyMix(likedSongIds, preferredGenres, preferredArtists, ratings)
+          return { songs: result.playlist.songs }
+        }
+        case 'discover-weekly': {
+          const result = await generateDiscoverWeekly(likedSongIds, preferredGenres, 25, ratings)
+          return { songs: result.playlist.songs }
+        }
+        case 'my-wave': {
+          const result = await generateMyWavePlaylist(likedSongIds, ratings, 25, true)
+          return { songs: result.songs }
+        }
+        case 'activity': {
+          const result = await generateActivityMix('workout', likedSongIds, ratings, preferredGenres, 25)
+          return { songs: result.songs }
+        }
+        case 'mood': {
+          const result = await generateMoodMix(likedSongIds, ratings, preferredGenres, 'energetic', 25)
+          return { songs: result.songs }
+        }
+        case 'time-of-day': {
+          const result = await generateTimeOfDayMix(likedSongIds, ratings, preferredGenres, 25)
+          return { songs: result.songs }
+        }
+        case 'genre': {
+          const result = await generateGenrePlaylist(playlistId || 'rock', 25)
+          return { songs: result.songs }
+        }
+        case 'artist-radio': {
+          const result = await generateSimilarArtistsPlaylist(playlistId || '', 25)
+          return { songs: result.songs }
+        }
         default:
           throw new Error(`Unknown playlist type: ${playlistType}`)
       }

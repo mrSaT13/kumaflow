@@ -3,11 +3,13 @@ import { Share2 } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { getSongStreamUrl } from '@/api/httpClient'
 import { getProxyURL } from '@/api/podcastClient'
+import { cn } from '@/lib/utils'
 import { MiniPlayerButton } from '@/app/components/mini-player/button'
 import { RadioInfo } from '@/app/components/player/radio-info'
 import { TrackInfo } from '@/app/components/player/track-info'
 import { useAutoScrobble } from '@/app/hooks/use-auto-scrobble'
 import { useAutoDJ } from '@/app/hooks/use-auto-dj'
+import { useIsMobile } from '@/app/hooks/use-mobile'
 import { podcasts } from '@/service/podcasts'
 import { getAudiobookshelfApi } from '@/service/audiobookshelf-api'
 import { useAppStore } from '@/store/app.store'
@@ -20,16 +22,19 @@ import {
   usePlayerRef,
   usePlayerSonglist,
   usePlayerStore,
+  usePlayerFullscreen,
   useReplayGainState,
 } from '@/store/player.store'
 import { LoopState } from '@/types/playerContext'
 import { hasPiPSupport } from '@/utils/browser'
 import { logger } from '@/utils/logger'
+import { getUserSeeking } from '@/lib/player-seeking'
 import { ReplayGainParams } from '@/utils/replayGain'
 import { AudioPlayer } from './audio'
 import { PlayerClearQueueButton } from './clear-queue-button'
 import { PlayerControls } from './controls'
 import { PlayerExpandButton } from './expand-button'
+import { PlayerLikeButton } from './like-button'
 import { PlayerLyricsButton } from './lyrics-button'
 import { PlayerQueueButton } from './queue-button'
 import { PodcastInfo } from './podcast-info'
@@ -48,10 +53,12 @@ const MemoPlayerVolume = memo(PlayerVolume)
 const MemoPodcastPlaybackRate = memo(PodcastPlaybackRate)
 const MemoMiniPlayerButton = memo(MiniPlayerButton)
 const MemoPlayerExpandButton = memo(PlayerExpandButton)
+const MemoPlayerLikeButton = memo(PlayerLikeButton)
 const MemoPlayerLyricsButton = memo(PlayerLyricsButton)
 const MemoAudioPlayer = memo(AudioPlayer)
 
 export function Player() {
+  const isMobile = useIsMobile()
   const audioRef = useRef<HTMLAudioElement>(null)
   const radioRef = useRef<HTMLAudioElement>(null)
   const podcastRef = useRef<HTMLAudioElement>(null)
@@ -71,6 +78,7 @@ export function Player() {
   const { isSong, isRadio, isPodcast } = usePlayerMediaType()
   const loopState = usePlayerLoop()
   const audioPlayerRef = usePlayerRef()
+  const { isFullscreen } = usePlayerFullscreen()
   const currentPlaybackRate = usePlayerStore().playerState.currentPlaybackRate
   const { replayGainType, replayGainPreAmp, replayGainDefaultGain } =
     useReplayGainState()
@@ -218,6 +226,8 @@ export function Player() {
   }, [song])
 
   const setupProgress = useCallback(() => {
+    if (getUserSeeking()) return
+
     const audio = getAudioRef().current
     if (!audio) return
 
@@ -679,6 +689,94 @@ export function Player() {
     return { gain: trackGain, peak: trackPeak, preAmp }
   }, [song, replayGainDefaultGain, replayGainPreAmp, replayGainType])
 
+  const audioElements = (
+    <>
+      {isSong && song && (
+        <MemoAudioPlayer
+          replayGain={trackReplayGain}
+          src={(song as any).isLocal && (song as any).url 
+            ? (song as any).url 
+            : song.isAudiobook && song.url 
+              ? song.url 
+              : getSongStreamUrl(song.id)}
+          autoPlay={isPlaying}
+          preload="auto"
+          audioRef={audioRef}
+          loop={loopState === LoopState.One}
+          onPlay={() => setPlayingState(true)}
+          onPause={() => setPlayingState(false)}
+          onLoadedMetadata={setupDuration}
+          onTimeUpdate={setupProgress}
+          onEnded={handleSongEnded}
+          onLoadStart={setupInitialVolume}
+          data-testid="player-song-audio"
+        />
+      )}
+
+      {isRadio && radio && (
+        <MemoAudioPlayer
+          src={radio.streamUrl}
+          autoPlay={isPlaying}
+          audioRef={radioRef}
+          onPlay={() => setPlayingState(true)}
+          onPause={() => setPlayingState(false)}
+          onLoadStart={setupInitialVolume}
+          data-testid="player-radio-audio"
+        />
+      )}
+
+      {isPodcast && podcast && (
+        <MemoAudioPlayer
+          src={getProxyURL(podcast.audio_url)}
+          autoPlay={isPlaying}
+          audioRef={podcastRef}
+          preload="auto"
+          onPlay={() => setPlayingState(true)}
+          onPause={() => setPlayingState(false)}
+          onLoadedMetadata={setupDuration}
+          onTimeUpdate={setupProgress}
+          onEnded={() => {
+            sendFinishProgress()
+            handleSongEnded()
+          }}
+          onLoadStart={setupInitialVolume}
+          data-testid="player-podcast-audio"
+        />
+      )}
+    </>
+  )
+
+  if (isMobile) {
+    return (
+      <footer className={cn(
+        'border-t h-[--player-height] w-full flex flex-col justify-center fixed bottom-[calc(var(--bottomnav-height)+env(safe-area-inset-bottom))] left-0 right-0 z-40 bg-background',
+        isFullscreen && 'hidden',
+      )}>
+        <div className="flex items-center gap-1.5 px-3 pt-2 min-w-0">
+          <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+            {isSong && <MemoTrackInfo song={song} />}
+            {isRadio && <MemoRadioInfo radio={radio} />}
+            {isPodcast && <MemoPodcastInfo podcast={podcast} />}
+          </div>
+          {isSong && <MemoPlayerLikeButton disabled={!song} />}
+          <MemoPlayerControls
+            song={song}
+            radio={radio}
+            podcast={podcast}
+            audioRef={getAudioRef()}
+            compact
+          />
+        </div>
+        {(isSong || isPodcast) && (
+          <div className="px-3 pb-2 pt-1">
+            <MemoPlayerProgress audioRef={getAudioRef()} />
+          </div>
+        )}
+        {audioElements}
+      </footer>
+    )
+  }
+
   // Обычный плеер для полноразмерного окна
   return (
     <footer className="border-t h-[--player-height] w-full flex items-center fixed bottom-0 left-0 right-0 z-40 bg-background">
@@ -736,57 +834,7 @@ export function Player() {
         </div>
       </div>
 
-      {isSong && song && (
-        <MemoAudioPlayer
-          replayGain={trackReplayGain}
-          src={(song as any).isLocal && (song as any).url 
-            ? (song as any).url 
-            : song.isAudiobook && song.url 
-              ? song.url 
-              : getSongStreamUrl(song.id)}
-          autoPlay={isPlaying}
-          audioRef={audioRef}
-          loop={loopState === LoopState.One}
-          onPlay={() => setPlayingState(true)}
-          onPause={() => setPlayingState(false)}
-          onLoadedMetadata={setupDuration}
-          onTimeUpdate={setupProgress}
-          onEnded={handleSongEnded}
-          onLoadStart={setupInitialVolume}
-          data-testid="player-song-audio"
-        />
-      )}
-
-      {isRadio && radio && (
-        <MemoAudioPlayer
-          src={radio.streamUrl}
-          autoPlay={isPlaying}
-          audioRef={radioRef}
-          onPlay={() => setPlayingState(true)}
-          onPause={() => setPlayingState(false)}
-          onLoadStart={setupInitialVolume}
-          data-testid="player-radio-audio"
-        />
-      )}
-
-      {isPodcast && podcast && (
-        <MemoAudioPlayer
-          src={getProxyURL(podcast.audio_url)}
-          autoPlay={isPlaying}
-          audioRef={podcastRef}
-          preload="auto"
-          onPlay={() => setPlayingState(true)}
-          onPause={() => setPlayingState(false)}
-          onLoadedMetadata={setupDuration}
-          onTimeUpdate={setupProgress}
-          onEnded={() => {
-            sendFinishProgress()
-            handleSongEnded()
-          }}
-          onLoadStart={setupInitialVolume}
-          data-testid="player-podcast-audio"
-        />
-      )}
+      {audioElements}
     </footer>
   )
 }
