@@ -16,7 +16,10 @@ export function MainRoutes() {
         id="main-scroll-area"
         className="w-full bg-background-foreground"
       >
-        <Outlet />
+        {/* Отступ снизу под плавающий закруглённый плеер (88px + зазоры) */}
+        <div className="pb-[112px]">
+          <Outlet />
+        </div>
       </ScrollArea>
     </main>
   )

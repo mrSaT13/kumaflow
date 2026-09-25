@@ -68,7 +68,6 @@ export async function getArtists(): Promise<SubsonicArtist[]> {
     const indexes = response?.data?.artists?.index || []
     const artists = indexes.flatMap(index => index.artist || [])
 
-    console.log('[getArtists] Fetched', artists.length, 'artists')
     return artists
   } catch (error) {
     console.error('Failed to fetch artists:', error)
@@ -83,7 +82,6 @@ export async function getStarredArtists(): Promise<SubsonicArtist[]> {
   try {
     const response = await httpClient<{ starred2?: { artist: SubsonicArtist[] } }>('getStarred2', {})
     const artists = response?.data?.starred2?.artist || []
-    console.log('[getStarredArtists] Fetched', artists.length, 'starred artists')
     return artists
   } catch (error) {
     console.error('Failed to fetch starred artists:', error)
@@ -117,7 +115,6 @@ export async function getRandomArtists(count: number = 20): Promise<SubsonicArti
     }
 
     const artists = Array.from(artistMap.values()).slice(0, count)
-    console.log('[getRandomArtists] Fetched', artists.length, 'artists from random songs')
     return artists
   } catch (error) {
     console.error('Failed to fetch random artists:', error)
@@ -165,8 +162,6 @@ export async function getArtistInfo(artistId: string): Promise<SubsonicArtistInf
 export async function getStarredSongs(): Promise<SubsonicSong[]> {
   try {
     const response = await httpClient<{ starred2?: { song: SubsonicSong[] } }>('getStarred2', {})
-    console.log('[getStarredSongs] Response:', response)
-    console.log('[getStarredSongs] Starred songs:', response?.data?.starred2?.song || [])
     return response?.data?.starred2?.song || []
   } catch (error) {
     console.error('Failed to fetch starred songs:', error)
@@ -210,7 +205,6 @@ export async function getSongsByGenre(genre: string, size: number = 50): Promise
   try {
     // Нормализуем жанр (перевод с русского на английский)
     const normalizedGenre = normalizeGenre(genre)
-    console.log(`[getSongsByGenre] Original: "${genre}" → Normalized: "${normalizedGenre}"`)
     
     // Пробуем точное совпадение
     const response = await httpClient<{ songsByGenre?: { song: SubsonicSong[] } }>('getSongsByGenre', {
@@ -221,7 +215,6 @@ export async function getSongsByGenre(genre: string, size: number = 50): Promise
     
     // Если мало треков, пробуем похожие жанры
     if (songs.length < size) {
-      console.log(`[getSongsByGenre] Found ${songs.length} for "${normalizedGenre}", trying similar genres...`)
       const similarGenres = findSimilarGenres(normalizedGenre)
       
       for (const similarGenre of similarGenres) {
@@ -233,7 +226,6 @@ export async function getSongsByGenre(genre: string, size: number = 50): Promise
           })
           const moreSongs = moreResponse?.data?.songsByGenre?.song || []
           songs = [...songs, ...moreSongs]
-          console.log(`[getSongsByGenre] Added ${moreSongs.length} from "${similarGenre}"`)
         } catch (error) {
           console.warn(`Failed to get songs from similar genre "${similarGenre}":`, error)
         }
@@ -245,7 +237,6 @@ export async function getSongsByGenre(genre: string, size: number = 50): Promise
       arr.findIndex(x => x.id === s.id) === i
     )
     
-    console.log(`[getSongsByGenre] "${genre}" → "${normalizedGenre}": ${uniqueSongs.length} total tracks`)
     return uniqueSongs.slice(0, size)
   } catch (error) {
     console.error('Failed to fetch songs by genre:', error)
@@ -461,7 +452,6 @@ export async function search3(
   } = {}
 ): Promise<Search3Result> {
   try {
-    console.log('[search3] Searching for:', query, 'with options:', options)
     const response = await httpClient<{ searchResult3?: {
       artist?: SubsonicArtist[]
       album?: any[]
@@ -477,7 +467,6 @@ export async function search3(
         songOffset: options.songOffset || 0,
       },
     })
-    console.log('[search3] Response:', response?.data?.searchResult3)
     const result = response?.data?.searchResult3
     return {
       artists: result?.artist || [],

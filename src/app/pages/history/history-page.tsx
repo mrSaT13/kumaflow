@@ -15,8 +15,6 @@ import {
   ChevronLeft,
   Music2,
 } from 'lucide-react'
-import { useThemeStore } from '@/store/theme.store'
-import { Theme } from '@/types/themeContext'
 import { usePlayerActions } from '@/store/player.store'
 import { ImageLoader } from '@/app/components/image-loader'
 import { LazyLoadImage } from 'react-lazy-load-image-component'
@@ -33,19 +31,18 @@ interface HistoryEntry {
 }
 
 function useThemeClasses() {
-  const theme = useThemeStore((state) => state.theme)
-  const isDark = theme === Theme.Dark
-
   return {
-    bg: isDark ? 'bg-[#121212]' : 'bg-[#F8F9FA]',
-    cardBg: isDark ? 'bg-[#1E1E1E]' : 'bg-white',
+    bg: 'bg-background',
+    cardBg: 'bg-card border-border',
     text: {
-      primary: isDark ? 'text-white' : 'text-gray-900',
-      secondary: isDark ? 'text-gray-400' : 'text-gray-500',
-      muted: isDark ? 'text-gray-500' : 'text-gray-400',
+      primary: 'text-foreground',
+      secondary: 'text-muted-foreground',
+      muted: 'text-muted-foreground/70',
     },
-    border: isDark ? 'border-gray-800' : 'border-gray-200',
-    hover: isDark ? 'hover:bg-[#252525]' : 'hover:bg-gray-50',
+    border: 'border-border',
+    hover: 'hover:bg-accent',
+    // Активный таб периода — в цвете темы, а не захардкоженный серый
+    activeTab: 'bg-primary text-primary-foreground',
   }
 }
 
@@ -240,7 +237,7 @@ export default function HistoryPage() {
                 onClick={() => setSelectedPeriod(period.id)}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                   selectedPeriod === period.id
-                    ? 'bg-gray-900 text-white'
+                    ? t.activeTab
                     : `${t.cardBg} ${t.text.secondary} ${t.hover}`
                 }`}
               >

@@ -19,6 +19,7 @@
 import { orchestratePlaylist, orchestratePlaylistWithBridges, createEnergyWave } from './playlist-orchestrator'
 import { analyzeTrack, vibeSimilarity } from './vibe-similarity'
 import { generateMLRecommendations } from './ml-wave-service'
+import { tryBrainAutoDJ } from './brain-autodj'
 import { useMLStore } from '@/store/ml.store'
 import { useAutoDJStore } from '@/store/auto-dj.store'
 import type { ISong } from '@/types/responses/song'
@@ -171,6 +172,30 @@ export async function generateSmartAutoDJ(
     console.log(`[SmartAutoDJ] 📚 Filtered out ${candidates.length - nonAudiobookCandidates.length} audiobooks`)
   }
   candidates = nonAudiobookCandidates
+
+  // ============================================
+  // 2.6. BRAIN (1.6.2): треки мозга — в голову очереди, дальше общий оркестратор
+  // ============================================
+  try {
+    const poolByExternalId = new Map<string, ISong>()
+    for (const s of [...songlist, ...candidates]) poolByExternalId.set(s.id, s)
+    const brain = await tryBrainAutoDJ({
+      queue: songlist,
+      current: currentSong,
+      count,
+      poolByExternalId,
+    })
+    if (brain.fromBrain && brain.songs.length > 0) {
+      const seen = new Set(candidates.map((s) => s.id))
+      const fresh = brain.songs.filter((s) => !playedIds.has(s.id) && !isBannedArtist(s) && !seen.has(s.id))
+      if (fresh.length > 0) {
+        console.log(`[SmartAutoDJ] 🧠 Brain: ${fresh.length} tracks first, local fallback after`)
+        candidates = [...fresh, ...candidates]
+      }
+    }
+  } catch {
+    // тихий фолбек на локальный ML
+  }
 
   // ============================================
   // 3. VIBE ФИЛЬТРАЦИЯ (похожие на последние)

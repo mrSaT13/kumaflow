@@ -1,0 +1,65 @@
+# Зависимости
+node_modules/
+.pnp
+.pnp.js
+.pnpm-store/
+
+# Сборка electron-vite (main/preload/renderer)
+out/
+
+# Артефакты electron-builder (инсталляторы, unpacked)
+dist/
+release/
+*.AppImage
+*.deb
+*.dmg
+*.exe
+*.msi
+*.snap
+*.tar.gz
+latest*.yml
+
+# Vite / TS
+*.local
+*.tsbuildinfo
+vite.config.*.timestamp*
+
+# Логи
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Тесты и coverage
+coverage/
+.nyc_output/
+cypress/screenshots/
+cypress/videos/
+cypress/downloads/
+test-results/
+
+# Env (секреты только локально, в репо им не место)
+.env
+.env.*
+!.env.example
+
+# ОС и редакторы
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Временные файлы
+*.tmp
+*.temp
+.cache/
+.parcel-cache/

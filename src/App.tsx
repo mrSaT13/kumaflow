@@ -28,6 +28,11 @@ import { dualUrlBackgroundService } from '@/service/dual-url-background-service'
 import { mlPlaylistAutoUpdate } from '@/service/ml-playlist-auto-update'
 import { getFavoriteArtists } from '@/service/subsonic-api'
 import { checkAndGenerateHolidayPlaylists } from '@/service/holiday-playlist-generator'  // 🆕
+import { startBrainFlushLoop } from '@/service/brain-events'  // 1.6.2: Brain flush
+import { startBrainAutoSyncLoop } from '@/service/brain-autosync'  // Автосинк вкусов (вкл по умолчанию)
+import { wavePublish } from '@/service/brain-wave'  // 1.6.2: живая очередь мозгу
+import { isBrainActive } from '@/store/brain.store'
+import { usePlayerStore } from '@/store/player.store'
 
 function App() {
   const [isLoading, setIsLoading] = useState(true)
@@ -91,6 +96,30 @@ function App() {
     // ВАЖНО: Автосинхронизация лайкнутых артистов из Navidrome
     console.log('[App] Syncing favorite artists from Navidrome...')
     syncFavoriteArtists()
+
+    // 1.6.2: фоновый флаш событий мозга (30с)
+    startBrainFlushLoop()
+
+    // Автосинк вкусов в мозг (первый прогон ~90с, дальше каждые 30 мин).
+    // Работает только если мозг включен и настроен; тумблер — в настройках мозга.
+    startBrainAutoSyncLoop()
+
+    // 1.6.2: живая очередь мозгу при ЛЮБОМ изменении очереди/текущего трека
+    // (троттлинг 5с внутри wavePublish, best-effort)
+    const unsubBrainQueue = usePlayerStore.subscribe(
+      (s) =>
+        `${s.songlist.currentList.map((t) => t.id).join(',')}|${s.songlist.currentSong?.id ?? ''}`,
+      () => {
+        if (!isBrainActive()) return
+        const st = usePlayerStore.getState()
+        wavePublish(
+          st.songlist.currentList.map((t) => t.id).filter(Boolean),
+          st.songlist.currentSong?.id ?? null,
+        )
+      },
+    )
+
+    return () => unsubBrainQueue()
   }, [initializeServices, initializeListenBrainz])
 
   // Функция синхронизации лайкнутых артистов

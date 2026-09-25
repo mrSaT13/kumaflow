@@ -1,0 +1,7 @@
+# Локальный оверрайд: вывод unpacked-сборки на C: (на D: нет места).
+# Использование: pnpm exec electron-builder --dir --win --x64 -c electron-builder.yml -c electron-builder.local.yml
+directories:
+  output: C:/kumaflow-dist
+# @electron/rebuild падает под Node 22 (tar ESM-конфликт); bufferutil/utf-8-validate
+# имеют JS-фолбэк, поэтому пропускаем пересборку
+npmRebuild: false

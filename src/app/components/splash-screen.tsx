@@ -61,22 +61,35 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
       <div className="relative z-10 text-center px-8">
         {/* Логотип с анимацией */}
         <div className="relative w-32 h-32 mx-auto mb-8">
+          {/* Пульсирующие кольца */}
+          <div className="absolute inset-0 rounded-full border-2 border-emerald-400/50 animate-ping-slow" />
+          <div className="absolute inset-0 rounded-full border-2 border-blue-400/40 animate-ping-slow-delayed" />
           {/* Внешнее кольцо */}
           <div className="absolute inset-0 rounded-full border-4 border-emerald-500/30 animate-spin-slow" />
-          
+
           {/* Среднее кольцо */}
           <div className="absolute inset-2 rounded-full border-4 border-blue-500/40 animate-spin-reverse-slow" />
-          
-          {/* Внутренний круг */}
-          <div className="absolute inset-4 rounded-full bg-gradient-to-br from-emerald-500 to-blue-500 animate-pulse flex items-center justify-center">
+
+          {/* Внутренний круг с иконкой приложения */}
+          <div className="absolute inset-4 rounded-full bg-gradient-to-br from-emerald-500 to-blue-500 animate-pulse flex items-center justify-center overflow-hidden">
+            <img
+              src="icon-192x192.png"
+              alt="KumaFlow"
+              className="w-14 h-14 rounded-2xl shadow-lg"
+              onError={(e) => {
+                // Фолбек на нотку, если иконки нет в пакете
+                ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+              }}
+            />
             <svg
-              className="w-12 h-12 text-white"
+              className="w-12 h-12 text-white absolute"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
+              style={{ zIndex: -1 }}
             >
-              {/* Иконка музыки */}
+              {/* Иконка музыки (фолбек) */}
               <path d="M9 18V5l12-2v13" />
               <circle cx="6" cy="18" r="3" />
               <circle cx="18" cy="16" r="3" />
@@ -135,12 +148,31 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
           }
         }
 
+        @keyframes ping-slow {
+          0% {
+            transform: scale(1);
+            opacity: 0.7;
+          }
+          80%, 100% {
+            transform: scale(1.45);
+            opacity: 0;
+          }
+        }
+
         .animate-spin-slow {
           animation: spin-slow 8s linear infinite;
         }
 
         .animate-spin-reverse-slow {
           animation: spin-reverse-slow 12s linear infinite;
+        }
+
+        .animate-ping-slow {
+          animation: ping-slow 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+
+        .animate-ping-slow-delayed {
+          animation: ping-slow 2.4s cubic-bezier(0, 0, 0.2, 1) 1.2s infinite;
         }
       `}</style>
     </div>

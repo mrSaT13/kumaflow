@@ -11,6 +11,7 @@ import { generateMyWavePlaylist } from '@/service/ml-wave-service'
 import { toast } from 'react-toastify'
 import { Play, Settings } from 'lucide-react'
 import MyWaveSettings from './my-wave-settings'
+import { saveWaveContext, waveLabel } from './my-wave-settings'
 
 export default function HeroMyWave() {
   const navigate = useNavigate()
@@ -47,6 +48,19 @@ export default function HeroMyWave() {
       )
 
       if (playlist.songs.length > 0) {
+        let hint = ''
+        try {
+          const s = settings ?? JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
+          hint = [s.activity, s.characteristic, s.mood, s.language]
+            .filter(Boolean)
+            .map((v: string) => waveLabel(v))
+            .join(' • ')
+        } catch { /* ignore */ }
+        saveWaveContext(
+          playlist.songs.map((s: { id: string }) => s.id),
+          hint,
+          'local',
+        )
         setSongList(
           playlist.songs,
           0,
@@ -116,6 +130,7 @@ export default function HeroMyWave() {
         <MyWaveSettings 
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
+          onApplied={handlePlayMyWave}
         />
       </div>
 

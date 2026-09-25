@@ -25,6 +25,24 @@ export function setupEvents(window: BrowserWindow | null) {
     window.show()
   })
 
+  // Страховка: если рендер не отрисовался за 20с — показать окно принудительно,
+  // чтобы вместо вечно скрытого окна был хотя бы белый экран
+  setTimeout(() => {
+    try {
+      if (window && !window.isDestroyed() && !window.isVisible()) {
+        window.show()
+      }
+    } catch { /* ignore */ }
+  }, 20000)
+
+  // did-fail-load — только в файл, без console (иначе EPIPE + флуд в лог)
+  window.webContents.on('did-fail-load', (_, errorCode, errorDescription) => {
+    try {
+      const { logToFile } = require('../index') as { logToFile: (m: string) => void }
+      logToFile(`[Window] did-fail-load: ${errorCode} ${errorDescription}`)
+    } catch { /* ignore */ }
+  })
+
   window.on('show', () => {
     setTaskbarButtons()
     updateTray()

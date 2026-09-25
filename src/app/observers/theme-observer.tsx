@@ -6,7 +6,7 @@ import { setDesktopTitleBarColors } from '@/utils/theme'
 export const appThemes: Theme[] = Object.values(Theme)
 
 export function ThemeObserver() {
-  const { theme } = useTheme()
+  const { theme, glassEnabled, glassBlur, glassOpacity } = useTheme()
 
   useLayoutEffect(() => {
     const root = window.document.documentElement
@@ -14,8 +14,13 @@ export function ThemeObserver() {
     root.classList.remove(...appThemes)
     root.classList.add(theme)
 
+    // Матовое стекло: глобальный тумблер + сила
+    root.classList.toggle('no-glass', !glassEnabled)
+    root.style.setProperty('--glass-blur', `${glassBlur}px`)
+    root.style.setProperty('--glass-opacity', `${glassOpacity}`)
+
     setDesktopTitleBarColors()
-  }, [theme])
+  }, [theme, glassEnabled, glassBlur, glassOpacity])
 
   return null
 }

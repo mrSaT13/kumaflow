@@ -31,6 +31,8 @@ export interface TrackRating {
   // Scoring system (Яндекс-подобная)
   score?: number // Общий вес трека (накапливается)
   replayCount?: number // Количество прослушиваний подряд (сильный сигнал)
+  seekBackCount?: number // Перемотки назад >5с (интерес к моменту)
+  abandonCount?: number // Брошен в первые 30с (ранний скип)
   lastSkipTime?: number // Время когда пропустил (для анализа когда именно)
   // Temporal patterns
   hourPlayed?: number[] // В какие часы слушал (0-23)
@@ -61,6 +63,8 @@ interface MLStore {
   rateSong: (songId: string, like: boolean | null, songInfo?: TrackRating['songInfo']) => Promise<void>
   incrementPlayCount: (songId: string, playProgress?: number) => void
   incrementSkipCount: (songId: string, skipTime?: number) => Promise<void>
+  incrementSeekBackCount: (songId: string) => void // Перемотка назад (счётчик для мозга)
+  incrementAbandonCount: (songId: string) => void // Бросок трека <30с (счётчик для мозга)
   updateLastPlayed: (songId: string) => void
   saveTrackAnalysis: (songId: string, analysis: { bpm?: number; energy?: number; danceability?: number; valence?: number; acousticness?: number }) => void
   recordReplay: (songId: string) => Promise<void> // Записать повторное прослушивание
@@ -124,7 +128,7 @@ export const useMLStore = createWithEqualityFn<MLStore>()(
                 songId,
                 songInfo: songInfo || existingRating?.songInfo,
                 like,
-                playCount: (existingRating?.playCount || 0) + 1,
+                playCount: existingRating?.playCount || 0,
                 skipCount: existingRating?.skipCount || 0,
                 lastPlayed: new Date().toISOString(),
                 lastPlayedDate: today,
@@ -339,6 +343,40 @@ export const useMLStore = createWithEqualityFn<MLStore>()(
             }
           },
 
+          // Перемотка назад >5с: чистый счётчик для мозга, локальный скор не трогаем
+          // (rewind чаще интерес к моменту, а не негатив)
+          incrementSeekBackCount: (songId) => {
+            set((state) => {
+              const existingRating = state.ratings[songId]
+              state.ratings[songId] = {
+                ...existingRating,
+                songId,
+                playCount: existingRating?.playCount || 0,
+                skipCount: existingRating?.skipCount || 0,
+                lastPlayed: existingRating?.lastPlayed || null,
+                like: existingRating?.like ?? null,
+                seekBackCount: (existingRating?.seekBackCount || 0) + 1,
+              }
+            })
+          },
+
+          // Бросок трека в первые 30с: счётчик для мозга + мягкий минус к скору
+          incrementAbandonCount: (songId) => {
+            set((state) => {
+              const existingRating = state.ratings[songId]
+              state.ratings[songId] = {
+                ...existingRating,
+                songId,
+                playCount: existingRating?.playCount || 0,
+                skipCount: existingRating?.skipCount || 0,
+                lastPlayed: existingRating?.lastPlayed || null,
+                like: existingRating?.like ?? null,
+                abandonCount: (existingRating?.abandonCount || 0) + 1,
+                score: (existingRating?.score || 0) - 5,
+              }
+            })
+          },
+
           calculateTrackScore: (songId) => {
             const state = get()
             const rating = state.ratings[songId]
@@ -438,8 +476,8 @@ export const useMLStore = createWithEqualityFn<MLStore>()(
                 skipCount: existingRating?.skipCount || 0,
                 like: existingRating?.like ?? null,
                 // Обновляем temporal patterns (НЕ изменяем likedSongs/dislikedSongs!)
-                hourPlayed: [...(existingRating?.hourPlayed || []), currentHour],
-                dayPlayed: [...(existingRating?.dayPlayed || []), currentDay],
+                hourPlayed: [...(existingRating?.hourPlayed || []).slice(-99), currentHour],
+                dayPlayed: [...(existingRating?.dayPlayed || []).slice(-99), currentDay],
                 // Записываем когда впервые услышал
                 firstHeard: existingRating?.firstHeard || now.toISOString(),
               }
@@ -520,7 +558,7 @@ export const useMLStore = createWithEqualityFn<MLStore>()(
           resetProfile: () => {
             set({
               ratings: {},
-              profile: defaultProfile,
+              profile: { ...defaultProfile },
             })
           },
 
@@ -776,6 +814,8 @@ export const useMLActions = () => useMLStore((state) => ({
   rateSong: state.rateSong,
   incrementPlayCount: state.incrementPlayCount,
   incrementSkipCount: state.incrementSkipCount,
+  incrementSeekBackCount: state.incrementSeekBackCount,
+  incrementAbandonCount: state.incrementAbandonCount,
   updateLastPlayed: state.updateLastPlayed,
   saveTrackAnalysis: state.saveTrackAnalysis,
   recordReplay: state.recordReplay,

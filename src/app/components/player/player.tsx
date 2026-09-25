@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { RefObject } from 'react'
 import { Share2 } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { getSongStreamUrl } from '@/api/httpClient'
@@ -14,14 +15,18 @@ import { useAppStore } from '@/store/app.store'
 import {
   getVolume,
   usePlayerActions,
+  usePlayerDuration,
   usePlayerIsPlaying,
   usePlayerLoop,
   usePlayerMediaType,
+  usePlayerProgress,
   usePlayerRef,
   usePlayerSonglist,
   usePlayerStore,
   useReplayGainState,
+  useSongColor,
 } from '@/store/player.store'
+import { getGenreColor } from '@/utils/genreColors'
 import { LoopState } from '@/types/playerContext'
 import { hasPiPSupport } from '@/utils/browser'
 import { logger } from '@/utils/logger'
@@ -35,7 +40,9 @@ import { PlayerQueueButton } from './queue-button'
 import { PodcastInfo } from './podcast-info'
 import { PodcastPlaybackRate } from './podcast-playback-rate'
 import { PlayerProgress } from './progress'
+import { QualityBadge } from './quality-badge'
 import { PlayerVolume } from './volume'
+import { convertSecondsToTime } from '@/utils/convertSecondsToTime'
 
 const MemoTrackInfo = memo(TrackInfo)
 const MemoRadioInfo = memo(RadioInfo)
@@ -50,6 +57,85 @@ const MemoMiniPlayerButton = memo(MiniPlayerButton)
 const MemoPlayerExpandButton = memo(PlayerExpandButton)
 const MemoPlayerLyricsButton = memo(PlayerLyricsButton)
 const MemoAudioPlayer = memo(AudioPlayer)
+
+/**
+ * Прогресс сверху панели как у Яндекса: тонкая полоса по верхней кромке.
+ * - клик/перемотка (широкая зона попадания 16px, z-10 поверх сетки),
+ * - точка playhead только при наведении,
+ * - время (наведение / всего) только при наведении, под курсором.
+ * Цвет — под жанр/обложку трека.
+ */
+function TopEdgeProgress({
+  audioRef,
+  barColor,
+}: {
+  audioRef: RefObject<HTMLAudioElement>
+  barColor: string
+}) {
+  const progress = usePlayerProgress()
+  const duration = usePlayerDuration()
+  const { setProgress } = usePlayerActions()
+  const [hovering, setHovering] = useState(false)
+  const [hoverRatio, setHoverRatio] = useState(0)
+
+  const hasDuration =
+    !!duration && Number.isFinite(duration) && duration > 0
+  const pct = hasDuration ? Math.min(100, (progress / duration) * 100) : 0
+
+  const ratioFromEvent = (clientX: number, el: HTMLDivElement) => {
+    const rect = el.getBoundingClientRect()
+    if (rect.width <= 0) return 0
+    return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+  }
+
+  const seekTo = (clientX: number, el: HTMLDivElement) => {
+    if (!hasDuration) return
+    const value = Math.floor(ratioFromEvent(clientX, el) * duration)
+    if (audioRef.current) audioRef.current.currentTime = value
+    setProgress(value)
+  }
+
+  if (!hasDuration) return null
+
+  const previewTime = Math.floor(hoverRatio * duration)
+  // Пузырёк держим внутри панели, чтобы не резался скруглением
+  const bubbleRatio = Math.min(0.94, Math.max(0.06, hoverRatio))
+
+  return (
+    <div
+      onClick={(e) => seekTo(e.clientX, e.currentTarget)}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+      onMouseMove={(e) =>
+        setHoverRatio(ratioFromEvent(e.clientX, e.currentTarget))
+      }
+      className="group/top absolute top-0 left-0 right-0 z-10 flex h-[14px] cursor-pointer items-start"
+    >
+      {/* Сама полоса — тонкая, на ховере толще как у Яндекса */}
+      <div className="relative h-[5px] w-full rounded-full bg-foreground/10 transition-all duration-150 group-hover/top:h-[8px]">
+        <div
+          className="h-full rounded-full transition-[width] duration-300"
+          style={{ width: `${pct}%`, background: barColor }}
+        />
+        {/* Точка playhead — только при наведении */}
+        <div
+          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-md opacity-0 transition-opacity duration-150 group-hover/top:opacity-100"
+          style={{ left: `${pct}%`, width: 12, height: 12 }}
+        />
+      </div>
+      {/* Время — только при наведении, под курсором */}
+      {hovering && (
+        <div
+          className="absolute top-[18px] -translate-x-1/2 rounded-md bg-popover border border-border px-2 py-0.5 text-xs whitespace-nowrap shadow-lg pointer-events-none"
+          style={{ left: `${bubbleRatio * 100}%` }}
+        >
+          {convertSecondsToTime(previewTime)} /{' '}
+          {convertSecondsToTime(duration)}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function Player() {
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -679,15 +765,46 @@ export function Player() {
     return { gain: trackGain, peak: trackPeak, preAmp }
   }, [song, replayGainDefaultGain, replayGainPreAmp, replayGainType])
 
-  // Обычный плеер для полноразмерного окна
+  // Обычный плеер для полноразмерного окна — плавающая закруглённая панель как у Яндекса
+  // Подсветка панели динамически: средний цвет обложки → иначе цвет жанра
+  const { currentSongColor } = useSongColor()
+  const genreColor = song?.genre ? getGenreColor(song.genre) : null
+  const tintColor = currentSongColor || genreColor || null
+  const barColor = tintColor || '#10b981'
   return (
-    <footer className="border-t h-[--player-height] w-full flex items-center fixed bottom-0 left-0 right-0 z-40 bg-background">
-      <div className="w-full h-full grid grid-cols-player gap-2 px-4">
+    <footer
+      className="fixed bottom-3 left-3 right-3 z-40 glass-player border border-border/40 rounded-2xl shadow-2xl h-[88px] flex items-center overflow-hidden"
+      style={
+        tintColor
+          ? {
+              boxShadow: `0 8px 40px ${tintColor}33, 0 2px 12px rgba(0,0,0,0.35), inset 0 1px 0 ${tintColor}44`,
+              borderColor: `${tintColor}55`,
+            }
+          : undefined
+      }
+    >
+      <TopEdgeProgress audioRef={getAudioRef()} barColor={barColor} />
+      {/* Динамическая вуаль под жанр/обложку — панель выделяется, текст читаем */}
+      {tintColor && (
+        <div
+          className="pointer-events-none absolute inset-0 opacity-25"
+          style={{
+            background: `linear-gradient(135deg, ${tintColor}66 0%, transparent 55%, ${tintColor}33 100%)`,
+          }}
+        />
+      )}
+      <div className="relative w-full h-full grid grid-cols-player gap-2 px-4 pt-[5px]">
         {/* Track Info */}
         <div className="flex items-center gap-2 w-full min-w-0">
           {isSong && <MemoTrackInfo song={song} />}
           {isRadio && <MemoRadioInfo radio={radio} />}
           {isPodcast && <MemoPodcastInfo podcast={podcast} />}
+          {/* Бейдж качества жил в нижнем баре — переехал сюда, чтобы не потерять */}
+          {isSong && song && (
+            <div className="shrink-0 hidden xl:block">
+              <QualityBadge song={song} />
+            </div>
+          )}
         </div>
         {/* Main Controls */}
         <div className="col-span-2 flex flex-col justify-center items-center px-2 gap-1 min-w-0">
@@ -698,9 +815,14 @@ export function Player() {
             audioRef={getAudioRef()}
           />
 
-          {(isSong || isPodcast) && (
-            <MemoPlayerProgress audioRef={getAudioRef()} />
-          )}
+          {/* Нижнего бара больше нет: время живёт в верхней полосе по ховеру.
+              Компонент оставлен скрытым ради сайд-эффектов:
+              скробблинг + сохранение прогресса подкастов. */}
+          <div className="hidden" aria-hidden>
+            {(isSong || isPodcast) && (
+              <MemoPlayerProgress audioRef={getAudioRef()} />
+            )}
+          </div>
         </div>
         {/* Right Controls and Volume */}
         <div className="flex items-center w-full justify-end gap-1 min-w-0 overflow-hidden">

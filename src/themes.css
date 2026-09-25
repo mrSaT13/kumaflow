@@ -949,3 +949,54 @@
     --ring: 210 100% 40%;
   }
 }
+
+/* === KumaFlow 1.6.2: матовое стекло (glass) === */
+@layer base {
+  :root {
+    --glass-blur: 16px;
+    --glass-opacity: 0.6;
+  }
+
+  .glass-card,
+  .glass-sidebar,
+  .glass-player,
+  .glass-dialog {
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  }
+
+  .glass-card {
+    background: color-mix(in srgb, hsl(var(--card)) calc(var(--glass-opacity) * 100%), transparent);
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  .glass-sidebar {
+    background: color-mix(in srgb, hsl(var(--background)) calc(var(--glass-opacity) * 100%), transparent);
+    border-right: 1px solid hsl(var(--border) / 0.4);
+  }
+
+  .glass-player {
+    background: color-mix(in srgb, hsl(var(--background)) calc(var(--glass-opacity) * 100%), transparent);
+    border-top: 1px solid hsl(var(--border) / 0.4);
+  }
+
+  .glass-dialog {
+    background: color-mix(in srgb, hsl(var(--popover)) calc(var(--glass-opacity) * 100%), transparent);
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  /* Выключатель: полностью режем blur для слабых машин */
+  .no-glass .glass-card,
+  .no-glass .glass-sidebar,
+  .no-glass .glass-player,
+  .no-glass .glass-dialog,
+  .no-glass .backdrop-blur-sm,
+  .no-glass .backdrop-blur,
+  .no-glass .backdrop-blur-md,
+  .no-glass .backdrop-blur-lg,
+  .no-glass .backdrop-blur-xl,
+  .no-glass .backdrop-blur-2xl {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}

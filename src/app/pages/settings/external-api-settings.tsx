@@ -8,6 +8,7 @@ import { Label } from '@/app/components/ui/label'
 import { toast } from 'react-toastify'
 import { LastFmAuth } from '@/app/components/settings/pages/content/lastfm-auth'
 import { ListenBrainzSettings } from '@/app/components/settings/pages/external/listenbrainz'
+import { BrainSettings } from '@/app/components/settings/pages/external/brain'
 
 export default function ExternalApiSettings() {
   const {
@@ -130,6 +131,11 @@ export default function ExternalApiSettings() {
         {/* ListenBrainz */}
         <div className="pt-4 border-t">
           <ListenBrainzSettings />
+        </div>
+
+        {/* Brain: Моя волна */}
+        <div className="pt-4 border-t">
+          <BrainSettings />
         </div>
 
         {/* Fanart.tv */}

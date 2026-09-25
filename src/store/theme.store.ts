@@ -23,6 +23,24 @@ export const useThemeStore = createWithEqualityFn<IThemeContext>()(
               state.theme = theme
             })
           },
+          glassEnabled: true,
+          glassBlur: 16,
+          glassOpacity: 0.6,
+          setGlassEnabled: (enabled: boolean) => {
+            set((state) => {
+              state.glassEnabled = enabled
+            })
+          },
+          setGlassBlur: (blur: number) => {
+            set((state) => {
+              state.glassBlur = Math.min(24, Math.max(4, blur))
+            })
+          },
+          setGlassOpacity: (opacity: number) => {
+            set((state) => {
+              state.glassOpacity = Math.min(0.9, Math.max(0.2, opacity))
+            })
+          },
         })),
         {
           name: 'theme_store',
@@ -30,7 +48,7 @@ export const useThemeStore = createWithEqualityFn<IThemeContext>()(
       ),
       {
         name: 'theme_store',
-        version: 1,
+        version: 2,
         merge: (persistedState, currentState) => {
           if (appThemeFromEnv) {
             if (persistedState && typeof persistedState === 'object') {

@@ -37,3 +37,28 @@ export function getValidThemeFromEnv(): Theme | null {
 
   return null
 }
+
+/**
+ * Светлые темы (фон ~90%+ светлоты). Всё остальное считаем тёмным.
+ * Раньше страницы проверяли `theme === Theme.Dark` и на любой другой
+ * тёмной теме (nuclear-dark, gruvbox-dark, ...) рисовали белые карточки.
+ */
+const LIGHT_THEMES: ReadonlySet<Theme> = new Set([
+  Theme.Light,
+  Theme.NightOwlLight,
+  Theme.NoctisLilac,
+  Theme.Achiever,
+  Theme.TinaciousDesign,
+  Theme.DefaultLight,
+  Theme.GruvboxLight,
+  Theme.SolarizedLight,
+  Theme.AyuLight,
+  Theme.CatppuccinLatte,
+  Theme.RosePineDawn,
+  Theme.GithubLight,
+  Theme.VSCODELight,
+])
+
+export function isDarkTheme(theme: Theme): boolean {
+  return !LIGHT_THEMES.has(theme)
+}

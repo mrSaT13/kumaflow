@@ -235,7 +235,7 @@ export class AutoRecommender {
       },
       energetic: {
         name: '⚡ Энергетическая вспышка',
-        description: 'EDM, pop-rock, hip-hop. Сильные биты, drop'ы',
+        description: "EDM, pop-rock, hip-hop. Сильные биты, drop'ы",
         gradient: 'from-red-500 to-orange-600',
       },
       calm: {

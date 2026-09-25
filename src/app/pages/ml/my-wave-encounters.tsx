@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useThemeStore } from '@/store/theme.store'
-import { Theme } from '@/types/themeContext'
+import { isDarkTheme } from '@/utils/theme'
 import { useMLStore } from '@/store/ml.store'
 import { getStarredArtists } from '@/service/subsonic-api'
 import { subsonic } from '@/service/subsonic'
@@ -20,18 +20,18 @@ import { LazyLoadImage } from 'react-lazy-load-image-component'
 
 function useThemeClasses() {
   const theme = useThemeStore((state) => state.theme)
-  const isDark = theme === Theme.Dark
+  const isDark = isDarkTheme(theme)
 
   return {
-    bg: isDark ? 'bg-[#121212]' : 'bg-[#F8F9FA]',
-    cardBg: isDark ? 'bg-[#1E1E1E]' : 'bg-white',
+    bg: 'bg-background',
+    cardBg: 'bg-card border-border',
     text: {
-      primary: isDark ? 'text-white' : 'text-gray-900',
-      secondary: isDark ? 'text-gray-400' : 'text-gray-500',
-      muted: isDark ? 'text-gray-500' : 'text-gray-400',
+      primary: 'text-foreground',
+      secondary: 'text-muted-foreground',
+      muted: 'text-muted-foreground/70',
     },
-    border: isDark ? 'border-gray-800' : 'border-gray-200',
-    hover: isDark ? 'hover:bg-[#252525]' : 'hover:bg-gray-50',
+    border: 'border-border',
+    hover: 'hover:bg-accent',
     gradient: isDark
       ? 'bg-gradient-to-br from-violet-950/50 via-purple-900/30 to-[#1a1225]'
       : 'bg-gradient-to-br from-violet-100/50 via-purple-50/30 to-pink-100/50',

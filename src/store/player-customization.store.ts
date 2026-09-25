@@ -71,12 +71,22 @@ interface PlayerCustomizationStore {
   settings: PlayerCustomization
   
   // Actions
+  setProgressType: (type: ProgressType) => void
   setProgressIcon: (icon: ProgressIcon) => void
   setCustomIconSvg: (svg: string) => void
   setProgressColor: (color: string) => void
   setProgressHeight: (height: number) => void
+  setMarkerSize: (size: number) => void
   setHoverAnimation: (enabled: boolean) => void
   setShowTimeOnHover: (enabled: boolean) => void
+  setGlowEffect: (enabled: boolean) => void
+  setGlowLayers: (layers: number) => void
+  setPulseOnPlay: (enabled: boolean) => void
+  setGradientProgress: (enabled: boolean) => void
+  setAnimatedIcon: (icon: string) => void
+  setAnimationSpeed: (speed: number) => void
+  setAnimationType: (type: 'none' | 'rotate' | 'scale' | 'bounce' | 'spin') => void
+  setHoverRotation: (degrees: number) => void
   resetToDefaults: () => void
 }
 
@@ -84,7 +94,7 @@ const defaultSettings: PlayerCustomization = {
   progressType: 'slider',
   progressIcon: 'circle',
   progressColor: '#10b981',  // emerald-500
-  progressHeight: 4,
+  progressHeight: 6,
   markerSize: 1.5,  // Увеличенный размер по умолчанию для SVG
   hoverAnimation: true,
   showTimeOnHover: true,
@@ -105,6 +115,12 @@ export const usePlayerCustomizationStore = createWithEqualityFn<PlayerCustomizat
       devtools(
         immer((set) => ({
           settings: defaultSettings,
+
+          setProgressType: (type) => {
+            set((state) => {
+              state.settings.progressType = type
+            })
+          },
 
           setProgressIcon: (icon) => {
             set((state) => {
@@ -199,7 +215,7 @@ export const usePlayerCustomizationStore = createWithEqualityFn<PlayerCustomizat
 
           resetToDefaults: () => {
             set((state) => {
-              state.settings = defaultSettings
+              state.settings = { ...defaultSettings }
             })
           },
         })),

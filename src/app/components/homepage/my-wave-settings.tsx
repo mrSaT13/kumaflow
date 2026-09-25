@@ -3,17 +3,82 @@
  * Модальное окно с настройками персонализации
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useML } from '@/store/ml.store'
+import { isBrainActive } from '@/store/brain.store'
 import { toast } from 'react-toastify'
-import { X, RefreshCw, Heart, Sparkles, Zap, Music, Mic } from 'lucide-react'
+import { X, RefreshCw, Heart, Sparkles, Zap, Music, Mic, Cpu, MonitorSmartphone } from 'lucide-react'
+
+export const WAVE_SOURCE_KEY = 'my-wave-source'
+export type WaveSource = 'local' | 'brain'
+
+export function getWaveSource(): WaveSource {
+  try {
+    return localStorage.getItem(WAVE_SOURCE_KEY) === 'brain' ? 'brain' : 'local'
+  } catch {
+    return 'local'
+  }
+}
+
+/** Человеческие подписи вместо сырых ключей (wakeup/work/unfamiliar/...) */
+export const WAVE_LABELS: Record<string, string> = {
+  wakeup: 'Просыпаюсь',
+  commute: 'В дороге',
+  work: 'Работаю',
+  workout: 'Тренируюсь',
+  sleep: 'Засыпаю',
+  favorite: 'Любимое',
+  unfamiliar: 'Незнакомое',
+  popular: 'Популярное',
+  energetic: 'Бодрое',
+  happy: 'Весёлое',
+  calm: 'Спокойное',
+  sad: 'Грустное',
+  russian: 'Русский',
+  foreign: 'Иностранный',
+  instrumental: 'Без слов',
+}
+
+export function waveLabel(key: string): string {
+  return WAVE_LABELS[key] || key
+}
+
+const WAVE_CTX_KEY = 'my-wave-last'
+
+export interface WaveContext {
+  ids: string[]
+  hint: string
+  source: WaveSource
+  at: number
+}
+
+/** Запоминаем, что именно сейчас играет Волна — для шапки «Сейчас играет / Работаю» как в Яндексе */
+export function saveWaveContext(ids: string[], hint: string, source: WaveSource) {
+  try {
+    const ctx: WaveContext = { ids: ids.slice(0, 100), hint, source, at: Date.now() }
+    localStorage.setItem(WAVE_CTX_KEY, JSON.stringify(ctx))
+  } catch { /* ignore */ }
+}
+
+export function readWaveContext(): WaveContext | null {
+  try {
+    const raw = localStorage.getItem(WAVE_CTX_KEY)
+    if (!raw) return null
+    const ctx = JSON.parse(raw) as WaveContext
+    if (!ctx || !Array.isArray(ctx.ids)) return null
+    return ctx
+  } catch {
+    return null
+  }
+}
 
 interface MyWaveSettingsProps {
   isOpen: boolean
   onClose: () => void
+  onApplied?: () => void
 }
 
-export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps) {
+export default function MyWaveSettings({ isOpen, onClose, onApplied }: MyWaveSettingsProps) {
   const { profile } = useML()
   
   // Состояния настроек
@@ -21,23 +86,49 @@ export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps)
   const [characteristic, setCharacteristic] = useState<string>('')
   const [mood, setMood] = useState<string>('')
   const [language, setLanguage] = useState<string>('')
+  // Источник Волны как в мобайле (локальный AutoDJ / Brain)
+  const [source, setSource] = useState<WaveSource>('local')
+  const [brainOn, setBrainOn] = useState<boolean>(false)
+
+  // Подгружаем сохраненные настройки при открытии (как в мобайле: initState из prefs)
+  useEffect(() => {
+    if (!isOpen) return
+    try {
+      const raw = JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
+      setActivity(raw.activity || '')
+      setCharacteristic(raw.characteristic || '')
+      setMood(raw.mood || '')
+      setLanguage(raw.language || '')
+      setSource(getWaveSource())
+      setBrainOn(isBrainActive())
+    } catch { /* ignore */ }
+  }, [isOpen])
 
   if (!isOpen) return null
+
+  const activeHint = [activity, characteristic, mood, language].filter(Boolean).map(waveLabel).join(' • ')
 
   const handleSave = () => {
     // Сохраняем настройки в localStorage
     const settings = { activity, characteristic, mood, language }
     localStorage.setItem('my-wave-settings', JSON.stringify(settings))
+    localStorage.setItem(WAVE_SOURCE_KEY, source)
     
-    console.log('Saving My Wave settings:', settings)
-    
-    // TODO: Интегрировать с ML и Оркестратором
-    // Нужно передать эти параметры в generateMyWavePlaylist
-    toast.success('Настройки сохранены!', {
-      autoClose: 1500,
-    })
+    console.log('Saving My Wave settings:', settings, 'source:', source)
+
+    if (source === 'brain' && !isBrainActive()) {
+      toast.warning('Мозг не подключен — сыграет локальная Волна. Включи мозг в Настройки → Внешние API.', {
+        autoClose: 4000,
+      })
+    } else {
+      toast.success(activeHint ? `Волна (${source === 'brain' ? 'Мозг' : 'локально'}): ${activeHint}` : 'Настройки сохранены!', {
+        autoClose: 1500,
+      })
+    }
     
     onClose()
+    // Как в мобайле (_applyWave): применить = сразу перегенерировать
+    onApplied?.()
   }
 
   const handleReset = () => {
@@ -49,7 +140,7 @@ export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps)
 
   return (
     <div className="my-wave-settings-overlay" onClick={onClose}>
-      <div className="my-wave-settings-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="my-wave-settings-modal glass-dialog" onClick={(e) => e.stopPropagation()}>
         {/* Заголовок */}
         <div className="settings-header">
           <div className="header-left">
@@ -188,10 +279,37 @@ export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps)
           </div>
         </div>
 
+        {/* Источник Волны — как в мобайле: локальный AutoDJ или Brain */}
+        <div className="settings-section">
+          <h3 className="section-title">Источник</h3>
+          <div className="language-buttons">
+            <button
+              className={`language-button ${source === 'local' ? 'active' : ''}`}
+              onClick={() => setSource('local')}
+            >
+              <MonitorSmartphone className="w-4 h-4" />
+              Локальный
+            </button>
+            <button
+              className={`language-button ${source === 'brain' ? 'active' : ''}`}
+              onClick={() => setSource('brain')}
+            >
+              <Cpu className="w-4 h-4" />
+              Мозг
+            </button>
+          </div>
+          <p style={{ fontSize: 12, color: brainOn ? '#16a34a' : '#999', marginTop: 8 }}>
+            {brainOn ? '● Мозг подключен' : '○ Мозг выключен — будет играть локальная Волна (мозг включается в Настройки → Внешние API)'}
+          </p>
+        </div>
+
         {/* Кнопка сохранить */}
         <div className="settings-footer">
+          {activeHint ? (
+            <p className="wave-hint">Волна: {activeHint}</p>
+          ) : null}
           <button className="save-button" onClick={handleSave}>
-            Сохранить
+            Применить
           </button>
         </div>
       </div>
@@ -211,8 +329,10 @@ export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps)
         }
 
         .my-wave-settings-modal {
-          background: white;
+          background: hsl(var(--popover));
+          color: hsl(var(--popover-foreground));
           border-radius: 24px;
+          border: 1px solid hsl(var(--border) / 0.5);
           width: 90%;
           max-width: 600px;
           max-height: 90vh;
@@ -228,7 +348,7 @@ export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps)
           align-items: center;
           margin-bottom: 24px;
           padding-bottom: 16px;
-          border-bottom: 2px solid #f0f0f0;
+          border-bottom: 2px solid hsl(var(--border));
         }
 
         .header-left {
@@ -240,7 +360,7 @@ export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps)
         .settings-title {
           font-size: 24px;
           font-weight: 700;
-          color: #000;
+          color: hsl(var(--foreground));
         }
 
         .header-right {
@@ -252,8 +372,9 @@ export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps)
           width: 40px;
           height: 40px;
           border-radius: 12px;
-          border: none;
-          background: #f0f0f0;
+          border: 1px solid hsl(var(--border));
+          background: hsl(var(--secondary));
+          color: hsl(var(--secondary-foreground));
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -278,7 +399,7 @@ export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps)
         .section-title {
           font-size: 16px;
           font-weight: 600;
-          color: #666;
+          color: hsl(var(--muted-foreground));
           margin-bottom: 12px;
           text-transform: uppercase;
           letter-spacing: 0.5px;
@@ -293,8 +414,9 @@ export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps)
         .oval-button {
           padding: 10px 20px;
           border-radius: 9999px;
-          border: 2px solid #e0e0e0;
-          background: white;
+          border: 2px solid hsl(var(--border));
+          background: hsl(var(--secondary));
+          color: hsl(var(--secondary-foreground));
           font-size: 14px;
           font-weight: 600;
           cursor: pointer;
@@ -302,14 +424,15 @@ export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps)
         }
 
         .oval-button:hover {
-          border-color: #667eea;
-          background: #f5f5ff;
+          border-color: hsl(var(--primary));
+          background: hsl(var(--accent));
+          color: hsl(var(--accent-foreground));
         }
 
         .oval-button.active {
-          border-color: #667eea;
-          background: #667eea;
-          color: white;
+          border-color: hsl(var(--primary));
+          background: hsl(var(--primary));
+          color: hsl(var(--primary-foreground));
         }
 
         .character-buttons {
@@ -321,8 +444,9 @@ export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps)
           flex: 1;
           padding: 16px;
           border-radius: 16px;
-          border: 2px solid #e0e0e0;
-          background: white;
+          border: 2px solid hsl(var(--border));
+          background: hsl(var(--secondary));
+          color: hsl(var(--secondary-foreground));
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -332,14 +456,15 @@ export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps)
         }
 
         .character-button:hover {
-          border-color: #667eea;
-          background: #f5f5ff;
+          border-color: hsl(var(--primary));
+          background: hsl(var(--accent));
+          color: hsl(var(--accent-foreground));
         }
 
         .character-button.active {
-          border-color: #667eea;
-          background: #667eea;
-          color: white;
+          border-color: hsl(var(--primary));
+          background: hsl(var(--primary));
+          color: hsl(var(--primary-foreground));
         }
 
         .mood-buttons {
@@ -394,8 +519,9 @@ export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps)
           flex: 1;
           padding: 12px 16px;
           border-radius: 12px;
-          border: 2px solid #e0e0e0;
-          background: white;
+          border: 2px solid hsl(var(--border));
+          background: hsl(var(--secondary));
+          color: hsl(var(--secondary-foreground));
           font-size: 14px;
           font-weight: 600;
           cursor: pointer;
@@ -407,19 +533,26 @@ export default function MyWaveSettings({ isOpen, onClose }: MyWaveSettingsProps)
         }
 
         .language-button:hover {
-          border-color: #667eea;
-          background: #f5f5ff;
+          border-color: hsl(var(--primary));
+          background: hsl(var(--accent));
+          color: hsl(var(--accent-foreground));
         }
 
         .language-button.active {
-          border-color: #667eea;
-          background: #667eea;
-          color: white;
+          border-color: hsl(var(--primary));
+          background: hsl(var(--primary));
+          color: hsl(var(--primary-foreground));
         }
 
         .settings-footer {
           padding-top: 16px;
-          border-top: 2px solid #f0f0f0;
+          border-top: 2px solid hsl(var(--border));
+        }
+
+        .wave-hint {
+          font-size: 12px;
+          color: hsl(var(--muted-foreground));
+          margin-bottom: 8px;
         }
 
         .save-button {

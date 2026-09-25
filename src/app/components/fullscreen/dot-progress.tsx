@@ -6,9 +6,11 @@ interface DotProgressProps {
   duration: number
   onSeek: (value: number) => void
   className?: string
+  /** Динамический цвет (жанр/обложка), иначе primary темы */
+  color?: string
 }
 
-export function DotProgress({ progress, duration, onSeek, className }: DotProgressProps) {
+export function DotProgress({ progress, duration, onSeek, className, color }: DotProgressProps) {
   const progressPct = useMemo(() => {
     return duration > 0 ? (progress / duration) * 100 : 0
   }, [progress, duration])
@@ -33,16 +35,19 @@ export function DotProgress({ progress, duration, onSeek, className }: DotProgre
       {/* Заполненная часть */}
       <div 
         className="absolute top-1/2 left-0 h-0.5 bg-primary -translate-y-1/2 rounded-full transition-all duration-100"
-        style={{ width: `${progressPct}%` }}
+        style={{ width: `${progressPct}%`, ...(color ? { background: color } : null) }}
       />
       
       {/* Точка прогресса */}
       <div
         className="absolute top-1/2 w-4 h-4 bg-primary rounded-full shadow-lg shadow-primary/50 -translate-x-1/2 -translate-y-1/2 transition-all duration-100 group-hover:scale-125"
-        style={{ left: `${progressPct}%` }}
+        style={{ left: `${progressPct}%`, ...(color ? { background: color } : null) }}
       >
         {/* Пульсация */}
-        <div className="absolute inset-0 bg-primary rounded-full animate-ping opacity-75" />
+        <div
+          className="absolute inset-0 bg-primary rounded-full animate-ping opacity-75"
+          style={color ? { background: color } : undefined}
+        />
       </div>
       
       {/* Tooltip при наведении */}

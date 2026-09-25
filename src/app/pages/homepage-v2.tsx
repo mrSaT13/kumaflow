@@ -10,10 +10,21 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useML, useMLStore } from '@/store/ml.store'
-import { usePlayerActions } from '@/store/player.store'
+import { usePlayerActions, usePlayerStore } from '@/store/player.store'
 import { useMLPlaylists } from '@/store/ml-playlists.store'
 import { useMLPlaylistsStateActions } from '@/store/ml-playlists-state.store'
 import { generateMyWavePlaylist } from '@/service/ml-wave-service'
+import MyWaveSettings, {
+  getWaveSource,
+  readWaveContext,
+  saveWaveContext,
+  waveLabel,
+} from '@/app/components/homepage/my-wave-settings'
+import { isBrainActive } from '@/store/brain.store'
+import { mapWaveSettings, waveContinue } from '@/service/brain-wave'
+import { getRecentBrainEvents } from '@/service/brain-events'
+import { subsonic } from '@/service/subsonic'
+import type { ISong } from '@/types/responses/song'
 import { generateCSSGradient } from '@/utils/genreColors'
 import { getGenres, getSongsByGenre, getRandomSongs, getStarredArtists } from '@/service/subsonic-api'
 import { getSimpleCoverArtUrl } from '@/api/httpClient'
@@ -21,6 +32,7 @@ import { toast } from 'react-toastify'
 import { useQuery } from '@tanstack/react-query'
 import {
   Play,
+  Pause,
   BarChart3,
   Settings,
   Sparkles,
@@ -38,7 +50,7 @@ import {
   Music2,
 } from 'lucide-react'
 import { useThemeStore } from '@/store/theme.store'
-import { Theme } from '@/types/themeContext'
+import { isDarkTheme } from '@/utils/theme'
 import { myWaveDiscoveryTracker } from '@/service/mywave-discoveries'
 import { useAppStore } from '@/store/app.store'
 
@@ -46,24 +58,22 @@ import { useAppStore } from '@/store/app.store'
 
 function useThemeClasses() {
   const theme = useThemeStore((state) => state.theme)
-  const isDark = theme === Theme.Dark
+  const isDark = isDarkTheme(theme)
 
   return {
     isDark,
-    // ✅ Исправлен градиент — теперь работает
-    bg: isDark ? 'bg-[#121212]' : 'bg-gradient-to-b from-violet-50/50 via-white to-[#F8F9FA]',
-    bgGradient: isDark
-      ? 'bg-gradient-to-b from-violet-950/30 via-[#121212] to-[#121212]'
-      : 'bg-gradient-to-b from-violet-50 via-white to-[#F8F9FA]',
-    cardBg: isDark ? 'bg-[#1E1E1E] border-[#2A2A2A]' : 'bg-white border-gray-100',
-    cardHover: isDark ? 'hover:bg-[#252525]' : 'hover:bg-gray-50',
+    // Токены темы вместо хардкода — карточки следуют за активной темой
+    bg: 'bg-background',
+    bgGradient: 'bg-background',
+    cardBg: 'bg-card border-border',
+    cardHover: 'hover:bg-accent',
     text: {
-      primary: isDark ? 'text-white' : 'text-gray-900',
-      secondary: isDark ? 'text-gray-400' : 'text-gray-500',
-      muted: isDark ? 'text-gray-500' : 'text-gray-400',
+      primary: 'text-foreground',
+      secondary: 'text-muted-foreground',
+      muted: 'text-muted-foreground/70',
     },
-    link: isDark ? 'text-violet-400 hover:text-violet-300' : 'text-violet-600 hover:text-violet-700',
-    borderDashed: isDark ? 'border-gray-700' : 'border-gray-200',
+    link: 'text-primary hover:text-primary/80',
+    borderDashed: 'border-border',
   }
 }
 
@@ -147,9 +157,9 @@ function QuickAccessCard({ icon, label, subtitle, route, gradient }: QuickAccess
   return (
     <button
       onClick={() => navigate(route)}
-      className={`relative flex items-center gap-4 p-5 rounded-2xl ${t.cardBg} border shadow-sm hover:shadow-xl transition-all duration-300 hover:scale-[1.02] text-left group overflow-hidden ${t.cardHover}`}
+      className={`glass-card relative flex items-center gap-4 p-4 rounded-2xl ${t.cardBg} border shadow-sm hover:shadow-xl transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5 text-left group overflow-hidden ${t.cardHover}`}
     >
-      <div className={`p-3 rounded-xl bg-gradient-to-br ${gradient} text-white group-hover:scale-110 transition-transform duration-300 shadow-md`}>
+      <div className={`p-3 rounded-2xl bg-gradient-to-br ${gradient} text-white group-hover:scale-110 transition-transform duration-300 shadow-md`}>
         {icon}
       </div>
       <div className="flex-1 min-w-0">
@@ -277,8 +287,8 @@ function ViralArtistsSection({ onArtistClick }: { onArtistClick: (artistId: stri
       <div className="flex gap-4 overflow-x-auto pb-4">
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="flex-shrink-0 w-[140px] flex flex-col items-center">
-            <div className="w-[120px] h-[120px] rounded-full bg-gray-200 animate-pulse" />
-            <div className="mt-3 w-20 h-3 rounded-full bg-gray-200" />
+            <div className="w-[120px] h-[120px] rounded-full bg-muted animate-pulse" />
+            <div className="mt-3 w-20 h-3 rounded-full bg-muted" />
           </div>
         ))}
       </div>
@@ -338,8 +348,8 @@ function InStyleArtistsSection({
       <div className="flex gap-4 overflow-x-auto pb-4">
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="flex-shrink-0 w-[140px] flex flex-col items-center">
-            <div className="w-[120px] h-[120px] rounded-full bg-gray-200 animate-pulse" />
-            <div className="mt-3 w-20 h-3 rounded-full bg-gray-200" />
+            <div className="w-[120px] h-[120px] rounded-full bg-muted animate-pulse" />
+            <div className="mt-3 w-20 h-3 rounded-full bg-muted" />
           </div>
         ))}
       </div>
@@ -488,9 +498,9 @@ function ScrollContainer({ children }: { children: React.ReactNode }) {
       {canScrollLeft && (
         <button
           onClick={() => scroll('left')}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white shadow-lg flex items-center justify-center hover:bg-gray-50 transition-colors"
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-popover border border-border text-popover-foreground shadow-lg flex items-center justify-center hover:bg-accent transition-colors"
         >
-          <ChevronLeft className="w-5 h-5 text-gray-700" />
+          <ChevronLeft className="w-5 h-5" />
         </button>
       )}
 
@@ -507,9 +517,9 @@ function ScrollContainer({ children }: { children: React.ReactNode }) {
       {canScrollRight && (
         <button
           onClick={() => scroll('right')}
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white shadow-lg flex items-center justify-center hover:bg-gray-50 transition-colors"
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-popover border border-border text-popover-foreground shadow-lg flex items-center justify-center hover:bg-accent transition-colors"
         >
-          <ChevronRight className="w-5 h-5 text-gray-700" />
+          <ChevronRight className="w-5 h-5" />
         </button>
       )}
     </div>
@@ -522,8 +532,49 @@ export default function NewHomepage() {
   const navigate = useNavigate()
   const [isGenerating, setIsGenerating] = useState<string | null>(null)
   const [myWaveArtists, setMyWaveArtists] = useState<any[]>([])
+  const [isWaveSettingsOpen, setIsWaveSettingsOpen] = useState(false)
+  // Пилюля активного контекста волны как у Яндекса («Работаю ×»)
+  const [waveHint, setWaveHint] = useState<string>('')
+  const refreshWaveHint = useCallback(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
+      const hint = [s.activity, s.characteristic, s.mood, s.language]
+        .filter(Boolean)
+        .map((v: string) => waveLabel(v))
+        .join(' • ')
+      setWaveHint(hint)
+    } catch {
+      setWaveHint('')
+    }
+  }, [])
+  useEffect(() => {
+    refreshWaveHint()
+  }, [refreshWaveHint])
+  const clearWaveHint = useCallback(() => {
+    try {
+      localStorage.setItem('my-wave-settings', JSON.stringify({}))
+    } catch { /* ignore */ }
+    setWaveHint('')
+  }, [])
   const { getProfile, ratings } = useML()
-  const { setSongList } = usePlayerActions()
+  const { setSongList, togglePlayPause } = usePlayerActions()
+  // Треки последней сгенерированной Волны — чтобы кнопка знала, играет ли сейчас Волна
+  const waveSongIds = useRef<Set<string>>(new Set())
+  // После рестарта ref пуст, а очередь персистится — восстанавливаем контекст
+  // волны из localStorage, иначе кнопка не переключится на паузу
+  useEffect(() => {
+    try {
+      const wave = readWaveContext()
+      if (wave && wave.ids.length > 0) {
+        waveSongIds.current = new Set(wave.ids)
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [])
+  const currentSong = usePlayerStore((s) => s.songlist.currentSong)
+  const isPlaying = usePlayerStore((s) => s.playerState.isPlaying)
+  const isWaveActive = !!currentSong && waveSongIds.current.has(currentSong.id)
   // Берём названия из сохранённых плейлистов (если есть)
   const { getPlaylist } = useMLPlaylistsStateActions()
   const dailyMixPL = getPlaylist('daily-mix')
@@ -700,11 +751,63 @@ export default function NewHomepage() {
     if (isGenerating) return
     setIsGenerating('mywave')
 
+    // Подпись контекста для шапки полноэкранного ("Моя волна под занятие / Работаю")
+    const waveHint = (() => {
+      try {
+        const s = JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
+        return [s.activity, s.characteristic, s.mood, s.language]
+          .filter(Boolean)
+          .map((v: string) => waveLabel(v))
+          .join(' • ')
+      } catch {
+        return ''
+      }
+    })()
+
     try {
+      // Источник как в мобайле: Brain (если выбран и подключен) → иначе локальный ML
+      if (getWaveSource() === 'brain' && isBrainActive()) {
+        try {
+          const settingsRaw = JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
+          const res = await waveContinue({
+            queue: [],
+            count: trackCount,
+            settings: mapWaveSettings(settingsRaw),
+            excludeIds: [],
+            recentEvents: getRecentBrainEvents(),
+          })
+          if (res && res.tracks.length > 0) {
+            const loaded = await Promise.all(
+              res.tracks.map((t) => subsonic.songs.getSong(t.external_id || t.track_id).catch(() => null)),
+            )
+            const songs = loaded.filter((s): s is ISong => !!s)
+            if (songs.length > 0) {
+              waveSongIds.current = new Set(songs.map((s) => s.id))
+              saveWaveContext(
+                songs.map((s) => s.id),
+                waveHint,
+                'brain',
+              )
+              setSongList(songs, 0)
+              toast.success(`Мозг: волна (${songs.length} треков)`, { type: 'success' })
+              return
+            }
+          }
+        } catch {
+          // тихий фолбек на локальную Волну
+        }
+      }
+
       const likedSongIds = profile.likedSongs || []
       const playlist = await generateMyWavePlaylist(likedSongIds, ratings, trackCount, true)
 
       if (playlist.songs.length > 0) {
+        waveSongIds.current = new Set(playlist.songs.map((s: any) => s.id))
+        saveWaveContext(
+          playlist.songs.map((s: any) => s.id),
+          waveHint,
+          'local',
+        )
         setSongList(playlist.songs, 0)
         toast.success('Моя волна запущена!', { type: 'success' })
       }
@@ -714,6 +817,17 @@ export default function NewHomepage() {
     } finally {
       setIsGenerating(null)
     }
+  }
+
+  // Кнопка Волны: если Волна уже играет — пауза/продолжить без пересборки (как в Яндексе),
+  // иначе — сгенерировать новую
+  const handleWaveButton = () => {
+    if (isGenerating) return
+    if (isWaveActive) {
+      togglePlayPause()
+      return
+    }
+    handleMyWavePlay()
   }
 
   const handleGenreClick = async (genreName: string) => {
@@ -803,7 +917,7 @@ export default function NewHomepage() {
 
           {/* Карточка "Моя волна" */}
           <div
-            className="relative rounded-3xl overflow-hidden shadow-xl"
+            className="relative rounded-3xl overflow-hidden shadow-xl group"
             style={{
               background: myWaveGradient,
               backgroundSize: '200% 200%',
@@ -813,6 +927,11 @@ export default function NewHomepage() {
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
               <div className="absolute -top-20 -left-20 w-80 h-80 bg-white/20 rounded-full blur-3xl" />
               <div className="absolute top-1/2 -right-20 w-96 h-96 bg-white/15 rounded-full blur-3xl" />
+            </div>
+            {/* Матовое стекло на ховер + блик (заметное: сильнее блюр и белый слой) */}
+            <div className="absolute inset-0 pointer-events-none bg-white/25 backdrop-blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]" />
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+              <div className="absolute -top-1/2 -bottom-1/2 -left-1/4 w-1/4 rotate-12 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-[200%] group-hover:translate-x-[600%] transition-transform duration-1000 ease-out" />
             </div>
 
             <div className="relative z-10 p-8 sm:p-10 flex flex-col sm:flex-row items-center sm:items-start gap-8">
@@ -827,23 +946,25 @@ export default function NewHomepage() {
                   Персональная музыкальная лента, адаптированная под ваши предпочтения
                 </p>
 
-                <div className="flex flex-wrap justify-center sm:justify-start gap-3">
+                <div className="flex flex-wrap justify-center sm:justify-start items-center gap-3">
                   <button
-                    onClick={handleMyWavePlay}
+                    onClick={handleWaveButton}
                     disabled={!!isGenerating}
-                    className="px-5 py-3.5 rounded-xl font-semibold bg-white text-gray-900 hover:bg-gray-50 active:scale-95 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative group"
-                    title="Запустить Мою волну"
+                    className="px-5 py-3.5 rounded-2xl font-semibold bg-white text-gray-900 hover:bg-gray-50 active:scale-95 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative group"
+                    title={isWaveActive ? (isPlaying ? 'Пауза' : 'Продолжить') : 'Запустить Мою волну'}
                   >
                     {isGenerating === 'mywave' ? (
                       <div className="w-5 h-5 border-2 border-gray-400 border-t-gray-900 rounded-full animate-spin" />
+                    ) : isWaveActive && isPlaying ? (
+                      <Pause className="w-5 h-5 fill-gray-900" />
                     ) : (
                       <Play className="w-5 h-5 fill-gray-900" />
                     )}
                   </button>
 
                   <button
-                    onClick={() => navigate('/settings/ml')}
-                    className="p-3.5 rounded-xl font-medium bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm transition-colors flex items-center justify-center group relative"
+                    onClick={() => setIsWaveSettingsOpen(true)}
+                    className="p-3.5 rounded-2xl font-medium bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm transition-colors flex items-center justify-center group relative"
                     title="Настройки Моей волны"
                   >
                     <Settings className="w-5 h-5" />
@@ -851,11 +972,23 @@ export default function NewHomepage() {
 
                   <button
                     onClick={() => navigate('/ml/stats')}
-                    className="p-3.5 rounded-xl font-medium bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm transition-colors flex items-center justify-center group relative"
+                    className="p-3.5 rounded-2xl font-medium bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm transition-colors flex items-center justify-center group relative"
                     title="Статистика прослушиваний"
                   >
                     <BarChart3 className="w-5 h-5" />
                   </button>
+
+                  {/* Пилюля активного контекста как у Яндекса */}
+                  {waveHint && (
+                    <button
+                      onClick={clearWaveHint}
+                      title="Сбросить настройку волны"
+                      className="px-4 py-2.5 rounded-full bg-white/25 hover:bg-white/35 text-white text-sm font-medium backdrop-blur-sm transition-colors flex items-center gap-2"
+                    >
+                      {waveHint}
+                      <span className="opacity-70">×</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -997,6 +1130,19 @@ export default function NewHomepage() {
         </div>
 
       </div>
+
+      {/* Шит настроек Волны как в мобайле — открывается шестерёнкой, битого /settings/ml больше нет */}
+      <MyWaveSettings
+        isOpen={isWaveSettingsOpen}
+        onClose={() => {
+          setIsWaveSettingsOpen(false)
+          refreshWaveHint()
+        }}
+        onApplied={() => {
+          refreshWaveHint()
+          handleMyWavePlay()
+        }}
+      />
     </div>
   )
 }

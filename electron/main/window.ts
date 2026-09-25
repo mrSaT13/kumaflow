@@ -42,7 +42,15 @@ export function createWindow(): void {
     },
   })
 
-  createTray()
+  // Трей никогда не должен ронять окно: иконок может не быть в пакете
+  try {
+    createTray()
+  } catch (err) {
+    try {
+      const { logToFile } = require('./index') as { logToFile: (m: string) => void }
+      logToFile(`[Window] createTray failed (non-fatal): ${err}`)
+    } catch { /* ignore */ }
+  }
   setupEvents(mainWindow)
   setupIpcEvents(mainWindow)
   setupDownloads(mainWindow)
