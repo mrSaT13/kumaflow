@@ -43,10 +43,8 @@ export class MyWaveDiscoveryTracker {
       // Уже слышал — обновляем lastHeardAt и playCount
       existing.lastHeardAt = now
       existing.playCount++
-      // +0.5 за повторное прослушивание (макс +2)
-      if (existing.weight < 7) {  // 5 (threshold) + 2 (max bonus)
-        existing.weight += 0.5
-      }
+      // +0.5 за повторное прослушивание (макс 7)
+      existing.weight = Math.min(7, existing.weight + 0.5)
     } else {
       // Впервые — создаём запись
       this.discoveries.set(artistId, {
@@ -70,7 +68,7 @@ export class MyWaveDiscoveryTracker {
     const existing = this.discoveries.get(artistId)
     if (existing) {
       existing.likedAt = Date.now()
-      existing.weight += 2  // +2 за лайк
+      existing.weight = Math.min(10, existing.weight + 2)  // +2 за лайк, макс 10
       this.save()
     }
   }
@@ -82,7 +80,7 @@ export class MyWaveDiscoveryTracker {
     const existing = this.discoveries.get(artistId)
     if (existing) {
       existing.addedToPlaylist = Date.now()
-      existing.weight += 3  // +3 за добавление в плейлист
+      existing.weight = Math.min(10, existing.weight + 3)  // +3 за добавление в плейлист, макс 10
       this.save()
     }
   }

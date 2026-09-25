@@ -79,7 +79,7 @@ class DLNAService {
       return true
     } catch (error) {
       console.error('[DLNA] Failed to start:', error)
-      await this.stop()
+      await this.stopServer()
       return false
     }
   }

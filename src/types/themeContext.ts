@@ -56,4 +56,10 @@ export enum Theme {
 export interface IThemeContext {
   theme: Theme
   setTheme: (theme: Theme) => void
+  glassEnabled: boolean
+  glassBlur: number
+  glassOpacity: number
+  setGlassEnabled: (enabled: boolean) => void
+  setGlassBlur: (blur: number) => void
+  setGlassOpacity: (opacity: number) => void
 }

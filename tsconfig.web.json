@@ -38,6 +38,9 @@
     "vite.config.ts",
     "src/manual-chunks.ts"
   ],
+  "exclude": [
+    "src/service/ml-wave-service(old).ts"
+  ],
   "references": [
     {
       "path": "./tsconfig.node.json"

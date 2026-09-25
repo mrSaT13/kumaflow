@@ -20,6 +20,7 @@ import {
 } from '@/store/player.store'
 import { usePlaybackSettings } from '@/store/playback.store'
 import { crossfadeService } from '@/service/crossfade-service'
+import { detectSeekBack, reportSeekBack } from '@/service/brain-events'
 import { offlineService } from '@/service/offline-service'
 import { dualUrlBackgroundService } from '@/service/dual-url-background-service'
 import { cacheService } from '@/service/cache-service'
@@ -355,6 +356,55 @@ export function AudioPlayer({
     }
     if (isRadio) handleRadio()
   }, [audioRef, isPlaying, isRadio])
+
+  // === BRAIN: детект seek_back централизованно ===
+  // Ловит ВСЕ перемотки назад >5с (кнопки ±15/30, слайдеры, верхняя полоса,
+  // remote/MPRIS): нативное событие seeked элемента audio.
+  // Гарды от ложных: смена трека (другой src) и конец трека (loop/replay).
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !isSong) return
+
+    let lastSrc = ''
+    let lastPos = 0
+
+    const onTimeUpdate = () => {
+      lastPos = audio.currentTime
+    }
+
+    const onSeeked = () => {
+      const cur = audio.currentTime
+      // Сменился трек — просто запоминаем, не событие
+      if (audio.src !== lastSrc) {
+        lastSrc = audio.src
+        lastPos = cur
+        return
+      }
+      const dur = audio.duration
+      const nearEnd =
+        Number.isFinite(dur) && dur > 0 && lastPos > dur - 2
+      if (!nearEnd && detectSeekBack(lastPos, cur)) {
+        const id = usePlayerStore.getState().songlist.currentSong?.id
+        if (id) {
+          reportSeekBack(id, cur)
+          // Потрековый счётчик для мозга (sync-from-mobile)
+          void import('@/store/ml.store').then((m) => {
+            try {
+              m.useMLStore.getState().incrementSeekBackCount(id)
+            } catch { /* best-effort */ }
+          })
+        }
+      }
+      lastPos = cur
+    }
+
+    audio.addEventListener('timeupdate', onTimeUpdate)
+    audio.addEventListener('seeked', onSeeked)
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate)
+      audio.removeEventListener('seeked', onSeeked)
+    }
+  }, [audioRef, isSong])
 
   const handleError = useMemo(() => {
     if (isSong) return handleSongError

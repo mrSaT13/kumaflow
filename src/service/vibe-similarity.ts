@@ -114,7 +114,7 @@ function getGenreFeatures(genre: string): VibeFeatures {
   }
   
   // Возвращаем дефолт
-  return DEFAULT_FEATURES
+  return { ...DEFAULT_FEATURES }
 }
 
 /**

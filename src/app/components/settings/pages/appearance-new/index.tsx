@@ -3,6 +3,7 @@
  */
 
 import { ColorSettings } from '@/app/components/settings/pages/appearance/colors'
+import { GlassSettings } from '@/app/components/settings/pages/appearance/glass'
 import { ProgressBarSettings } from '@/app/components/settings/pages/audio/progress-bar'
 import { FullscreenSettings } from '@/app/components/settings/pages/appearance/fullscreen'
 import { SidebarAppearanceSettings } from '@/app/components/settings/pages/appearance/sidebar'
@@ -50,6 +51,14 @@ export function VisualAppearance() {
       <div>
         <h3 className="text-lg font-semibold mb-3">🖥️ Полноэкранный плеер</h3>
         <FullscreenSettings />
+      </div>
+
+      <Separator />
+
+      {/* Цвета треков */}
+      <div>
+        <h3 className="text-lg font-semibold mb-3">🪟 Матовое стекло</h3>
+        <GlassSettings />
       </div>
 
       <Separator />

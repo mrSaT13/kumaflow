@@ -1,14 +1,24 @@
 import { is } from '@electron-toolkit/utils'
 import { app, nativeImage, nativeTheme } from 'electron'
+import { existsSync } from 'fs'
 import { join } from 'path'
 import { mainWindow } from '../window'
 import { sendPlayerEvents } from './playerEvents'
 import { playerState } from './playerState'
 
-export const resourcesPath = join(
-  is.dev ? app.getAppPath() : process.resourcesPath,
-  'resources',
-)
+function resolveResourcesPath(): string {
+  if (is.dev) return join(app.getAppPath(), 'resources')
+  // В проде extraResources могут лежать как resources/resources, так и плоско в resources/
+  // (зависит от electron-builder) — берём ту папку, где реально есть assets
+  const nested = join(process.resourcesPath, 'resources')
+  try {
+    if (existsSync(join(nested, 'assets'))) return nested
+    if (existsSync(join(process.resourcesPath, 'assets'))) return process.resourcesPath
+  } catch { /* ignore */ }
+  return nested
+}
+
+export const resourcesPath = resolveResourcesPath()
 const taskbarIconsPath = join(resourcesPath, 'taskbar')
 
 const buttons = {

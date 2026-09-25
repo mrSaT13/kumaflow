@@ -5,6 +5,11 @@ import { createManualChunks } from './src/manual-chunks'
 
 export default defineConfig({
   main: {
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, './src'),
+      },
+    },
     build: {
       minify: 'terser',
       rollupOptions: {
@@ -19,6 +24,10 @@ export default defineConfig({
           'electron-dl',
           'electron-updater',
           'discord-rpc',
+          // 1.6.2: node_modules не пакуется (см. electron-builder.yml files),
+          // поэтому ws и music-metadata бандлим внутрь main
+          'ws',
+          'music-metadata',
         ],
       },
     },

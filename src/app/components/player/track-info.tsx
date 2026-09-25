@@ -76,7 +76,7 @@ export function TrackInfo({ song }: { song: ISong | undefined }) {
     <Fragment>
       <div className="group relative">
         <div
-          className="min-w-[70px] max-w-[70px] aspect-square bg-cover bg-center bg-skeleton rounded overflow-hidden shadow-md cursor-pointer"
+          className="min-w-[56px] max-w-[56px] aspect-square bg-cover bg-center bg-skeleton rounded-xl overflow-hidden shadow-md cursor-pointer"
           onClick={() => setIsFullscreen(!isFullscreen)}
           title={isFullscreen ? 'Свернуть плеер' : 'Развернуть плеер'}
         >

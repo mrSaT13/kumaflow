@@ -117,8 +117,8 @@ export function calculateGenreTransitionScore(
 ): number {
   if (!genre1 || !genre2) return 0.5 // Нейтрально если жанры не указаны
   
-  const normalized1 = genre1.toLowerCase().split('-')[0]
-  const normalized2 = genre2.toLowerCase().split('-')[0]
+  const normalized1 = genre1.toLowerCase().trim()
+  const normalized2 = genre2.toLowerCase().trim()
   
   // Одинаковые жанры
   if (normalized1 === normalized2) return 1.0
@@ -133,6 +133,12 @@ export function calculateGenreTransitionScore(
     .map(([genre]) => genre)
   
   if (reverseRelated.includes(normalized2)) return 0.7
+  
+  // Проверяем частичное совпадение (для составных жанров)
+  const parts1 = normalized1.split(/[\s-]+/)
+  const parts2 = normalized2.split(/[\s-]+/)
+  const commonParts = parts1.filter(p => parts2.includes(p))
+  if (commonParts.length > 0) return 0.5
   
   // Очень разные жанры
   return 0.3

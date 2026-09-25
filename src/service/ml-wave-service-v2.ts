@@ -84,7 +84,6 @@ export async function generateDecadePlaylistV2(
   }
 
   const [startYear, endYear] = config.years
-  console.log(`[DecadePlaylist] Generating for ${decade} (${startYear}-${endYear})`)
 
   const songs: ISong[] = []
   const usedSongIds = new Set<string>()
@@ -94,7 +93,6 @@ export async function generateDecadePlaylistV2(
   // ============================================
   // 1. ЯКОРНЫЕ ТРЕКИ (Хиты десятилетия)
   // ============================================
-  console.log(`[DecadePlaylist] 🎯 Adding anchor tracks...`)
   
   for (const anchor of config.anchorTracks || []) {
     try {
@@ -112,7 +110,6 @@ export async function generateDecadePlaylistV2(
           songs.push(track)
           usedSongIds.add(track.id)
           artistCounts[track.artist] = (artistCounts[track.artist] || 0) + 1
-          console.log(`[DecadePlaylist] ✅ Anchor: ${anchor.artist} - ${anchor.title}`)
         }
       }
     } catch (e) {
@@ -207,7 +204,6 @@ export async function generateDecadePlaylistV2(
   // ============================================
   // 6. ХРОНОЛОГИЧЕСКАЯ СОРТИРОВКА
   // ============================================
-  console.log(`[DecadePlaylist] 📅 Sorting: ${config.sort}...`)
 
   if (config.sort === 'chronological') {
     songs.sort((a, b) => {
@@ -219,9 +215,6 @@ export async function generateDecadePlaylistV2(
   } else {
     songs.sort((a, b) => (b.playCount || 0) - (a.playCount || 0))
   }
-
-  console.log(`[DecadePlaylist] ✅ Generated ${songs.length} tracks for ${decade}`)
-  console.log(`[DecadePlaylist] 🎤 Artists: ${Object.keys(artistCounts).length}, Genres: ${Object.keys(genreCounts).length}`)
 
   return {
     songs: songs.slice(0, limit),
@@ -239,7 +232,6 @@ export async function generateNewReleasesPlaylistV2(
   preferredGenres: Record<string, number> = {},
   preferredArtists: Record<string, number> = {}
 ): Promise<{ songs: ISong[]; source: string; name: string; description: string }> {
-  console.log('[NewReleasesV2] ===== START =====')
 
   const songs: ISong[] = []
   const usedSongIds = new Set<string>()
@@ -297,8 +289,6 @@ export async function generateNewReleasesPlaylistV2(
     })
   }
 
-  console.log(`[NewReleasesV2] 📥 Found ${candidates.length} recent tracks`)
-
   if (candidates.length === 0) {
     const fallback = await getRandomSongs(limit)
     return {
@@ -350,8 +340,6 @@ export async function generateNewReleasesPlaylistV2(
   // 5. СОРТИРОВКА (Energy ascending)
   songs.sort((a, b) => (a.energy || 0.5) - (b.energy || 0.5))
 
-  console.log(`[NewReleasesV2] ✅ Generated ${songs.length} tracks`)
-
   return {
     songs: songs.slice(0, limit),
     source: 'new-releases',
@@ -368,7 +356,6 @@ export async function generateSimilarArtistsPlaylistV2(
   limit: number = 25,
   preferredArtists: Record<string, number> = {}
 ): Promise<{ songs: ISong[]; source: string; name: string; description: string }> {
-  console.log(`[SimilarArtistsV2] ===== START for artist: ${artistId} =====`)
 
   const songs: ISong[] = []
   const usedSongIds = new Set<string>()
@@ -385,8 +372,6 @@ export async function generateSimilarArtistsPlaylistV2(
     if (!artist) {
       throw new Error('Artist not found')
     }
-
-    console.log(`[SimilarArtistsV2] 🎤 Seed artist: ${artist.name}`)
 
     const artistTopSongs = await getTopSongs(artist.name, 5)
     if (artistTopSongs.length === 0) {

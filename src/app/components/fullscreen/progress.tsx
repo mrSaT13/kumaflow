@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { ProgressSlider } from '@/app/components/ui/slider'
 import {
   usePlayerActions,
@@ -6,9 +7,11 @@ import {
   usePlayerProgress,
   usePlayerRef,
   usePlayerSonglist,
+  useSongColor,
 } from '@/store/player.store'
 import { usePlaybackSettings } from '@/store/playback.store'
 import { convertSecondsToTime } from '@/utils/convertSecondsToTime'
+import { getGenreColor } from '@/utils/genreColors'
 import { QualityBadge } from '@/app/components/player/quality-badge'
 import { DotProgress } from './dot-progress'
 import { SpectrogramProgress } from './spectrogram-progress'
@@ -76,6 +79,16 @@ export function FullscreenProgress() {
     setShowRemaining(prev => !prev)
   }, [])
 
+  // Динамический цвет как у нижней панели: средний цвет обложки → цвет жанра
+  const { currentSongColor } = useSongColor()
+  const barColor =
+    currentSongColor ||
+    (currentSong?.genre ? getGenreColor(currentSong.genre) : null) ||
+    undefined
+  const barStyle = barColor
+    ? ({ '--progress-color': barColor } as CSSProperties)
+    : undefined
+
   // Рендерим нужный тип прогресс бара
   const renderProgressBar = () => {
     const commonProps = {
@@ -86,7 +99,7 @@ export function FullscreenProgress() {
 
     switch (progressBarType) {
       case 'dot':
-        return <DotProgress {...commonProps} />
+        return <DotProgress {...commonProps} color={barColor} />
       case 'spectrogram':
         return <SpectrogramProgress {...commonProps} />
       case 'line':
@@ -100,6 +113,7 @@ export function FullscreenProgress() {
             max={currentDuration}
             step={1}
             className="w-full h-4"
+            style={barStyle}
             onValueChange={([value]) => handleSeeking(value)}
             onValueCommit={([value]) => handleSeeked(value)}
             onPointerUp={handleSeekedFallback}
@@ -110,17 +124,18 @@ export function FullscreenProgress() {
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <div className="min-w-[50px] max-w-[60px] text-right drop-shadow-lg">
+    <div className="flex items-center gap-3 group/fs-progress">
+      <div className="min-w-[50px] max-w-[60px] text-right drop-shadow-lg opacity-0 group-hover/fs-progress:opacity-100 transition-opacity duration-200">
         {currentTime}
       </div>
 
-      <div className="flex-1">
+      {/* Приглушён по умолчанию, выделяется при наведении */}
+      <div className="flex-1 opacity-50 hover:opacity-100 transition-opacity duration-200">
         {renderProgressBar()}
       </div>
 
       <div
-        className="min-w-[50px] max-w-[60px] text-left drop-shadow-lg cursor-pointer hover:text-primary/80 transition-colors"
+        className="min-w-[50px] max-w-[60px] text-left drop-shadow-lg cursor-pointer hover:text-primary/80 transition-all opacity-0 group-hover/fs-progress:opacity-100 duration-200"
         onClick={handleDurationClick}
         title={showRemaining ? 'Показать общее время' : 'Показать оставшееся время'}
       >

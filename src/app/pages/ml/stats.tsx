@@ -2,6 +2,8 @@ import { useTranslation } from 'react-i18next'
 import { useEffect, useState, useMemo } from 'react'
 import { useML } from '@/store/ml.store'
 import { useMLStore } from '@/store/ml.store'
+import { useMLPlaylistsStore } from '@/store/ml-playlists.store'
+import { useMLPlaylistsState } from '@/store/ml-playlists-state.store'
 import { useExternalApi, useExternalApiStore } from '@/store/external-api.store'
 import { useAchievements } from '@/store/achievements.store'
 import { fanartService } from '@/service/fanart-api'
@@ -40,6 +42,35 @@ export default function MLStats() {
   const [showAllFavorites, setShowAllFavorites] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [hasImportedFromNavidrome, setHasImportedFromNavidrome] = useState(false)
+  // Счётчики плейлистов из всех хранилищ + songCount жанров из Navidrome
+  const mlPlaylistsCount = useMLPlaylistsStore(s => s.playlists.length)
+  const mlStatePlaylistsCount = useMLPlaylistsState(s => s.playlists.length)
+  const [idbPlaylistsCount, setIdbPlaylistsCount] = useState(0)
+  const [genreSongCounts, setGenreSongCounts] = useState<Record<string, number>>({})
+
+  // IndexedDB (сохранённые/сгенерированные) + getGenres: один раз при монте
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const { getAllGeneratedPlaylists } = await import('@/store/generated-playlists.store')
+        const all = await getAllGeneratedPlaylists()
+        if (alive) setIdbPlaylistsCount(all.length)
+      } catch { /* best-effort */ }
+      try {
+        const { getGenres } = await import('@/service/subsonic-api')
+        const genres = await getGenres()
+        if (!alive) return
+        const map: Record<string, number> = {}
+        for (const g of genres) {
+          const name = (g.value || '').toLowerCase().trim()
+          if (name && typeof g.songCount === 'number') map[name] = g.songCount
+        }
+        setGenreSongCounts(map)
+      } catch { /* best-effort */ }
+    })()
+    return () => { alive = false }
+  }, [])
   
   // ML Patterns (реальное время)
   const [mlPatterns, setMlPatterns] = useState({
@@ -58,6 +89,24 @@ export default function MLStats() {
     actionsLast24h: 0,
     lastUpdated: new Date(),
   })
+
+  // Дней с первого прослушивания: минимум lastPlayed по всем оценкам.
+  // Живое (useMemo от ratings): поставил первый лайк/плей — счётчик обновился.
+  const daysSinceFirstListen = useMemo(() => {
+    let min = Number.POSITIVE_INFINITY
+    for (const r of Object.values(ratings)) {
+      const lp = (r as { lastPlayed?: number | string }).lastPlayed
+      if (lp == null) continue
+      const t = typeof lp === 'number' ? lp : Date.parse(lp)
+      if (Number.isFinite(t) && t < min) min = t
+    }
+    if (!Number.isFinite(min)) return 0
+    return Math.max(0, Math.floor((Date.now() - min) / 86400000))
+  }, [ratings])
+
+  // Всего плейлистов: ML-настройки + сгенерированные (стор) + сохранённые (IndexedDB).
+  // Живое: сторы подписаны, IDB пересчитывается при монте.
+  const totalPlaylistsCount = mlPlaylistsCount + mlStatePlaylistsCount + idbPlaylistsCount
 
   // Подсчитываем статистику
   const totalRatings = Object.entries(ratings).filter(([_, rating]) => rating.like !== null).length
@@ -334,10 +383,10 @@ export default function MLStats() {
       totalLikes: profile.likedSongs.length + navidromeStats.lovedTracks, // KumaFlow + Navidrome
       totalDislikes: profile.dislikedSongs.length,
       totalSkips: totalSkipsCount,
-      totalPlaylists: 0, // Будет обновляться отдельно
+      totalPlaylists: totalPlaylistsCount,
       totalGenres: Object.keys(profile.preferredGenres).length,
       totalArtists: Object.keys(profile.preferredArtists).length + favoriteArtists.length, // ML + Navidrome
-      daysSinceFirstListen: 0, // Можно вычислить из listeningHistory
+      daysSinceFirstListen,
     }
     checkAll(stats)
     
@@ -442,15 +491,10 @@ export default function MLStats() {
     }
 
     loadArtistInfo()
-  }, [ratings, profile.preferredArtists])
+  }, [ratings, profile.preferredArtists, totalPlaylistsCount, daysSinceFirstListen])
 
-  // Топ жанры (ML preferredGenres + количество песен из Navidrome)
+  // Топ жанры (ML preferredGenres + количество песен из Navidrome getGenres)
   const topGenres = Object.entries(profile.preferredGenres)
-    .map(([genre, weight]) => {
-      // Ищем жанр в Navidrome чтобы получить количество песен
-      // (здесь можно добавить запрос к API для получения songCount по жанрам)
-      return [genre, weight]
-    })
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
 
@@ -805,6 +849,11 @@ export default function MLStats() {
                 <span className="flex-1 font-medium">{genre}</span>
                 <Progress value={Math.min(100, (weight / topGenres[0][1]) * 100)} className="h-2 w-32" />
                 <span className="text-sm text-muted-foreground w-12 text-right">{weight}</span>
+                {genreSongCounts[genre.toLowerCase()] != null && (
+                  <span className="text-xs text-muted-foreground w-20 text-right tabular-nums">
+                    🎵 {genreSongCounts[genre.toLowerCase()]}
+                  </span>
+                )}
               </div>
             ))
           ) : (

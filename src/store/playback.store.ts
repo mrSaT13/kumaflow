@@ -30,7 +30,7 @@ interface PlaybackStore {
   setReplayGainMode: (mode: 'album' | 'track' | 'off') => void
   setFloatingPlayerEnabled: (enabled: boolean) => void
   setFloatingPlayerPosition: (position: { x: number; y: number } | null) => void
-  setProgressBarType: (type: 'line' | 'wave' | 'dot') => void
+  setProgressBarType: (type: 'line' | 'dot' | 'spectrogram') => void
   setAutoColorByGenre: (enabled: boolean) => void  // Новый action
 }
 
@@ -169,4 +169,5 @@ export const usePlaybackActions = () => usePlaybackStore((state) => ({
   setFloatingPlayerEnabled: state.setFloatingPlayerEnabled,
   setFloatingPlayerPosition: state.setFloatingPlayerPosition,
   setProgressBarType: state.setProgressBarType,
+  setAutoColorByGenre: state.setAutoColorByGenre,
 }))

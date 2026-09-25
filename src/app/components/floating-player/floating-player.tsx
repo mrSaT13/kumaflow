@@ -222,7 +222,7 @@ export function FloatingPlayer() {
   return (
     <div
       className={cn(
-        'fixed z-50 w-80 bg-card rounded-lg shadow-2xl overflow-hidden',
+        'fixed z-50 w-80 bg-card rounded-lg shadow-2xl overflow-hidden glass-card',
         'transition-shadow duration-200',
         isDragging ? 'shadow-2xl ring-2 ring-primary' : 'border border-border',
         isMinimized ? 'h-14' : 'h-auto'

@@ -380,11 +380,6 @@ export async function generateMyWavePlaylist(
   }
 
   // === AUDIOBOOKS EXCLUSION: Исключаем аудиокниги из ML ===
-  const nonAudiobookLiked = likedSongIds.filter(async (id) => {
-    const song = await subsonic.songs.getSong(id).catch(() => null)
-    return song && !song.isAudiobook
-  })
-  
   // Фильтруем аудиокниги из likedSongIds (быстрая проверка через ratings)
   const filteredLikedIds = likedSongIds.filter(id => {
     const songInfo = ratings[id]?.songInfo
@@ -404,72 +399,107 @@ export async function generateMyWavePlaylist(
   // Определяем vibeSeedTracks на верхнем уровне (чтобы было доступно везде)
   let vibeSeedTracks: ISong[] = seedTracks.length > 0 ? seedTracks : []
 
-  // 1. СНАЧАЛА фильтруем лайкнутые по настройкам
+  // 1. СНАЧАЛА фильтруем лайкнутые по настройкам (полный пайплайн как в мобайле _buildWave:
+  // характер -> язык -> настроение/занятие; если после фильтра <5 — возвращаем пул до него)
   if (filteredLikedIds.length > 0 && myWaveSettings && Object.keys(myWaveSettings).length > 0) {
-    console.log('[MyWave] Filtering liked songs by settings...')
+    console.log('[MyWave] Filtering liked songs by settings...', myWaveSettings)
     
     const { analyzeTrack } = await import('./vibe-similarity')
+    
+    // ПРИОРИТЕТ: Артисты "relax/asmr" для calm/sleep (объявляем ДО filter)
+    const isCalmMode = myWaveSettings.mood === 'calm' || myWaveSettings.activity === 'sleep'
+    const relaxArtists = ['relax', 'asmr', 'meditation', 'sleep', 'calm']
+    const cyr = /[а-яёА-ЯЁ]/
     
     // Получаем все лайкнутые треки (без аудиокниг)
     const allLikedSongs = await Promise.all(
       filteredLikedIds.map(id => subsonic.songs.getSong(id).catch(() => null))
     )
-    
-    // Фильтруем по настройкам
-    const filteredLiked = allLikedSongs.filter(song => {
-      if (!song || !song.genre) return false
+    const basePool = allLikedSongs.filter((s): s is ISong => !!s && !isBannedArtist(s))
+    let pool = [...basePool]
 
-      // ПРОПУСКАЕМ забаненных артистов!
-      if (isBannedArtist(song)) {
-        return false
-      }
-      
-      const features = analyzeTrack(song)
-      const artist = (song.artist || '').toLowerCase()
+    // --- Характер (как в мобайле: Любимое / Незнакомое / Популярное) ---
+    if (myWaveSettings.characteristic === 'favorite') {
+      pool = pool.filter(song => {
+        const r = ratings[song.id]
+        return (song as any).starred === true ||
+          (r?.like === true) ||
+          ((r?.score || 0) > 20) ||
+          ((r?.playCount || (song as any).playCount || 0) > 3)
+      })
+    } else if (myWaveSettings.characteristic === 'unfamiliar') {
+      const recent = playlistCache.getRecentUsedSongIds(5)
+      pool = pool.filter(song => {
+        const r = ratings[song.id]
+        const neverMl = (!r || ((r.playCount || 0) === 0 && !r.lastPlayed)) && r?.like !== true
+        const neverServer = ((song as any).playCount == null || (song as any).playCount === 0)
+        return neverMl && neverServer && (song as any).starred !== true && !recent.has(song.id)
+      })
+    } else if (myWaveSettings.characteristic === 'popular') {
+      pool.sort((a, b) => (((b as any).playCount ?? ratings[b.id]?.playCount ?? 0) - ((a as any).playCount ?? ratings[a.id]?.playCount ?? 0)))
+      const keep = pool.length > 0 ? Math.max(1, Math.ceil(pool.length * 0.35)) : 0
+      pool = pool.slice(0, keep)
+    }
 
-      // ПРИОРИТЕТ: Артисты "relax/asmr" для calm/sleep
-      const isCalmMode = myWaveSettings.mood === 'calm' || myWaveSettings.activity === 'sleep'
-      const relaxArtists = ['relax', 'asmr', 'meditation', 'sleep', 'calm']
-      
-      // Если артист relax/asmr - мягкий фильтр
-      if (isCalmMode && relaxArtists.some(a => artist.includes(a))) {
-        return features.energy <= 0.6  // Мягкий фильтр для relax артистов
-      }
+    // --- Язык (как в мобайле: Русский / Иностранный / Без слов) ---
+    if (myWaveSettings.language === 'russian') {
+      pool = pool.filter(song => cyr.test(song.title || '') || cyr.test(song.artist || '') || cyr.test((song as any).album || ''))
+    } else if (myWaveSettings.language === 'foreign') {
+      pool = pool.filter(song => {
+        const txt = `${song.title || ''} ${song.artist || ''} ${(song as any).album || ''}`
+        if (cyr.test(txt)) return false
+        const g = ((song as any).genre || '').toLowerCase()
+        if (g.includes('instrumental') || g.includes('classical')) return false
+        return true
+      })
+    } else if (myWaveSettings.language === 'instrumental') {
+      pool = pool.filter(song => {
+        const g = ((song as any).genre || '').toLowerCase()
+        const t = (song.title || '').toLowerCase()
+        if (g.includes('instrumental') || g.includes('classical') || g.includes('soundtrack') || g.includes('ambient') || t.includes('instrumental')) return true
+        try { return analyzeTrack(song).instrumentalness >= 0.5 } catch { return false }
+      })
+    }
 
-      // Фильтр по настроению - МЯГКИЙ!
-      if (myWaveSettings.mood === 'calm') {
-        if (features.energy > 0.6) {  // Было 0.5
-          return false
+    // --- Настроение + занятие (мягкие фильтры; при <5 треков — откат) ---
+    const mood = myWaveSettings.mood || ''
+    const activity = myWaveSettings.activity || ''
+    if (mood || activity) {
+      const before = [...pool]
+      pool = pool.filter(song => {
+        const features = analyzeTrack(song)
+        const artist = (song.artist || '').toLowerCase()
+        if (isCalmMode && relaxArtists.some(a => artist.includes(a))) {
+          return features.energy <= 0.6
         }
-      }
+        let okMood = true, okAct = true
+        const g = ((song as any).genre || '').toLowerCase()
+        const m = ((song as any).mood || '').toLowerCase()
+        if (mood === 'energetic') okMood = features.energy >= 0.6 || g.includes('dance') || g.includes('electronic') || g.includes('rock') || g.includes('pop')
+        else if (mood === 'happy') okMood = (features as any).valence === undefined || (features as any).valence >= 0.5 || g.includes('disco') || g.includes('funk') || g.includes('pop') || g.includes('dance')
+        else if (mood === 'calm') okMood = features.energy <= 0.6
+        else if (mood === 'sad') okMood = ((features as any).valence !== undefined ? (features as any).valence <= 0.45 : true) || g.includes('blues') || g.includes('folk') || g.includes('ballad')
+        if (activity === 'wakeup') okAct = features.energy >= 0.3 && features.energy <= 0.75 || g.includes('pop') || g.includes('acoustic') || g.includes('indie')
+        else if (activity === 'commute') okAct = features.energy >= 0.5 || g.includes('rock') || g.includes('electronic') || g.includes('pop') || g.includes('hip')
+        else if (activity === 'work') okAct = features.energy <= 0.65 || g.includes('classical') || g.includes('jazz') || g.includes('ambient') || g.includes('lo-fi') || g.includes('lofi') || g.includes('chill')
+        else if (activity === 'workout') okAct = features.energy >= 0.65 || (features.bpm || 0) >= 120
+        else if (activity === 'sleep') okAct = features.energy <= 0.5 && (features.bpm || 0) <= 120
+        void m
+        return okMood && okAct
+      })
+      if (pool.length < 5) pool = before
+    }
 
-      // Фильтр по занятию - МЯГКИЙ!
-      if (myWaveSettings.activity === 'sleep') {
-        if (features.energy > 0.5 || features.bpm > 120) {  // Было 0.4 и 110
-          return false
-        }
-      }
-
-      // Фильтр по языку (instrumental = без слов) - МЯГКИЙ!
-      if (myWaveSettings.language === 'instrumental') {
-        if (features.instrumentalness < 0.5) {  // Было 0.7
-          return false
-        }
-      }
-
-      // === MOOD DRIFT: Дополнительная фильтрация по энергии ===
-      if (moodAdjustments.energyMax !== undefined) {
-        if (features.energy > moodAdjustments.energyMax) {
-          return false
-        }
-      }
-
-      return true
-    })
+    // === MOOD DRIFT: Дополнительная фильтрация по энергии ===
+    if (moodAdjustments.energyMax !== undefined) {
+      pool = pool.filter(song => {
+        try { return analyzeTrack(song).energy <= (moodAdjustments.energyMax as number) } catch { return true }
+      })
+    }
 
     // Сортируем: СНАЧАЛА relax/asmr артисты, потом остальные
     if (isCalmMode) {
-      filteredLiked.sort((a, b) => {
+      pool.sort((a, b) => {
         const aArtist = (a.artist || '').toLowerCase()
         const bArtist = (b.artist || '').toLowerCase()
         const aIsRelax = relaxArtists.some(r => aArtist.includes(r)) ? 1 : 0
@@ -478,10 +508,10 @@ export async function generateMyWavePlaylist(
       })
     }
 
-    console.log(`[MyWave] Filtered ${filteredLiked.length} liked songs by settings`)
+    console.log(`[MyWave] Filtered ${pool.length} liked songs by settings`)
     
     // Добавляем отфильтрованные лайкнутые
-    filteredLiked.forEach(song => {
+    pool.forEach(song => {
       if (song && !usedSongIds.has(song.id)) {
         songs.push(song)
         usedSongIds.add(song.id)
@@ -527,31 +557,57 @@ export async function generateMyWavePlaylist(
         }
         
         // ПРИОРИТЕТ: Артисты "relax/asmr" для calm/sleep
-        const isCalmMode = myWaveSettings.mood === 'calm' || myWaveSettings.activity === 'sleep'
+        const isCalmMode2 = myWaveSettings.mood === 'calm' || myWaveSettings.activity === 'sleep'
         const relaxArtists = ['relax', 'asmr', 'meditation', 'sleep', 'calm']
+        const cyr2 = /[а-яёА-ЯЁ]/
         
         // Если артист relax/asmr - пропускаем почти всё!
-        if (isCalmMode && relaxArtists.some(a => artist.includes(a))) {
+        if (isCalmMode2 && relaxArtists.some(a => artist.includes(a))) {
           return features.energy <= 0.6  // Мягкий фильтр
         }
-        
-        // Фильтр по настроению - ОЧЕНЬ МЯГКИЙ!
-        if (myWaveSettings.mood === 'calm') {
+
+        // Характер: незнакомое = срезаем заигранное, популярное уже учтено сидами
+        if (myWaveSettings.characteristic === 'unfamiliar') {
+          const r = ratings[song.id]
+          if (r && ((r.playCount || 0) > 0 || r.lastPlayed || r.like === true)) return false
+          if ((song as any).starred === true) return false
+        } else if (myWaveSettings.characteristic === 'favorite') {
+          const r = ratings[song.id]
+          const fav = (song as any).starred === true || r?.like === true || (r?.score || 0) > 20
+          if (!fav) return false
+        }
+
+        // Язык
+        if (myWaveSettings.language === 'russian') {
+          if (!(cyr2.test(song.title || '') || cyr2.test(song.artist || '') || cyr2.test((song as any).album || ''))) return false
+        } else if (myWaveSettings.language === 'foreign') {
+          const txt = `${song.title || ''} ${song.artist || ''} ${(song as any).album || ''}`
+          if (cyr2.test(txt)) return false
+        } else if (myWaveSettings.language === 'instrumental') {
+          // Фильтр по языку (instrumental = без слов)
+          if (features.instrumentalness < 0.5) {  // Было 0.7
+            return false
+          }
+        }
+
+        // Настроение / занятие — мягко
+        const g2 = ((song as any).genre || '').toLowerCase()
+        const mood2 = myWaveSettings.mood || ''
+        const act2 = myWaveSettings.activity || ''
+        if (mood2 === 'energetic' && !(features.energy >= 0.6 || g2.includes('dance') || g2.includes('electronic') || g2.includes('rock') || g2.includes('pop'))) return false
+        if (mood2 === 'happy' && !((features as any).valence === undefined || (features as any).valence >= 0.5 || g2.includes('disco') || g2.includes('funk') || g2.includes('pop'))) return false
+        if (mood2 === 'calm') {
           if (features.energy > 0.6) {  // Было 0.5
             return false
           }
         }
-        
-        // Фильтр по занятию - МЯГКИЙ!
-        if (myWaveSettings.activity === 'sleep') {
+        if (mood2 === 'sad' && !(((features as any).valence !== undefined ? (features as any).valence <= 0.45 : true) || g2.includes('blues') || g2.includes('folk'))) return false
+        if (act2 === 'wakeup' && !(features.energy >= 0.3 && features.energy <= 0.75 || g2.includes('pop') || g2.includes('acoustic') || g2.includes('indie'))) return false
+        if (act2 === 'commute' && !(features.energy >= 0.5 || g2.includes('rock') || g2.includes('electronic') || g2.includes('pop'))) return false
+        if (act2 === 'work' && !(features.energy <= 0.65 || g2.includes('classical') || g2.includes('jazz') || g2.includes('ambient') || g2.includes('lo-fi') || g2.includes('lofi'))) return false
+        if (act2 === 'workout' && !(features.energy >= 0.65 || (features.bpm || 0) >= 120)) return false
+        if (act2 === 'sleep') {
           if (features.energy > 0.5 || features.bpm > 120) {  // Было 0.4 и 110
-            return false
-          }
-        }
-        
-        // Фильтр по языку (instrumental = без слов)
-        if (myWaveSettings.language === 'instrumental') {
-          if (features.instrumentalness < 0.5) {  // Было 0.7
             return false
           }
         }

@@ -27,6 +27,14 @@ function getTrayIconPath(size: number): string {
   return join(resourcesPath, 'assets', 'tray', dirName, fileName)
 }
 
+function readVariant(iconPath: string): Buffer | null {
+  try {
+    return readFileSync(iconPath)
+  } catch {
+    return null
+  }
+}
+
 function getTrayIcon(): NativeImage {
   let image: NativeImage
 
@@ -37,8 +45,9 @@ function getTrayIcon(): NativeImage {
     const scaleFactor = getDisplaysMaxScaleFactor()
     const variant = getVariantForScaleFactor(scaleFactor)
     const iconPath = getTrayIconPath(variant.size)
-    const buffer = readFileSync(iconPath)
+    const buffer = readVariant(iconPath)
 
+    if (!buffer) return fallbackTrayIcon()
     image = nativeImage.createFromBuffer(buffer, {
       scaleFactor: 1.0,
       width: variant.size,
@@ -48,22 +57,38 @@ function getTrayIcon(): NativeImage {
     // Windows/macOS: Responsive tray icons
     image = nativeImage.createEmpty()
 
+    let loaded = 0
     for (const variant of NativeIconVariants) {
       const iconPath = getTrayIconPath(variant.size)
-      const buffer = readFileSync(iconPath)
+      const buffer = readVariant(iconPath)
+      if (!buffer) continue
       image.addRepresentation({
         buffer,
         width: variant.size,
         height: variant.size,
         scaleFactor: variant.scaleFactor,
       })
+      loaded++
     }
+
+    // Ни один вариант не прочитался (нет файлов в пакете) — фолбек на иконку приложения
+    if (loaded === 0 || image.isEmpty()) return fallbackTrayIcon()
 
     // Set image as a Template Image for macOS.
     if (platform.isMacOS) image.setTemplateImage(true)
   }
 
   return image
+}
+
+/** Фолбек: иконка приложения вместо трея, чтобы отсутствие png никогда не роняло запуск */
+function fallbackTrayIcon(): NativeImage {
+  try {
+    const { appIcon } = require('./core/icon') as { appIcon: () => NativeImage }
+    const icon = appIcon()
+    if (!icon.isEmpty()) return icon
+  } catch { /* ignore */ }
+  return nativeImage.createEmpty()
 }
 
 export function createTray() {

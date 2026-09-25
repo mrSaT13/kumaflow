@@ -16,7 +16,7 @@ export function AppSidebar({
   ...props
 }: React.ComponentProps<typeof MainSidebar>) {
   return (
-    <MainSidebar collapsible="icon" {...props}>
+    <MainSidebar collapsible="icon" className="glass-sidebar" {...props}>
       <MobileCloseButton />
       <MainSidebarHeader>
         <CommandMenu />

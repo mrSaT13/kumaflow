@@ -1,7 +1,7 @@
 import { produce } from 'immer'
 import clamp from 'lodash/clamp'
 import merge from 'lodash/merge'
-import omit from 'lodash/omit'
+
 import { devtools, persist, subscribeWithSelector } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { shallow } from 'zustand/shallow'
@@ -18,6 +18,8 @@ import { trackRepeatModeEnabled, trackSkipAfterHalf, trackEvent } from '@/servic
 import { cacheService } from '@/service/cache-service'
 import { useAppStore } from './app.store'
 import { behaviorTracker } from '@/service/behavior-tracker'
+import { queueBrainEvent } from '@/service/brain-events'
+import { wavePublish } from '@/service/brain-wave'
 import { moodDriftDetector } from '@/service/mood-drift-detector'
 import { timeAwareHistory } from '@/service/time-aware-history'
 import { myWaveDiscoveryTracker } from '@/service/mywave-discoveries'
@@ -494,10 +496,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               const { currentList, currentSongIndex } = get().songlist
 
               const listLength = currentList.length
-              const isPlayingOneOrLess = listLength <= 1
-              const isPlayingLastSong = currentSongIndex === listLength - 1
-
-              if (isPlayingOneOrLess || isPlayingLastSong) return
+              if (listLength <= 1) return
 
               if (isShuffleActive) {
                 const currentSongId = get().songlist.currentSong.id
@@ -507,7 +506,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
 
                 set((state) => {
                   state.songlist.currentList = state.songlist.originalList
-                  state.songlist.currentSongIndex = index
+                  state.songlist.currentSongIndex = index >= 0 ? index : 0
                   state.playerState.isShuffleActive = false
                 })
               } else {
@@ -537,7 +536,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                   // Скип после 50% но не в конце трека
                   trackSkipAfterHalf(currentSong.id, progress)
                   console.log('[ML] Skip after half detected:', currentSong.title, `${progress.toFixed(1)}%`)
-                  
+
                   // Логируем пропуск трека
                   behaviorTracker.logEvent({
                     trackId: currentSong.id,
@@ -547,6 +546,29 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
 
                   // === MOOD DRIFT: Логируем пропуск для определения смены настроения ===
                   moodDriftDetector.logSkip(currentSong.id, currentSong)
+                }
+
+                // === BRAIN 1.6.2: любой ручной next = skip с position_sec ===
+                // (вне 50-95% гарда: скип на 20% мозгу тоже важен)
+                queueBrainEvent({
+                  track_id: currentSong.id,
+                  action: 'skip',
+                  position_sec: Math.floor(audio.currentTime),
+                })
+                if (audio.currentTime < 30) {
+                  queueBrainEvent({
+                    track_id: currentSong.id,
+                    action: 'abandon',
+                    position_sec: Math.floor(audio.currentTime),
+                  })
+                  // Потрековый счётчик abandon для мозга (dynamic import —
+                  // ml.store тянет player.store, статик даст цикл)
+                  const abandonedId = currentSong.id
+                  void import('./ml.store').then((m) => {
+                    try {
+                      m.useMLStore.getState().incrementAbandonCount(abandonedId)
+                    } catch { /* best-effort */ }
+                  })
                 }
               }
 
@@ -701,7 +723,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               })
             },
             starCurrentSong: async () => {
-              const { currentList, currentSongIndex } = get().songlist
+              const { currentList, currentSongIndex, originalList, shuffledList } = get().songlist
               const { mediaType } = get().playerState
 
               if (currentList.length === 0 && mediaType !== 'song') return
@@ -713,31 +735,20 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               if (!isSongStarred) {
                 // ML Event Tracking для автодиджея
                 trackEvent('first_like', { songId: id })
-                console.log('[ML Tracker] Tracked first_like event:', id)
 
                 // Проверяем настройку автосохранения
                 const appState = useAppStore.getState()
                 const autoCacheEnabled = appState.pages.autoCacheStarred
-                
-                console.log('[PlayerStore] Auto-cache settings:', {
-                  enabled: autoCacheEnabled,
-                  autoCacheStarred: appState.pages.autoCacheStarred,
-                  allPages: appState.pages,
-                })
 
                 if (autoCacheEnabled) {
-                  console.log('[PlayerStore] Liking song + auto-cache enabled, caching:', id)
                   // Кэшируем в фоне без ожидания
                   cacheService.cacheAudioFile(id).then((success) => {
-                    console.log('[PlayerStore] Cache result:', success ? 'SUCCESS ✅' : 'FAILED ❌')
                     if (success) {
                       console.log('[PlayerStore] Song cached successfully:', id)
                     }
                   }).catch((err) => {
                     console.error('[PlayerStore] Failed to cache liked song:', err)
                   })
-                } else {
-                  console.log('[PlayerStore] Liking song but auto-cache disabled:', id)
                 }
               }
 
@@ -746,14 +757,26 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 starred: isSongStarred,
               })
 
+              const newStarred = isSongStarred ? undefined : new Date().toISOString()
+
+              // Обновляем все три списка
               const songList = [...currentList]
               songList[currentSongIndex] = {
                 ...songList[currentSongIndex],
-                starred: isSongStarred ? undefined : new Date().toISOString(),
+                starred: newStarred,
               }
+
+              const newOriginalList = originalList.map((song) =>
+                song.id === id ? { ...song, starred: newStarred } : song
+              )
+              const newShuffledList = shuffledList.map((song) =>
+                song.id === id ? { ...song, starred: newStarred } : song
+              )
 
               set((state) => {
                 state.songlist.currentList = songList
+                state.songlist.originalList = newOriginalList
+                state.songlist.shuffledList = newShuffledList
               })
             },
             setPlaybackRate: (value) => {
@@ -835,40 +858,27 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
             moveSongInQueue: (fromIndex: number, toIndex: number) => {
               const { currentList, originalList, shuffledList, currentSongIndex } = get().songlist
 
-              // Копируем массивы
+              // Находим перемещаемый трек
+              const movedSong = currentList[fromIndex]
+              if (!movedSong) return
+
+              // Перемещаем только в currentList
               const newCurrentList = [...currentList]
-              const newOriginalList = [...originalList]
-              const newShuffledList = [...shuffledList]
-
-              // Перемещаем трек в currentList
-              const [removedCurrent] = newCurrentList.splice(fromIndex, 1)
-              newCurrentList.splice(toIndex, 0, removedCurrent)
-
-              // Перемещаем трек в originalList
-              const [removedOriginal] = newOriginalList.splice(fromIndex, 1)
-              newOriginalList.splice(toIndex, 0, removedOriginal)
-
-              // Перемещаем трек в shuffledList
-              const [removedShuffled] = newShuffledList.splice(fromIndex, 1)
-              newShuffledList.splice(toIndex, 0, removedShuffled)
+              const [removed] = newCurrentList.splice(fromIndex, 1)
+              newCurrentList.splice(toIndex, 0, removed)
 
               // Обновляем индекс текущего трека если он переместился
               let newCurrentIndex = currentSongIndex
               if (fromIndex === currentSongIndex) {
-                // Переместили текущий трек
                 newCurrentIndex = toIndex
               } else if (fromIndex < currentSongIndex && toIndex >= currentSongIndex) {
-                // Переместили с начала в конец (после текущего)
                 newCurrentIndex--
               } else if (fromIndex > currentSongIndex && toIndex <= currentSongIndex) {
-                // Переместили с конца в начало (перед текущим)
                 newCurrentIndex++
               }
 
               set((state) => {
                 state.songlist.currentList = newCurrentList
-                state.songlist.originalList = newOriginalList
-                state.songlist.shuffledList = newShuffledList
                 state.songlist.currentSongIndex = newCurrentIndex
               })
             },
@@ -946,7 +956,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 hasNextSong,
                 playNextSong,
                 setPlayingState,
-                clearPlayerState,
+                resetProgress,
               } = get().actions
 
               // Логируем завершение трека
@@ -957,6 +967,22 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                   position: currentSong.duration || 0,
                 })
 
+                // === BRAIN 1.6.2: complete + живая очередь ===
+                queueBrainEvent({
+                  track_id: currentSong.id,
+                  action: 'complete',
+                  position_sec: Math.floor(currentSong.duration || 0),
+                })
+                try {
+                  const q = get().songlist.currentList ?? []
+                  const idx = get().songlist.currentSongIndex ?? 0
+                  wavePublish(
+                    q.map((s) => s.id).filter(Boolean),
+                    currentSong.id,
+                  )
+                  void idx
+                } catch { /* best-effort */ }
+
                 // === MOOD DRIFT: Завершение трека - положительное взаимодействие ===
                 moodDriftDetector.logPositiveInteraction(currentSong.id)
 
@@ -964,11 +990,19 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 timeAwareHistory.logPlay(currentSong.id)
               }
 
-              if (hasNextSong() || loopState === LoopState.All) {
+              if (loopState === LoopState.One) {
+                // Повтор одного трека — перезапускаем с начала
+                resetProgress()
+                setPlayingState(true)
+                // === BRAIN 1.6.2: replay ===
+                if (currentSong?.id) {
+                  queueBrainEvent({ track_id: currentSong.id, action: 'replay', position_sec: 0 })
+                }
+              } else if (hasNextSong() || loopState === LoopState.All) {
                 playNextSong()
                 setPlayingState(true)
               } else {
-                clearPlayerState()
+                // Конец плейлиста — останавливаем, но НЕ стираем очередь
                 setPlayingState(false)
               }
             },
@@ -1049,18 +1083,21 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
           return merged
         },
         partialize: (state) => {
-          const appStore = omit(state, [
-            'songlist',
-            'actions',
-            'playerState.isPlaying',
-            'playerState.audioPlayerRef',
-            'playerState.mainDrawerState',
-            'playerState.queueState',
-            'playerState.lyricsState',
-            'state.settings.colors.bigPlayer.blur.settings',
-          ])
-
-          return appStore
+          const { isPlaying, audioPlayerRef, mainDrawerState, queueState, lyricsState, ...restPlayerState } = state.playerState
+          const { blur, ...restColors } = state.settings.colors
+          const { blur: bigPlayerBlur, ...restBigPlayer } = state.settings.colors.bigPlayer
+          const { actions, songlist, ...rest } = state
+          return {
+            ...rest,
+            playerState: restPlayerState,
+            settings: {
+              ...state.settings,
+              colors: {
+                ...restColors,
+                bigPlayer: restBigPlayer,
+              },
+            },
+          }
         },
       },
     ),

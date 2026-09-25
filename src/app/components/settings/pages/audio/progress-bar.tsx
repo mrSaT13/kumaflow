@@ -19,6 +19,7 @@ import { Input } from '@/app/components/ui/input'
 import { Button } from '@/app/components/ui/button'
 import { Switch } from '@/app/components/ui/switch'
 import { usePlayerCustomization, usePlayerCustomizationActions } from '@/store/player-customization.store'
+import { usePlaybackActions, usePlaybackStore } from '@/store/playback.store'
 import { cn } from '@/lib/utils'
 import { RotateCcw, Upload, Sparkles, Music, Zap, Star, Heart } from 'lucide-react'
 
@@ -46,6 +47,9 @@ export function ProgressBarSettings() {
   const { t } = useTranslation()
   const settings = usePlayerCustomization()
   const actions = usePlayerCustomizationActions()
+  // Тип прогресс-бара фулскрина («Сейчас играет»): line | dot | spectrogram
+  const progressBarType = usePlaybackStore((s) => s.settings.progressBarType)
+  const { setProgressBarType } = usePlaybackActions()
 
   const [customSvg, setCustomSvg] = useState('')
   const [previewValue, setPreviewValue] = useState(50)
@@ -85,12 +89,25 @@ export function ProgressBarSettings() {
         {/* Тип прогресс-бара */}
         <div className="space-y-2">
           <Label>Тип прогресс-бара</Label>
-          <div className="p-3 bg-muted/50 rounded-lg">
-            <p className="text-sm">Slider (классический)</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Классический слайдер с полосой прогресса
-            </p>
-          </div>
+          <Select
+            value={progressBarType}
+            onValueChange={(v) =>
+              setProgressBarType(v as 'line' | 'dot' | 'spectrogram')
+            }
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="line">Линия (классическая)</SelectItem>
+              <SelectItem value="dot">Точка с пульсацией</SelectItem>
+              <SelectItem value="spectrogram">Спектрограмма</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Применяется к странице «Сейчас играет». Нижняя панель всегда
+            использует тонкую полосу сверху.
+          </p>
         </div>
 
         {/* Форма маркера */}

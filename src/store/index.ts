@@ -29,3 +29,6 @@ export type { TrackRating, MLProfile } from './ml.store'
 // ML Playlists Store
 export { useMLPlaylistsStore, useMLPlaylists } from './ml-playlists.store'
 export type { MLPlaylistSettings, MLPlaylist } from './ml-playlists.store'
+
+// Brain Store (1.6.2: Моя волна)
+export { useBrainStore, isBrainActive } from './brain.store'

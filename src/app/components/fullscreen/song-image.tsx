@@ -3,7 +3,7 @@ import { ImageLoader } from '@/app/components/image-loader'
 import { AspectRatio } from '@/app/components/ui/aspect-ratio'
 import { usePlayerStore } from '@/store/player.store'
 
-export function FullscreenSongImage() {
+export function FullscreenSongImage({ centered = false }: { centered?: boolean }) {
   const { coverArt, artist, title } = usePlayerStore(({ songlist }) => {
     return songlist.currentSong
   })
@@ -13,10 +13,17 @@ export function FullscreenSongImage() {
   const coverUrl = (usePlayerStore.getState().songlist.currentSong as any)?.coverUrl
 
   return (
-    <div className="2xl:w-[33%] h-full max-w-[450px] max-h-[450px] 2xl:max-w-[550px] 2xl:max-h-[550px] items-end flex aspect-square">
+    <div
+      className={
+        centered
+          // Как в мобайле: большая обложка по центру колонки
+          ? 'w-[min(44vh,400px)] max-w-full aspect-square flex shrink-0'
+          : '2xl:w-[33%] h-full max-w-[450px] max-h-[450px] 2xl:max-w-[550px] 2xl:max-h-[550px] items-end flex aspect-square'
+      }
+    >
       <AspectRatio
         ratio={1 / 1}
-        className="rounded-lg 2xl:rounded-2xl overflow-hidden bg-accent/60"
+        className="rounded-2xl overflow-hidden bg-accent/60 shadow-custom-5 w-full"
       >
         {isAudiobook && coverUrl ? (
           // Для аудиокниг — прямой URL обложки

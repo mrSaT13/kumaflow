@@ -97,7 +97,7 @@ export const useMLPlaylistsStore = createWithEqualityFn<MLPlaylistsStore>()(
   persist(
     subscribeWithSelector(
       devtools(
-        immer((set) => ({
+        immer((set, get) => ({
           settings: defaultSettings,
           playlists: [],
 
@@ -205,7 +205,6 @@ export const useMLPlaylistsStore = createWithEqualityFn<MLPlaylistsStore>()(
           setDiscoveryEnabled: (enabled) => {
             set((state) => {
               state.settings.discoveryEnabled = enabled
-              console.log(`[ML Playlists] 🔒 Discovery ${enabled ? 'ENABLED' : 'DISABLED'} — novelty will ${enabled ? 'use noveltyFactor' : 'be 0'}`)
             })
           },
 
@@ -219,7 +218,6 @@ export const useMLPlaylistsStore = createWithEqualityFn<MLPlaylistsStore>()(
           setMabEnabled: async (enabled) => {
             set((state) => {
               state.settings.mabEnabled = enabled
-              console.log(`[ML Playlists] 🎰 MAB ${enabled ? 'ENABLED' : 'DISABLED'}`)
             })
             
             // Если включаем — применяем настройки
@@ -233,18 +231,13 @@ export const useMLPlaylistsStore = createWithEqualityFn<MLPlaylistsStore>()(
           },
 
           setMabConfig: async (config) => {
-            console.log('[ML Playlists] 🎰 setMabConfig called with:', config)
-            
-            // Сначала синхронное обновление state (чтобы UI обновился сразу)
             set((state) => {
               state.settings.mabConfig = { ...state.settings.mabConfig, ...config }
-              console.log('[ML Playlists] 🎰 mabConfig after update:', state.settings.mabConfig)
             })
             
             // Потом async — применяем к MAB
             setTimeout(async () => {
               const state = get()
-              console.log('[ML Playlists] 🎰 mabEnabled:', state.settings.mabEnabled)
               if (state.settings.mabEnabled) {
                 const { multiArmedBandit } = await import('@/service/multi-armed-bandit')
                 multiArmedBandit.updateConfig({ ...state.settings.mabConfig, ...config })
@@ -255,7 +248,6 @@ export const useMLPlaylistsStore = createWithEqualityFn<MLPlaylistsStore>()(
           resetMabStats: async () => {
             const { multiArmedBandit } = await import('@/service/multi-armed-bandit')
             multiArmedBandit.reset()
-            console.log('[ML Playlists] 🎰 MAB stats reset')
           },
 
           getMabStats: async () => {
@@ -278,7 +270,6 @@ export const useMLPlaylistsStore = createWithEqualityFn<MLPlaylistsStore>()(
                 rating,
                 timestamp: Date.now(),
               }
-              console.log(`[ML Playlists] 🆕 Recorded rating ${rating}/5 for playlist ${playlistId}`)
             })
           },
 

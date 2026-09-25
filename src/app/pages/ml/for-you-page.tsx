@@ -48,7 +48,7 @@ export default function MLForYouPage() {
   const [isInstantMixOpen, setIsInstantMixOpen] = useState(false)
   const [isAlchemyOpen, setIsAlchemyOpen] = useState(false)
   // TODO: AI авто-генерация - временно отключена
-  // const [aiPlaylistsGenerating, setAiPlaylistsGenerating] = useState(false)
+  const [aiPlaylistsGenerating, setAiPlaylistsGenerating] = useState(false)
   const [generatedPlaylistTypes, setGeneratedPlaylistTypes] = useState<Set<string>>(() => {
     // Загружаем из localStorage при монтировании
     try {

@@ -177,10 +177,9 @@ export class TrackScorer {
       const similarity = 1 - (energyDiff * 0.5 + valenceDiff * 0.5)
       
       // Если seed похож на лайкнутый → увеличиваем его вес
-      if (similarity > 0.7) {
+        if (similarity > 0.7) {
         const currentWeight = this.realtimeSeedWeights.get(seed.id) || 0
         this.realtimeSeedWeights.set(seed.id, currentWeight + 0.2)
-        console.log(`[Realtime Feedback] 🔼 Seed ${seed.id} weight +0.2 (similarity: ${similarity.toFixed(2)})`)
       }
     }
   }
@@ -205,7 +204,6 @@ export class TrackScorer {
       if (similarity > 0.7) {
         const currentWeight = this.realtimeSeedWeights.get(seed.id) || 0
         this.realtimeSeedWeights.set(seed.id, currentWeight - 0.3)
-        console.log(`[Realtime Feedback] 🔽 Seed ${seed.id} weight -0.3 (similarity: ${similarity.toFixed(2)})`)
       }
     }
   }
@@ -231,7 +229,6 @@ export class TrackScorer {
   clearRealtimeFeedback(): void {
     this.realtimeAdjustments.clear()
     this.realtimeSeedWeights.clear()
-    console.log('[Realtime Feedback] Cleared all adjustments')
   }
 
   /**
@@ -484,7 +481,6 @@ export class TrackScorer {
 
         const bridges = GENRE_BRIDGES[genreA]?.[genreB] || []
         if (bridges.some(bridge => songGenre.toLowerCase().includes(bridge.toLowerCase()))) {
-          console.log(`[Genre Bridge] 🌉 "${songGenre}" bridges ${genreA} ↔ ${genreB} → +0.12 bonus`)
           return 0.12
         }
       }
@@ -514,7 +510,6 @@ export class TrackScorer {
       // Ровно год/несколько лет назад
       const yearsAgo = today.getFullYear() - lastPlayed.getFullYear()
       if (yearsAgo >= 1) {
-        console.log(`[Anniversary] 🎂 "${song.title}" played ${yearsAgo} year(s) ago today! +0.2 bonus`)
         return 0.2
       }
     }
@@ -549,8 +544,6 @@ export class TrackScorer {
       .sort((a, b) => b[1] - a[1])[0]?.[0] || 'default'
 
     const curve = GENRE_ENERGY_CURVES[dominantGenre] || GENRE_ENERGY_CURVES['default']
-
-    console.log(`[Genre Curve] 🎵 Applying ${curve.type} curve for ${dominantGenre} (variance: ${curve.variance})`)
 
     // Сортируем треки по энергии
     const tracksWithEnergy = songs.map(song => ({
@@ -590,13 +583,13 @@ export class TrackScorer {
         return result
 
       case 'wave':
-        // Волна: чередование пиков
+        // Волна: начинаем со средних, поднимаемся к высоким, опускаемся к низким
         const byEnergy = tracksWithEnergy.sort((a, b) => a.energy - b.energy)
         const third = Math.floor(byEnergy.length / 3)
         return [
-          ...byEnergy.slice(0, third).reverse().map(t => t.song),     // Высокая → Средняя
           ...byEnergy.slice(third, third * 2).map(t => t.song),       // Средняя
-          ...byEnergy.slice(third * 2).map(t => t.song),              // Низкая → Средняя
+          ...byEnergy.slice(third * 2).reverse().map(t => t.song),     // Высокая → Средняя
+          ...byEnergy.slice(0, third).map(t => t.song),                // Низкая
         ]
 
       case 'flat':
@@ -654,10 +647,6 @@ export class TrackScorer {
     // Штраф за отклонение от целевой энергии
     const delta = Math.abs(energy - targetEnergy)
     const penalty = Math.min(curve.maxDelta * 2, delta * 0.5)
-
-    if (penalty > 0.05) {
-      console.log(`[Genre Curve] ${genre} (${curve.type}): track energy ${energy.toFixed(2)} vs target ${targetEnergy.toFixed(2)} → penalty ${penalty.toFixed(2)}`)
-    }
 
     return penalty
   }

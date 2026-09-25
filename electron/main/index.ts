@@ -50,22 +50,52 @@ function getFirstLocalIp(): string | null {
   return null
 }
 
-// Логирование в файл для production
+// Логирование в файл для production (безопасное: stdout в упакованном exe может быть закрыт -> EPIPE)
 const logPath = join(app.getPath('userData'), 'kumaflow-debug.log')
-function logToFile(message: string) {
-  const timestamp = new Date().toISOString()
-  const logMessage = `[${timestamp}] ${message}\n`
-  fs.appendFile(logPath, logMessage, (err) => {
-    if (err) console.error('Failed to write to log file:', err)
-  })
+// Ротация: чтобы лог не разрастался до 70МБ и не забивал диск
+try {
+  const stat = fs.statSync(logPath)
+  if (stat.size > 10 * 1024 * 1024) {
+    fs.writeFileSync(logPath, `[truncated at ${new Date().toISOString()}, was ${(stat.size / 1024 / 1024).toFixed(1)}MB]\n`)
+  }
+} catch { /* файла ещё нет — ок */ }
+export function logToFile(message: string) {
+  try {
+    const timestamp = new Date().toISOString()
+    const logMessage = `[${timestamp}] ${message}\n`
+    fs.appendFile(logPath, logMessage, () => {})
+  } catch { /* никогда не роняем main из-за лога */ }
 }
 
-// Перехватываем console.log для логирования
-const originalConsoleLog = console.log
-console.log = (...args) => {
-  logToFile(args.join(' '))
-  originalConsoleLog(...args)
+// Перехватываем console.* для логирования — stdout глушим безопасно (EPIPE в exe без консоли)
+const originalConsoleLog = console.log.bind(console)
+const originalConsoleError = console.error.bind(console)
+const originalConsoleWarn = console.warn.bind(console)
+function safeConsole(original: (...a: unknown[]) => void) {
+  return (...args: unknown[]) => {
+    try {
+      logToFile(args.map((a) => String(a)).join(' '))
+    } catch { /* ignore */ }
+    try {
+      original(...args)
+    } catch { /* EPIPE: stdout закрыт — игнорируем */ }
+  }
 }
+console.log = safeConsole(originalConsoleLog) as typeof console.log
+console.error = safeConsole(originalConsoleError) as typeof console.error
+console.warn = safeConsole(originalConsoleWarn) as typeof console.warn
+// Страховка от EPIPE на уровне потоков и как uncaughtException
+try {
+  process.stdout?.on('error', () => {})
+  process.stderr?.on('error', () => {})
+} catch { /* ignore */ }
+process.on('uncaughtException', (err) => {
+  if ((err as NodeJS.ErrnoException)?.code === 'EPIPE') return
+  try {
+    logToFile(`uncaughtException: ${err?.stack || err}`)
+  } catch { /* ignore */ }
+  throw err
+})
 
 const currentDesktop = process.env.XDG_CURRENT_DESKTOP ?? ''
 

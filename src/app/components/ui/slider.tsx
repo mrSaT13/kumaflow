@@ -165,6 +165,7 @@ export function ProgressSlider(props: ProgressSliderProps) {
     tooltipTransformer,
     variant = 'default',
     onValueChange,
+    style,
     ...rest
   } = props
 
@@ -293,6 +294,17 @@ export function ProgressSlider(props: ProgressSliderProps) {
     event.preventDefault()
   }
 
+  // Прямой override цвета через CSS-переменные в style
+  // (динамический цвет под жанр/обложку), иначе настройки кастомизации
+  const styleVars = style as unknown as
+    | { '--progress-color'?: string; '--progress-gradient'?: string }
+    | undefined
+  const rangeBackground =
+    styleVars?.['--progress-gradient'] ||
+    styleVars?.['--progress-color'] ||
+    (customization.gradientProgress
+      ? `linear-gradient(90deg, ${customization.progressColor}, #3b82f6, #8b5cf6)`
+      : customization.progressColor || undefined)
   // Кастомизация thumb в зависимости от настроек
   const thumbIcon = React.useMemo(() => {
     const { progressIcon, customIconSvg } = customization
@@ -334,7 +346,7 @@ export function ProgressSlider(props: ProgressSliderProps) {
     // Для custom SVG - минимальные стили
     if (progressIcon === 'custom') {
       return clsx(
-        'block cursor-pointer select-none p-0 m-0',
+        'block cursor-pointer select-none p-0 m-0 opacity-0',
         'focus-visible:outline-none focus-visible:ring-transparent',
         'disabled:pointer-events-none disabled:opacity-50',
         'transition-transform duration-200',
@@ -347,7 +359,7 @@ export function ProgressSlider(props: ProgressSliderProps) {
     }
 
     const baseClasses = clsx(
-      'block cursor-pointer select-none border-2 transition-all duration-200',
+      'block cursor-pointer select-none border-2 transition-all duration-200 opacity-0',
       'focus-visible:outline-none focus-visible:ring-transparent',
       'disabled:pointer-events-none disabled:opacity-50',
       'hover-scale-125',
@@ -418,6 +430,7 @@ export function ProgressSlider(props: ProgressSliderProps) {
         'relative flex w-full touch-none select-none items-center cursor-pointer',
         className,
       )}
+      style={style}
       onMouseOver={handleMouseOver}
       onMouseOut={() => setShowTooltip(false)}
       onMouseMove={handleMouseMove}
@@ -434,31 +447,29 @@ export function ProgressSlider(props: ProgressSliderProps) {
       >
         <SliderPrimitive.Track
           className={clsx(
-            'relative h-1 w-full grow overflow-hidden rounded-full select-none',
+            'relative w-full grow overflow-hidden rounded-full select-none',
+            'group/track',
             variant === 'default' && 'bg-secondary',
             variant === 'secondary' && 'bg-muted-foreground/70',
           )}
           onContextMenu={handleContextMenu}
           style={{
             height: `${customization.progressHeight}px`,
-            borderRadius: `${customization.progressHeight / 2}px`,
+            borderRadius: `${Math.max(customization.progressHeight, 999)}px`,
           }}
         >
           <SliderPrimitive.Range
             className={clsx(
-              'absolute h-full select-none transition-all',
+              'absolute h-full select-none transition-all rounded-full',
               variant === 'default' && 'bg-primary',
               variant === 'secondary' && 'bg-secondary-foreground',
-              showTooltip ? 'rounded-none' : 'rounded',
             )}
             onContextMenu={handleContextMenu}
             style={{
-              // 🌈 Градиентный прогресс
-              background: customization.gradientProgress
-                ? `linear-gradient(90deg, ${customization.progressColor}, #3b82f6, #8b5cf6)`
-                : customization.progressColor || undefined,
+              // 🌈 Градиентный прогресс / прямой override через CSS-переменные
+              background: rangeBackground,
               height: `${customization.progressHeight}px`,
-              borderRadius: `${customization.progressHeight / 2}px`,
+              borderRadius: `${Math.max(customization.progressHeight, 999)}px`,
             }}
           />
         </SliderPrimitive.Track>

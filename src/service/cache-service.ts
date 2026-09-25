@@ -74,8 +74,7 @@ class CacheService {
   updateSettings(newSettings: Partial<CacheSettings>) {
     this.settings = { ...this.settings, ...newSettings }
     localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(this.settings))
-    console.log('[CacheService] Settings updated:', this.settings)
-    
+
     // Применяем новые настройки (очистка если нужно)
     this.cleanup()
   }
@@ -89,8 +88,6 @@ class CacheService {
   // ============================================
 
   async cacheTracks(trackIds: string[]): Promise<number> {
-    console.log(`[CacheService] Caching ${trackIds.length} tracks...`)
-
     // Отправляем событие начала кеширования
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('cache-start', {
@@ -106,20 +103,17 @@ class CacheService {
         // Проверяем есть ли уже в кеше
         const existing = this.getCachedTrack(trackId)
         if (existing) {
-          console.log(`[CacheService] Track ${trackId} already cached`)
           continue
         }
 
         // Получаем трек с сервера
         const track = await subsonic.songs.getSong(trackId)
         if (!track) {
-          console.warn(`[CacheService] Failed to get track ${trackId}`)
           continue
         }
 
         // Сохраняем метаданные в кеш
         this.setCacheEntry(STORAGE_KEYS.tracks, trackId, track)
-        cachedCount++
 
         // Кешируем аудиофайл через Cache API
         if (track.id) {
@@ -127,6 +121,9 @@ class CacheService {
           if (success) {
             cachedCount++
           }
+        } else {
+          // Метаданные сохранены, но аудио не кэшировано
+          cachedCount++
         }
 
         // Отправляем событие прогресса
@@ -140,8 +137,6 @@ class CacheService {
         console.error(`[CacheService] Failed to cache track ${trackId}:`, error)
       }
     }
-
-    console.log(`[CacheService] Cached ${cachedCount}/${trackIds.length} tracks`)
 
     // Отправляем событие завершения
     if (typeof window !== 'undefined') {
@@ -167,22 +162,13 @@ class CacheService {
         return false
       }
 
-      console.log(`[CacheService] Opening cache for ${trackId}...`)
       const cache = await caches.open('kumaflow-audio')
-      console.log(`[CacheService] Cache opened:`, cache)
 
       // Получаем URL для стриминга
       const streamUrl = subsonic.songs.getStreamUrl(trackId)
-      console.log(`[CacheService] Caching audio for ${trackId} from ${streamUrl}`)
 
       // Скачиваем файл как blob
-      console.log(`[CacheService] Fetching audio...`)
       const response = await fetch(streamUrl)
-      console.log(`[CacheService] Fetch response:`, {
-        ok: response.ok,
-        status: response.status,
-        contentType: response.headers.get('content-type'),
-      })
 
       if (!response.ok) {
         throw new Error(`Failed to fetch audio: ${response.status}`)
@@ -190,8 +176,7 @@ class CacheService {
 
       // Получаем blob и создаем новый response с правильными заголовками
       const blob = await response.blob()
-      console.log(`[CacheService] Blob size:`, (blob.size / 1024 / 1024).toFixed(2), 'MB')
-      
+
       const contentType = response.headers.get('content-type') || 'audio/mpeg'
 
       // Создаем новый response для кеша
@@ -203,19 +188,16 @@ class CacheService {
       })
 
       // Сохраняем в кеш - используем URL как ключ!
-      console.log(`[CacheService] Saving to cache with URL key...`)
       await cache.put(streamUrl, cacheResponse)
-      console.log(`[CacheService] Cached audio file ${trackId} (${(blob.size / 1024 / 1024).toFixed(2)} MB)`)
 
       // Сохраняем метаданные трека в localStorage для отображения в UI
       try {
         const songInfo = await subsonic.songs.getSong(trackId)
         if (songInfo) {
           this.setCacheEntry(STORAGE_KEYS.tracks, trackId, songInfo)
-          console.log(`[CacheService] Saved metadata for ${trackId}`)
         }
       } catch (metaError) {
-        console.warn(`[CacheService] Failed to save metadata for ${trackId}:`, metaError)
+        // metadata save failed
       }
 
       // Отправляем событие обновления кэша
@@ -245,14 +227,12 @@ class CacheService {
       const cachedResponse = await cache.match(streamUrl)
 
       if (!cachedResponse) {
-        console.log(`[CacheService] No cached audio for ${trackId}`)
         return null
       }
 
       // Создаем blob URL из закешированного response
       const blob = await cachedResponse.blob()
       const url = URL.createObjectURL(blob)
-      console.log(`[CacheService] Got cached audio URL for ${trackId}`)
       return url
 
     } catch (error) {
@@ -267,7 +247,8 @@ class CacheService {
   async isAudioCached(trackId: string): Promise<boolean> {
     try {
       const cache = await caches.open('kumaflow-audio')
-      const cachedResponse = await cache.match(trackId)
+      const streamUrl = subsonic.songs.getStreamUrl(trackId)
+      const cachedResponse = await cache.match(streamUrl)
       return !!cachedResponse
     } catch {
       return false
@@ -280,7 +261,8 @@ class CacheService {
   async removeCachedAudio(trackId: string): Promise<boolean> {
     try {
       const cache = await caches.open('kumaflow-audio')
-      return await cache.delete(trackId)
+      const streamUrl = subsonic.songs.getStreamUrl(trackId)
+      return await cache.delete(streamUrl)
     } catch (error) {
       console.error(`[CacheService] Failed to remove cached audio ${trackId}:`, error)
       return false
@@ -304,8 +286,6 @@ class CacheService {
   // ============================================
 
   async cacheArtists(artistIds: string[]): Promise<number> {
-    console.log(`[CacheService] Caching ${artistIds.length} artists...`)
-
     let cachedCount = 0
     let tracksCachedCount = 0
 
@@ -314,14 +294,12 @@ class CacheService {
         // Проверяем есть ли уже в кеше
         const existing = this.getCachedArtist(artistId)
         if (existing) {
-          console.log(`[CacheService] Artist ${artistId} already cached`)
           continue
         }
 
         // Получаем артиста с сервера
         const artist = await subsonic.artists.getOne(artistId)
         if (!artist) {
-          console.warn(`[CacheService] Failed to get artist ${artistId}`)
           continue
         }
 
@@ -331,8 +309,6 @@ class CacheService {
 
         // Кешируем все треки артиста через запрос каждого альбома
         if (artist.album && artist.album.length > 0) {
-          console.log(`[CacheService] Caching ${artist.album.length} albums for artist ${artist.name}`)
-          
           const trackIds: string[] = []
           
           // Запрашиваем каждый альбом отдельно для получения треков
@@ -352,7 +328,6 @@ class CacheService {
           }
 
           if (trackIds.length > 0) {
-            console.log(`[CacheService] Caching ${trackIds.length} tracks for artist ${artist.name}`)
             const cachedTracks = await this.cacheTracks(trackIds)
             tracksCachedCount += cachedTracks
           }
@@ -362,8 +337,6 @@ class CacheService {
         console.error(`[CacheService] Failed to cache artist ${artistId}:`, error)
       }
     }
-
-    console.log(`[CacheService] Cached ${cachedCount} artists, ${tracksCachedCount} tracks`)
 
     // Проверяем лимиты
     this.enforceLimits()
@@ -407,7 +380,6 @@ class CacheService {
       })
       
       await cache.put(id, cacheResponse)
-      console.log(`[CacheService] Cached image ${id} (${(blob.size / 1024).toFixed(2)} KB)`)
       return true
 
     } catch (error) {
@@ -491,8 +463,6 @@ class CacheService {
       })
     })
 
-    console.log(`[CacheService] Cleared cache: ${tracks} tracks, ${artists} artists`)
-    
     return { tracks, artists, images: 0 }
   }
 
@@ -564,7 +534,6 @@ class CacheService {
         // Удаляем oldest entry
         const oldest = entries.sort((a, b) => cache[a].cachedAt - cache[b].cachedAt)[0]
         delete cache[oldest]
-        console.log(`[CacheService] Removed oldest cache entry: ${oldest}`)
       }
 
       cache[id] = {
@@ -580,10 +549,8 @@ class CacheService {
 
       // 🆕 Если память переполнена - очищаем ВЕСЬ кеш этого типа
       if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-        console.warn('[CacheService] Storage quota exceeded, clearing this cache...')
         try {
           localStorage.removeItem(storageKey)
-          console.log(`[CacheService] Cleared ${storageKey} cache to free space`)
           // Пробуем сохранить ещё раз после очистки
           const freshCache: Record<string, CacheEntry<T>> = {}
           freshCache[id] = {
@@ -683,18 +650,17 @@ class CacheService {
     }
   }
 
-  private enforceLimits() {
+  private async enforceLimits() {
     // Проверяем лимит по количеству треков
     const tracks = this.getAllCacheEntries<ISong>(STORAGE_KEYS.tracks)
     if (tracks.length > this.settings.maxTracks) {
-      // Удаляем самые старые
       const toRemove = tracks.length - this.settings.maxTracks
-      console.log(`[CacheService] Removing ${toRemove} oldest tracks to enforce limit`)
       
+      const cache = this.getCacheFromStorage(STORAGE_KEYS.tracks)
       const sorted = tracks.sort((a, b) => {
-        const cacheA = this.getCacheFromStorage(STORAGE_KEYS.tracks)[a.id]
-        const cacheB = this.getCacheFromStorage(STORAGE_KEYS.tracks)[b.id]
-        return cacheA.cachedAt - cacheB.cachedAt
+        const cacheA = cache[a.id]
+        const cacheB = cache[b.id]
+        return (cacheA?.cachedAt ?? 0) - (cacheB?.cachedAt ?? 0)
       })
       
       sorted.slice(0, toRemove).forEach(track => {
@@ -706,12 +672,12 @@ class CacheService {
     const artists = this.getAllCacheEntries<IArtist>(STORAGE_KEYS.artists)
     if (artists.length > this.settings.maxArtists) {
       const toRemove = artists.length - this.settings.maxArtists
-      console.log(`[CacheService] Removing ${toRemove} oldest artists to enforce limit`)
       
+      const cache = this.getCacheFromStorage(STORAGE_KEYS.artists)
       const sorted = artists.sort((a, b) => {
-        const cacheA = this.getCacheFromStorage(STORAGE_KEYS.artists)[a.id]
-        const cacheB = this.getCacheFromStorage(STORAGE_KEYS.artists)[b.id]
-        return cacheA.cachedAt - cacheB.cachedAt
+        const cacheA = cache[a.id]
+        const cacheB = cache[b.id]
+        return (cacheA?.cachedAt ?? 0) - (cacheB?.cachedAt ?? 0)
       })
       
       sorted.slice(0, toRemove).forEach(artist => {
@@ -720,11 +686,10 @@ class CacheService {
     }
 
     // Проверяем лимит по размеру
-    const stats = this.getStats()
+    const stats = await this.getStats()
     const maxSizeBytes = this.settings.maxCacheSizeMB * 1024 * 1024
     
     if (stats.totalSize > maxSizeBytes) {
-      console.log(`[CacheService] Cache size ${stats.totalSize} exceeds limit ${maxSizeBytes}, cleaning up`)
       this.cleanup()
     }
   }
@@ -753,8 +718,6 @@ class CacheService {
 
     // 🆕 Если кэш всё ещё большой - удаляем oldest записи
     this.enforceSizeLimit()
-
-    console.log(`[CacheService] Cleaned up ${cleaned} expired entries`)
   }
 
   // 🆕 Принудительно ограничиваем размер кэша
@@ -768,7 +731,6 @@ class CacheService {
         const sorted = trackKeys.sort((a, b) => tracksCache[a].cachedAt - tracksCache[b].cachedAt)
         const toRemove = sorted.slice(0, sorted.length - this.settings.maxTracks)
         toRemove.forEach(id => this.removeCachedTrack(id))
-        console.log(`[CacheService] Removed ${toRemove.length} oldest tracks to enforce limit`)
       }
 
       // Артисты
@@ -778,7 +740,6 @@ class CacheService {
         const sorted = artistKeys.sort((a, b) => artistsCache[a].cachedAt - artistsCache[b].cachedAt)
         const toRemove = sorted.slice(0, sorted.length - this.settings.maxArtists)
         toRemove.forEach(id => this.removeCachedArtist(id))
-        console.log(`[CacheService] Removed ${toRemove.length} oldest artists to enforce limit`)
       }
     } catch (error) {
       console.error('[CacheService] Error enforcing size limit:', error)
@@ -792,5 +753,4 @@ export const cacheService = new CacheService()
 // Экспорт для доступа из консоли
 if (typeof window !== 'undefined') {
   ;(window as any).cacheService = cacheService
-  console.log('[CacheService] Initialized (access via window.cacheService)')
 }
