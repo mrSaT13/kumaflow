@@ -301,6 +301,64 @@ function getTimeOfDayExplanation(
 }
 
 /**
+ * Есть ли у трека настоящие аудио-теги (не жанровый фолбэк).
+ * Без них analyzeTrack выдаёт одинаковый вектор всем трекам жанра —
+ * и любые два «рок без тегов» дают «100% совпадение». Такие пары
+ * считать похожестью нельзя.
+ */
+export function hasRealAudioTags(t: {
+  bpm?: number | string | null
+  energy?: number | null
+  valence?: number | null
+  danceability?: number | null
+  acousticness?: number | null
+  instrumentalness?: number | null
+} | null | undefined): boolean {
+  if (!t) return false
+  if (typeof t.bpm === 'number' && t.bpm > 0) return true
+  if (typeof t.bpm === 'string' && /^\d+/.test(t.bpm)) return true
+  return (
+    t.energy !== undefined ||
+    t.valence !== undefined ||
+    t.danceability !== undefined ||
+    t.acousticness !== undefined ||
+    t.instrumentalness !== undefined
+  )
+}
+
+/**
+ * Похожий трек с мозга (best-effort).
+ * Мозг считает по настоящему sonic-анализу (librosa + CLAP-гибрид),
+ * а не по жанровой наклейке. Возвращает готовое объяснение или null —
+ * тогда вызывающий использует локальный vibe-скоринг.
+ */
+export async function fetchBrainSimilarExplanation(track: ISong): Promise<Explanation | null> {
+  try {
+    const { recommendSimilarTracks } = await import('./brain-wave')
+    const items = await recommendSimilarTracks(track.id)
+    const top = (items ?? []).find(
+      (it) => it.external_id && it.external_id !== track.id && (it.score ?? 0) >= 0.6,
+    )
+    if (!top || !top.external_id) return null
+    return {
+      type: 'similar-track',
+      text: i18n.t('explain.similarTrack', {
+        title: top.title,
+        pct: Math.min(99, Math.round(top.score * 100)),
+      }),
+      priority: 1,
+      details: {
+        similarity: top.score,
+        trackId: top.external_id,
+        trackTitle: top.title,
+      },
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
  * Найти самый похожий трек из истории прослушиваний
  */
 function findMostSimilarTrack(
@@ -319,9 +377,17 @@ function findMostSimilarTrack(
   let skippedByPlayCount = 0
   let skippedBySimilarity = 0
 
+  // Цель без тегов + кандидат без тегов = два одинаковых жанровых
+  // вектора и ложные «100%». Такие пары пропускаем сразу.
+  const targetHasTags = hasRealAudioTags(track)
+
   // Ищем среди ХОРОШО прослушанных треков (не просто playCount > 0)
   for (const [songId, rating] of Object.entries(ratings)) {
     if (!rating.songInfo) continue
+
+    if (!targetHasTags && !hasRealAudioTags(rating.songInfo)) {
+      continue
+    }
 
     totalCandidates++
 

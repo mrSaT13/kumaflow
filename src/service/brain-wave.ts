@@ -3,7 +3,7 @@
  * wave/continue + seeds + publish (throttle 5с) + resume. Источник внутри SmartAutoDJ.
  */
 
-import { brainGet, brainPost, brainRaw } from './brain-client'
+import { brainFetch, brainGet, brainPost, brainRaw } from './brain-client'
 import { isBrainActive, useBrainStore } from '@/store/brain.store'
 import type { BrainEvent, BrainRating } from './brain-sync'
 
@@ -74,6 +74,29 @@ export async function waveContinue(opts: {
   if (!res) return null
   if (typeof res.profile_version === 'number') st.setProfileVersion(res.profile_version)
   return { tracks: res.tracks ?? [], seeds: res.seeds, profile_version: res.profile_version }
+}
+
+export interface BrainSimilarItem {
+  track_id: string
+  title: string
+  artist_name: string
+  score: number
+  /** Navidrome song id — маппинг в локальную библиотеку без search() */
+  external_id?: string | null
+}
+
+/** Похожие на трек с мозга (sonic-косинус + кластер + жанр + настроение).
+ * Best-effort: мозг выкл/недоступен/не знает трек → null, вызывающий
+ * откатывается на локальный vibe-скоринг. Без ретраев — для поповера. */
+export async function recommendSimilarTracks(songId: string): Promise<BrainSimilarItem[] | null> {
+  if (!isBrainActive() || !songId) return null
+  const res = await brainFetch<{ items: BrainSimilarItem[] }>(
+    `/api/analysis/recommend/by-track/${encodeURIComponent(songId)}`,
+    { method: 'GET' },
+    0,
+  )
+  if (!res || !Array.isArray(res.items)) return null
+  return res.items
 }
 
 export async function waveSeeds(characteristic?: string, limit = 5): Promise<string[]> {

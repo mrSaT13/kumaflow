@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { explainRecommendation, type Explanation } from '@/service/explainable-ai'
+import { useEffect, useMemo, useState } from 'react'
+import { explainRecommendation, fetchBrainSimilarExplanation, type Explanation } from '@/service/explainable-ai'
 import { useML } from '@/store/ml.store'
 import { usePlayerStore } from '@/store/player.store'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
@@ -33,11 +33,32 @@ export function FullscreenExplanation() {
   const { getProfile, ratings } = useML()
   const { getArtistAllSongs } = useSongList()
   
-  const explanations = useMemo(() => {
+  const localExplanations = useMemo(() => {
     if (!currentSong) return []
     const profile = getProfile()
     return explainRecommendation(currentSong, profile, ratings)
   }, [currentSong, getProfile, ratings])
+
+  // Апгрейд с мозга: настоящий sonic-анализ вместо жанрового фолбэка.
+  const [brainExp, setBrainExp] = useState<Explanation | null>(null)
+  useEffect(() => {
+    if (!currentSong) {
+      setBrainExp(null)
+      return
+    }
+    let cancelled = false
+    setBrainExp(null)
+    void fetchBrainSimilarExplanation(currentSong).then((exp) => {
+      if (!cancelled) setBrainExp(exp)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [currentSong?.id])
+
+  const explanations = brainExp
+    ? [brainExp, ...localExplanations.filter((e) => e.type !== 'similar-track')]
+    : localExplanations
   
   if (!currentSong || explanations.length === 0) {
     return null
