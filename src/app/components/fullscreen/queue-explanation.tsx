@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { explainRecommendation } from '@/service/explainable-ai'
+import { useEffect, useMemo, useState } from 'react'
+import { explainRecommendation, fetchBrainSimilarExplanation } from '@/service/explainable-ai'
 import { useML } from '@/store/ml.store'
 import { ISong } from '@/types/responses/song'
 import { Button } from '@/app/components/ui/button'
@@ -45,10 +45,30 @@ export function QueueItemExplanation({ song }: { song: ISong }) {
   const { getArtistAllSongs } = useSongList()
   const [open, setOpen] = useState(false)
   
-  const explanations = useMemo(() => {
+  const localExplanations = useMemo(() => {
     const profile = getProfile()
     return explainRecommendation(song, profile, ratings).slice(0, 3) // Показываем топ-3
   }, [song, getProfile, ratings])
+
+  // Апгрейд с мозга: настоящий sonic-анализ вместо жанрового фолбэка.
+  // Локалка видна сразу, мозг подменяет similar-track по приходу (best-effort).
+  const [brainExp, setBrainExp] = useState<Explanation | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    setBrainExp(null)
+    void fetchBrainSimilarExplanation(song).then((exp) => {
+      if (!cancelled && exp) {
+        setBrainExp({ type: 'similar-track', text: exp.text, details: exp.details })
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [song.id])
+
+  const explanations = brainExp
+    ? [brainExp, ...localExplanations.filter((e) => e.type !== 'similar-track')].slice(0, 3)
+    : localExplanations
   
   if (explanations.length === 0) {
     return null
