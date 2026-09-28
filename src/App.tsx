@@ -31,7 +31,7 @@ import { getFavoriteArtists } from '@/service/subsonic-api'
 import { checkAndGenerateHolidayPlaylists } from '@/service/holiday-playlist-generator'  // 🆕
 import { startBrainFlushLoop } from '@/service/brain-events'  // 1.6.2: Brain flush
 import { startBrainAutoSyncLoop } from '@/service/brain-autosync'  // Автосинк вкусов (вкл по умолчанию)
-import { formatResumeTime, getWaveDeviceName, wavePublish, waveResume } from '@/service/brain-wave'  // 1.6.4: живая очередь + resume
+import { formatResumeTime, getWaveDeviceId, getWaveDeviceName, wavePublish, waveResume } from '@/service/brain-wave'  // 1.6.4: живая очередь + resume
 import { subsonic } from '@/service/subsonic'
 import type { ISong } from '@/types/responses/song'
 import { isBrainActive } from '@/store/brain.store'
@@ -202,7 +202,10 @@ function App() {
         if (!targetId) return
         const pos = Math.floor(resume.position_sec ?? 0)
         if (pos < 5) return // нечего продолжать
-        if (resume.device_name && resume.device_name === getWaveDeviceName()) return // сами играли
+        // Свой слот: сверяем по стабильному device-UUID; имя — только фолбек
+        // для старых слотов мозга (имена у десктопов могут совпадать).
+        if (resume.device && resume.device === getWaveDeviceId()) return // сами играли
+        if (!resume.device && resume.device_name && resume.device_name === getWaveDeviceName()) return // сами играли (legacy)
         const local = usePlayerStore.getState()
         const localId = local.songlist.currentSong?.id
         if (localId && (localId === targetId || localId === resume.track_id)) return

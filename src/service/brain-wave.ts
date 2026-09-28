@@ -100,6 +100,40 @@ export interface WavePublishExtra {
 }
 
 let cachedDeviceName = ''
+let cachedDeviceId = ''
+
+/** Стабильный UUID устройства — ключ слота на мозге.
+ * Генерируется один раз, хранится в localStorage. Человекочитаемое имя
+ * (getWaveDeviceName) для слота НЕ годится: два десктопа назовутся одинаково
+ * и упадут в один слот (last-writer-wins). */
+export function getWaveDeviceId(): string {
+  if (cachedDeviceId) return cachedDeviceId
+  try {
+    const saved = localStorage.getItem('wave_device_id')
+    if (saved && saved.trim()) {
+      cachedDeviceId = saved.trim().slice(0, 80)
+      return cachedDeviceId
+    }
+  } catch { /* ignore */ }
+  let id = ''
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      id = crypto.randomUUID()
+    }
+  } catch { /* ignore */ }
+  if (!id) {
+    id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.floor(Math.random() * 16)
+      const v = c === 'x' ? r : (r & 0x3) | 0x8
+      return v.toString(16)
+    })
+  }
+  try {
+    localStorage.setItem('wave_device_id', id)
+  } catch { /* ignore */ }
+  cachedDeviceId = id
+  return cachedDeviceId
+}
 
 export function getWaveDeviceName(): string {
   if (cachedDeviceName) return cachedDeviceName
@@ -160,6 +194,10 @@ export function wavePublish(
     paused,
     // Дуплет имени флага: мозг может ждать is_paused, шлём оба.
     is_paused: paused,
+    // Слот устройства: ключ — стабильный UUID (device), отображаемое имя —
+    // отдельно (device_name). Имя для ключа НЕ годится: два десктопа
+    // назовутся одинаково и затрут друг друга.
+    device: getWaveDeviceId(),
     device_name: deviceName,
   }
   if (hasPos) payload.position_sec = positionSec
@@ -192,6 +230,7 @@ export interface WaveResume {
   position_sec?: number
   duration_sec?: number
   queue?: string[]
+  device?: string | null
   device_name?: string | null
   updated_at?: string | null
 }
@@ -212,6 +251,7 @@ export async function waveResume(): Promise<WaveResume | null> {
     position_sec: Number.isFinite(Number(res.position_sec)) ? Math.floor(Number(res.position_sec)) : 0,
     duration_sec: Number.isFinite(Number(res.duration_sec)) ? Math.floor(Number(res.duration_sec)) : 0,
     queue: Array.isArray(res.queue) ? res.queue.filter(Boolean).slice(0, 100) : [],
+    device: (res as { device?: unknown }).device != null ? String((res as { device?: unknown }).device) : null,
     device_name: res.device_name ?? null,
     updated_at: res.updated_at ?? null,
   }
