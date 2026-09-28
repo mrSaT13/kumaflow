@@ -51,6 +51,8 @@ export enum Theme {
   OneDarkPro = 'one-dark-pro',
   GithubLight = 'github-light',
   VSCODELight = 'vscode-light',
+  PolarDark = 'polar-dark',
+  PolarLight = 'polar-light',
 }
 
 export interface IThemeContext {

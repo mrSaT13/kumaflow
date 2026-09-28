@@ -1,6 +1,9 @@
-import { useCallback, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { QualityBadge } from '@/app/components/player/quality-badge'
 import { ProgressSlider } from '@/app/components/ui/slider'
+import { usePlaybackSettings } from '@/store/playback.store'
 import {
   usePlayerActions,
   usePlayerDuration,
@@ -9,23 +12,24 @@ import {
   usePlayerSonglist,
   useSongColor,
 } from '@/store/player.store'
-import { usePlaybackSettings } from '@/store/playback.store'
 import { convertSecondsToTime } from '@/utils/convertSecondsToTime'
 import { getGenreColor } from '@/utils/genreColors'
-import { QualityBadge } from '@/app/components/player/quality-badge'
 import { DotProgress } from './dot-progress'
 import { SpectrogramProgress } from './spectrogram-progress'
 
 let isSeeking = false
 
 export function FullscreenProgress() {
+  const { t } = useTranslation()
   const progress = usePlayerProgress()
   const [localProgress, setLocalProgress] = useState(progress)
   const audioPlayerRef = usePlayerRef()
   const currentDuration = usePlayerDuration()
   const { setProgress } = usePlayerActions()
   const { currentSong } = usePlayerSonglist()
-  const progressBarType = usePlaybackSettings((state) => state.settings.progressBarType)
+  const progressBarType = usePlaybackSettings(
+    (state) => state.settings.progressBarType,
+  )
 
   // Переключение времени: всего / оставшееся
   const [showRemaining, setShowRemaining] = useState(false)
@@ -63,20 +67,20 @@ export function FullscreenProgress() {
 
   const currentTime = useMemo(
     () => convertSecondsToTime(isSeeking ? localProgress : progress),
-    [isSeeking, localProgress, progress]
+    [isSeeking, localProgress, progress],
   )
 
   // Оставшееся или общее время
   const songDuration = useMemo(() => {
     const time = showRemaining
-      ? currentDuration - progress  // Оставшееся время
-      : currentDuration             // Общее время
+      ? currentDuration - progress // Оставшееся время
+      : currentDuration // Общее время
     return convertSecondsToTime(time)
   }, [currentDuration, progress, showRemaining])
 
   // Обработчик клика для переключения
   const handleDurationClick = useCallback(() => {
-    setShowRemaining(prev => !prev)
+    setShowRemaining((prev) => !prev)
   }, [])
 
   // Динамический цвет как у нижней панели: средний цвет обложки → цвет жанра
@@ -137,9 +141,14 @@ export function FullscreenProgress() {
       <div
         className="min-w-[50px] max-w-[60px] text-left drop-shadow-lg cursor-pointer hover:text-primary/80 transition-all opacity-0 group-hover/fs-progress:opacity-100 duration-200"
         onClick={handleDurationClick}
-        title={showRemaining ? 'Показать общее время' : 'Показать оставшееся время'}
+        title={
+          showRemaining
+            ? t('fullscreen.showTotalTime')
+            : t('fullscreen.showRemainingTime')
+        }
       >
-        {showRemaining ? '-' : ''}{songDuration}
+        {showRemaining ? '-' : ''}
+        {songDuration}
       </div>
 
       {/* Quality Badge */}

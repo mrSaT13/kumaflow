@@ -12,8 +12,7 @@ import { Separator } from '@/app/components/ui/separator'
 import { Slider } from '@/app/components/ui/slider'
 import { Switch } from '@/app/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { useSongColor } from '@/store/player.store'
-import { usePlayerStore } from '@/store/player.store'
+import { usePlayerStore, useSongColor } from '@/store/player.store'
 import { buttonsStyle } from './controls'
 
 export function FullscreenSettings() {
@@ -78,57 +77,49 @@ export function QueueSettings() {
 type OptionProps = Omit<ComponentPropsWithoutRef<typeof SettingWrapper>, 'text'>
 
 function ShareTrackOption({ onShare }: { onShare: () => void }) {
-  const sharePhrases = [
-    '🎧 Отличный трек!',
-    '🔥 Слушай это!',
-    '🎵 Включай на повтор!',
-    '💯 Рекомендую!',
-    '🎶 Мой хит сегодня!',
-    '✨ Это стоит услышать!',
-    '🚀 Просто огонь!',
-    '🎵 Лови вайб!',
-    '🔥 Жжёт динамики!',
-    '💎 Чистое золото!',
-    '⚡ Заряжено энергией!',
-    '🌟 Must hear!',
-    '🎤 Топчик!',
-    '🎹 Музыка для души!',
-    '🎸 Стоит каждого прослушивания!',
-  ]
+  const { t } = useTranslation()
+  const localized = t('fullscreen.sharePhrases', { returnObjects: true })
+  const sharePhrases = Array.isArray(localized) ? localized : []
 
   const handleShare = () => {
     const state = usePlayerStore.getState()
     const currentSong = state.songlist?.currentSong
-    
-    const title = currentSong?.title || currentSong?.songTitle || currentSong?.name || ''
-    const artist = currentSong?.artist || currentSong?.artistName || currentSong?.performer || ''
-    
+
+    const title =
+      currentSong?.title || currentSong?.songTitle || currentSong?.name || ''
+    const artist =
+      currentSong?.artist ||
+      currentSong?.artistName ||
+      currentSong?.performer ||
+      ''
+
     if (!title || !artist) {
       return
     }
 
-    const randomPhrase = sharePhrases[Math.floor(Math.random() * sharePhrases.length)]
-    const shareText = `${randomPhrase} ${artist} — ${title}`
-    
-    navigator.clipboard.writeText(shareText)
+    const randomPhrase =
+      sharePhrases.length > 0
+        ? sharePhrases[Math.floor(Math.random() * sharePhrases.length)]
+        : ''
+    const shareText = randomPhrase
+      ? `${randomPhrase} ${artist} — ${title}`
+      : `${artist} — ${title}`
+
+    navigator.clipboard
+      .writeText(shareText)
       .then(() => {
         console.log('[ShareTrack] Copied to clipboard:', shareText)
       })
       .catch((err) => {
         console.error('[ShareTrack] Failed to copy:', err)
       })
-    
+
     onShare()
   }
 
   return (
-    <SettingWrapper text="Поделиться" showSeparator={false}>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={handleShare}
-        className="gap-2"
-      >
+    <SettingWrapper text={t('fullscreen.share')} showSeparator={false}>
+      <Button variant="ghost" size="sm" onClick={handleShare} className="gap-2">
         <Share2 className="w-4 h-4" />
       </Button>
     </SettingWrapper>

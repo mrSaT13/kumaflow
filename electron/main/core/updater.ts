@@ -141,14 +141,17 @@ export function initAutoUpdater() {
       }, 2000)
     })
   })
-  
-  // Установка обновления при закрытии приложения
-  app.on('before-quit', () => {
-    if (updateDownloaded) {
-      console.log('[Updater] Installing update on quit')
-      autoUpdater.quitAndInstall()
-    }
-  })
+}
+
+// Установка обновления — вызывается из ЕДИНОГО before-quit потока
+// в electron/main/index.ts (отдельного app.on('before-quit') здесь
+// больше нет: три хендлера сведены в один flush flow).
+export function quitAndInstallOnQuit(): void {
+  try {
+    autoUpdater.quitAndInstall()
+  } catch (err) {
+    console.error('[Updater] quitAndInstall failed:', err)
+  }
 }
 
 export function isUpdateDownloaded(): boolean {

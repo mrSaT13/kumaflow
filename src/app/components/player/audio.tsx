@@ -21,6 +21,8 @@ import {
 import { usePlaybackSettings } from '@/store/playback.store'
 import { crossfadeService } from '@/service/crossfade-service'
 import { detectSeekBack, reportSeekBack } from '@/service/brain-events'
+import { getWaveDeviceName, wavePublish } from '@/service/brain-wave'
+import { isBrainActive } from '@/store/brain.store'
 import { offlineService } from '@/service/offline-service'
 import { dualUrlBackgroundService } from '@/service/dual-url-background-service'
 import { cacheService } from '@/service/cache-service'
@@ -396,6 +398,24 @@ export function AudioPlayer({
         }
       }
       lastPos = cur
+      // 1.6.4: любая перемотка — сразу в живую очередь волны (force, мимо троттлинга)
+      if (!nearEnd && isBrainActive()) {
+        try {
+          const pst = usePlayerStore.getState()
+          const durSec = Number.isFinite(dur) && dur > 0 ? Math.floor(dur) : Math.floor(pst.playerState.currentDuration || 0)
+          wavePublish(
+            pst.songlist.currentList.map((t) => t.id).filter(Boolean),
+            pst.songlist.currentSong?.id ?? null,
+            {
+              positionSec: Math.floor(cur),
+              durationSec: durSec,
+              paused: !pst.playerState.isPlaying,
+              deviceName: getWaveDeviceName(),
+              force: true,
+            },
+          )
+        } catch { /* best-effort */ }
+      }
     }
 
     audio.addEventListener('timeupdate', onTimeUpdate)

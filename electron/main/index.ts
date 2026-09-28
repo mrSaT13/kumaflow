@@ -1,7 +1,7 @@
 import { electronApp, optimizer, platform } from '@electron-toolkit/utils'
 import { app, ipcMain, protocol } from 'electron'
 import { createAppMenu } from './core/menu'
-import { initAutoUpdater } from './core/updater'
+import { initAutoUpdater, isUpdateDownloaded, quitAndInstallOnQuit } from './core/updater'
 import { createWindow, mainWindow, sendToRenderer } from './window'
 import { initAudiobookshelfIPC } from './core/audiobookshelf'
 import { setupLocalMusicHandlers } from './core/local-music-handler'
@@ -325,11 +325,8 @@ if (!instanceLock) {
       updateRemoteState(state)
     })
 
-    // Остановка remote сервера при перезапуске приложения
-    app.on('before-quit', async () => {
-      console.log('[Remote] Shutting down remote server on app quit...')
-      await stopRemoteServer()
-    })
+    // Остановка remote сервера — в едином before-quit потоке ниже
+    // (см. flush flow: flush очереди -> stopRemoteServer -> updater/app.quit)
 
     // Yandex Music Auth IPC
     ipcMain.handle('yandex-music:auth', async (_, { login, password }) => {
@@ -604,57 +601,58 @@ if (!instanceLock) {
     })
   })
 
-  let isSaving = false
+  // Единый before-quit поток: раньше было три отдельных хендлера
+  // (remote-stop выше, этот save-флоу, quitAndInstall в updater.ts).
+  // Порядок: 1) один awaited IDB-flush очереди из рендера,
+  // 2) остановка remote сервера, 3) установка обновления или app.quit().
+  let isQuitFlowRunning = false
 
   app.on('before-quit', async (e) => {
-    // Если уже сохраняем — выходим
-    if (isSaving) {
-      console.log('[App] Save complete, quitting...')
-      isQuitting = true
+    // Повторный вход (из app.quit()/quitAndInstall ниже) — выходим сразу
+    if (isQuitting || isQuitFlowRunning) {
       return
     }
 
     e.preventDefault()
-    console.log('[App] before-quit triggered — saving all data...')
+    isQuitFlowRunning = true
+    console.log('[App] before-quit — single flush flow...')
 
-    // Принудительно сохраняем все данные перед выходом
-    isSaving = true
+    // 1. Один awaited flush очереди: рендер пишет текущий songlist
+    // в IndexedDB ключ player_songlist и возвращает результат.
+    // localStorage синхронен — его ждать не нужно; дырой был именно IDB.
     if (mainWindow && !mainWindow.isDestroyed()) {
       try {
-        await mainWindow.webContents.executeJavaScript(`
-          (async () => {
-            try {
-              const stores = ['ml_profile', 'ratings', 'settings', 'accounts-persistence', 
-                             'homepage-settings', 'page-design-settings', 'theme-store',
-                             'ml-playlists', 'ml-playlists-state', 'generated-playlists',
-                             'app-persistence', 'auth-persistence', 'shared-accounts'];
-              
-              for (const key of stores) {
-                const data = localStorage.getItem(key);
-                if (data) {
-                  console.log('[Save] ✓', key, '(' + data.length + ' bytes)');
-                } else {
-                  console.log('[Save] -', key, '(empty)');
-                }
-              }
-              
-              // Форсируем запись localStorage
-              window.dispatchEvent(new Event('beforeunload'));
-              await new Promise(r => setTimeout(r, 500));
-            } catch (e) {
-              console.error('[Save] Error:', e);
-            }
-          })();
-        `)
-        console.log('[App] Data save complete')
+        const res = await Promise.race([
+          mainWindow.webContents.executeJavaScript(
+            '(window.__kumaflowFlushQueue ? window.__kumaflowFlushQueue() : {ok:false,n:-1})',
+          ),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('queue flush timeout 3s')), 3000),
+          ),
+        ])
+        console.log('[App] Queue flush:', JSON.stringify(res))
       } catch (err) {
-        console.error('[App] Error saving data:', err)
+        console.error('[App] Queue flush failed (continuing quit):', err)
       }
     }
 
+    // 2. Remote server stop (раньше отдельный хендлер)
+    try {
+      console.log('[Remote] Shutting down remote server on app quit...')
+      await stopRemoteServer()
+    } catch (err) {
+      console.error('[Remote] Stop error (continuing quit):', err)
+    }
+
+    // 3. Обновление или выход (quitAndInstall в updater.ts больше
+    // не висит отдельным хендлером — вызывается отсюда)
     isQuitting = true
-    isSaving = false
-    app.quit()
+    if (isUpdateDownloaded()) {
+      console.log('[Updater] Installing update on quit')
+      quitAndInstallOnQuit()
+    } else {
+      app.quit()
+    }
   })
 
   app.on('window-all-closed', () => {

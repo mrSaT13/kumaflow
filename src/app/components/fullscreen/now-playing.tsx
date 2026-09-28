@@ -7,8 +7,7 @@
  *   кнопками (оверлей на обложке / иконки панели), а не табами
  * - артист (аватар и имя) кликабелен → страница артиста
  */
-import { memo, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+
 import {
   ArrowLeft,
   Heart,
@@ -26,19 +25,22 @@ import {
   ThumbsDown,
   X,
 } from 'lucide-react'
-import RepeatOne from '@/app/components/icons/repeat-one'
-import { AutoDJButton } from '@/app/components/player/auto-dj-button'
-import { SleepTimerButton } from '@/app/components/player/sleep-timer-button'
+import { memo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dot } from '@/app/components/dot'
 import { MarqueeTitle } from '@/app/components/fullscreen/marquee-title'
+import RepeatOne from '@/app/components/icons/repeat-one'
 import { ImageLoader } from '@/app/components/image-loader'
+import { AutoDJButton } from '@/app/components/player/auto-dj-button'
+import { SleepTimerButton } from '@/app/components/player/sleep-timer-button'
 import { SongQualityBadge } from '@/app/components/song/quality-badge'
 import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
+import i18n from '@/i18n'
+import { BRAIN_SHORT_NAME } from '@/store/brain.store'
 import { useML } from '@/store/ml.store'
 import {
   usePlayerActions,
-  usePlayerFullscreen,
   usePlayerIsPlaying,
   usePlayerLoop,
   usePlayerShuffle,
@@ -46,20 +48,20 @@ import {
   usePlayerStore,
 } from '@/store/player.store'
 import { useSongInfo } from '@/store/ui.store'
-import { useGetArtist } from '@/app/hooks/use-artist'
-import { FullscreenSettings } from './settings'
-import { VolumeContainer } from './volume-container'
-import { search3 } from '@/service/subsonic-api'
-import { LoopState } from '@/types/playerContext'
-import { ISong } from '@/types/responses/song'
-import { ROUTES } from '@/routes/routesList'
-import { ALBUM_ARTISTS_MAX_NUMBER } from '@/utils/multipleArtists'
+import { ArtistAvatar, useGoArtist } from './artist-avatar'
+export { useGoArtist }
+
 import {
   readWaveContext,
   waveLabel,
 } from '@/app/components/homepage/my-wave-settings'
-import { FullscreenSongExplanation } from './song-explanation'
+import { LoopState } from '@/types/playerContext'
+import { ISong } from '@/types/responses/song'
+import { ALBUM_ARTISTS_MAX_NUMBER } from '@/utils/multipleArtists'
 import { LyricsTab } from './lyrics'
+import { FullscreenSettings } from './settings'
+import { FullscreenSongExplanation } from './song-explanation'
+import { VolumeContainer } from './volume-container'
 
 const MemoLyricsTab = memo(LyricsTab)
 const MemoExplanation = memo(FullscreenSongExplanation)
@@ -80,17 +82,6 @@ function formatDuration(sec?: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-/** Переход на страницу артиста с закрытием полноэкранного */
-export function useGoArtist() {
-  const navigate = useNavigate()
-  const { setIsFullscreen } = usePlayerFullscreen()
-  return (artistId?: string) => {
-    if (!artistId) return
-    setIsFullscreen(false)
-    navigate(ROUTES.ARTIST.PAGE(artistId))
-  }
-}
-
 // ==================== ЛЕВАЯ КОЛОНКА ====================
 
 export function CoverColumn({
@@ -101,28 +92,33 @@ export function CoverColumn({
   setPanel: (p: FullscreenPanel) => void
 }) {
   const currentSong = usePlayerStore((state) => state.songlist.currentSong)
+  const { t } = useTranslation()
 
   // Очередь на обложке — переключатель качественной панели (сейчас играет + далее)
   const toggleQueue = () => setPanel(panel === 'context' ? 'hidden' : 'context')
   const toggleLyrics = () => setPanel(panel === 'lyrics' ? 'context' : 'lyrics')
-  // Без панели обложка разъезжается шире (как у Яндекса на широком экране)
-  const coverSize =
-    panel === 'hidden'
-      ? 'w-[min(72vw,430px)] lg:w-[min(58vh,600px)]'
-      : 'w-[min(54vw,340px)] lg:w-[min(44vh,440px)]'
+  // Обложка зависит от ОБОИХ размеров окна, а не только ширины:
+  // 1600x900 с масштабом Windows 125% = ~1280x720 CSS, минимум окна 960x600.
+  // Старое `lg:w-[44vh]` не срабатывало уже при 960px (< lg=1024), отсюда ползунки.
+  // Формула: min(vw, dvh - резерв под шапку/инфо/прогресс, cap).
+  const coverWidth =
+    panel === 'hidden' ? 'min(72vw, 58dvh, 560px)' : 'min(54vw, 44dvh, 440px)'
 
   return (
-    <div className="flex flex-col items-center justify-center w-full max-w-[640px] min-h-0 overflow-y-auto py-2 gap-3 mx-auto lg:mx-0 px-2 transition-all duration-300">
+    <div className="flex flex-col items-center justify-center w-full max-w-[640px] min-h-0 max-h-full overflow-hidden py-2 gap-3 mx-auto lg:mx-0 px-2 transition-all duration-300">
       <CoverWithOverlay
         queueActive={panel === 'context'}
         onToggleQueue={toggleQueue}
         onToggleLyrics={toggleLyrics}
-        coverSize={coverSize}
+        coverWidth={coverWidth}
       />
 
       {/* Инфо-блок шириной ровно с обложку, по центру — ничего не вылезает за края */}
-      <div className={`${coverSize} max-w-full flex flex-col gap-3 transition-all duration-300`}>
-        <div className="flex items-center gap-3 w-full">
+      <div
+        className="max-w-full flex flex-col gap-3 transition-all duration-300 shrink-0 min-h-0"
+        style={{ width: coverWidth }}
+      >
+        <div className="flex items-center gap-3 w-full min-w-0">
           <ArtistAvatar song={currentSong} />
           <div className="flex-1 min-w-0 text-left">
             <MarqueeTitle gap="mr-2">
@@ -130,12 +126,15 @@ export function CoverColumn({
                 {currentSong.title}
               </h2>
             </MarqueeTitle>
-            <div className="text-sm 2xl:text-base flex gap-1 text-foreground/70 truncate maskImage-marquee-fade-finished">
-              <p className="truncate text-shadow-lg text-foreground">
+            {/* Альбом ужимается (max-w), артисты занимают остаток — раньше альбом вытеснял имена */}
+            <div className="text-sm 2xl:text-base flex items-center gap-1 text-foreground/70 min-w-0 maskImage-marquee-fade-finished">
+              <p className="truncate text-shadow-lg text-foreground min-w-0 max-w-[45%] shrink">
                 {currentSong.album}
               </p>
               <Dot className="text-foreground/70 shrink-0" />
-              <ArtistNames song={currentSong} />
+              <div className="flex-1 min-w-0">
+                <ArtistNames song={currentSong} />
+              </div>
             </div>
           </div>
           <div className="shrink-0">
@@ -144,9 +143,13 @@ export function CoverColumn({
         </div>
 
         {/* Бейджи по центру блока */}
-        <div className="hidden [@media(min-height:640px)]:flex gap-2 flex-wrap justify-center">
-          {currentSong.genre && <Badge variant="neutral">{currentSong.genre}</Badge>}
-          {currentSong.year && <Badge variant="neutral">{currentSong.year}</Badge>}
+        <div className="hidden [@media(min-height:640px)]:flex gap-2 flex-wrap justify-center shrink-0">
+          {currentSong.genre && (
+            <Badge variant="neutral">{currentSong.genre}</Badge>
+          )}
+          {currentSong.year && (
+            <Badge variant="neutral">{currentSong.year}</Badge>
+          )}
           {currentSong.bpm && currentSong.bpm > 0 && (
             <Badge variant="neutral" title="Beats Per Minute">
               {currentSong.bpm} BPM
@@ -159,7 +162,7 @@ export function CoverColumn({
         </div>
 
         {/* Кнопки панелей для узких экранов — круглые, в стиле контролов */}
-        <div className="flex lg:hidden gap-2 justify-center">
+        <div className="flex lg:hidden gap-2 justify-center shrink-0">
           <button
             onClick={toggleQueue}
             className={`h-10 pl-4 pr-5 rounded-full flex items-center gap-2 text-sm font-semibold transition-all active:scale-95 ${
@@ -169,7 +172,7 @@ export function CoverColumn({
             }`}
           >
             <ListMusic className="w-4 h-4" />
-            Очередь
+            {t('fullscreen.queue')}
           </button>
           <button
             onClick={toggleLyrics}
@@ -180,7 +183,7 @@ export function CoverColumn({
             }`}
           >
             <Mic className="w-4 h-4" />
-            Текст
+            {t('fullscreen.lyrics')}
           </button>
         </div>
       </div>
@@ -193,30 +196,41 @@ function CoverWithOverlay({
   queueActive,
   onToggleQueue,
   onToggleLyrics,
-  coverSize,
+  coverWidth,
 }: {
   queueActive: boolean
   onToggleQueue: () => void
   onToggleLyrics: () => void
-  coverSize: string
+  coverWidth: string
 }) {
   const currentSong = usePlayerStore((state) => state.songlist.currentSong)
   const isPlaying = usePlayerIsPlaying()
   const loopState = usePlayerLoop()
   const isShuffleActive = usePlayerShuffle()
-  const { togglePlayPause, playNextSong, playPrevSong, toggleLoop, toggleShuffle, starCurrentSong } =
-    usePlayerActions()
+  const {
+    togglePlayPause,
+    playNextSong,
+    playPrevSong,
+    toggleLoop,
+    toggleShuffle,
+    starCurrentSong,
+  } = usePlayerActions()
   const { rateSong } = useML()
   const isLiked = usePlayerStore((state) => state.playerState.isSongStarred)
   const { setSongId, setModalOpen } = useSongInfo()
   // Шторка «•••»: всё невошедшее (сон, автодиджей, настройки, громкость, дизлайк)
   const [showExtras, setShowExtras] = useState(false)
+  const { t } = useTranslation()
 
-  const isAudiobook =
-    (usePlayerStore.getState().songlist.currentSong as unknown as { isAudiobook?: boolean })
-      ?.isAudiobook
+  const isAudiobook = (
+    usePlayerStore.getState().songlist.currentSong as unknown as {
+      isAudiobook?: boolean
+    }
+  )?.isAudiobook
   const coverUrl = (
-    usePlayerStore.getState().songlist.currentSong as unknown as { coverUrl?: string }
+    usePlayerStore.getState().songlist.currentSong as unknown as {
+      coverUrl?: string
+    }
   )?.coverUrl
 
   const handleLike = () => {
@@ -251,7 +265,10 @@ function CoverWithOverlay({
   }
 
   return (
-    <div className={`group relative ${coverSize} max-w-full aspect-square shrink-0 transition-all duration-300`}>
+    <div
+      className="group relative max-w-full aspect-square shrink-0 min-h-0 transition-all duration-300"
+      style={{ width: coverWidth }}
+    >
       <div className="absolute inset-0 rounded-2xl overflow-hidden bg-accent/60 shadow-custom-5">
         {isAudiobook && coverUrl ? (
           <img
@@ -279,18 +296,27 @@ function CoverWithOverlay({
       {/* Оверлей при наведении */}
       <div className="absolute inset-0 rounded-2xl bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-3">
         <div className="flex justify-end">
-          <OverlayBtn title="Показать/скрыть очередь" onClick={onToggleQueue} active={queueActive}>
+          <OverlayBtn
+            title={t('fullscreen.toggleQueue')}
+            onClick={onToggleQueue}
+            active={queueActive}
+          >
             <ListMusic className="w-5 h-5" />
           </OverlayBtn>
         </div>
 
         <div className="flex items-center justify-center gap-2">
-          <OverlayBtn title="Назад" onClick={() => playPrevSong()}>
+          <OverlayBtn
+            title={t('fullscreen.transportBack')}
+            onClick={() => playPrevSong()}
+          >
             <SkipBack className="w-5 h-5 fill-white" />
           </OverlayBtn>
           <button
             onClick={() => togglePlayPause()}
-            title={isPlaying ? 'Пауза' : 'Играть'}
+            title={
+              isPlaying ? t('player.tooltips.pause') : t('player.tooltips.play')
+            }
             className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform"
           >
             {isPlaying ? (
@@ -299,11 +325,14 @@ function CoverWithOverlay({
               <Play className="w-7 h-7 fill-black ml-0.5" />
             )}
           </button>
-          <OverlayBtn title="Вперёд" onClick={() => playNextSong()}>
+          <OverlayBtn
+            title={t('fullscreen.transportForward')}
+            onClick={() => playNextSong()}
+          >
             <SkipForward className="w-5 h-5 fill-white" />
           </OverlayBtn>
           <OverlayBtn
-            title="Повтор"
+            title={t('fullscreen.repeat')}
             onClick={() => toggleLoop()}
             active={loopState !== LoopState.Off}
           >
@@ -316,17 +345,23 @@ function CoverWithOverlay({
         </div>
 
         <div className="flex items-center justify-between">
-          <OverlayBtn title="Нравится" onClick={handleLike} active={!!isLiked}>
-            <Heart className={`w-5 h-5 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
+          <OverlayBtn
+            title={t('fullscreen.like')}
+            onClick={handleLike}
+            active={!!isLiked}
+          >
+            <Heart
+              className={`w-5 h-5 ${isLiked ? 'fill-red-500 text-red-500' : ''}`}
+            />
           </OverlayBtn>
           <OverlayBtn
-            title="Ещё"
+            title={t('fullscreen.more')}
             onClick={() => setShowExtras((v) => !v)}
             active={showExtras}
           >
             <MoreHorizontal className="w-5 h-5" />
           </OverlayBtn>
-          <OverlayBtn title="Текст" onClick={onToggleLyrics}>
+          <OverlayBtn title={t('fullscreen.lyrics')} onClick={onToggleLyrics}>
             <Mic className="w-5 h-5" />
           </OverlayBtn>
         </div>
@@ -343,11 +378,12 @@ function CoverWithOverlay({
               onClick={openSongDialog}
               className="flex items-center gap-2 flex-1 px-2 py-1.5 rounded-lg text-sm hover:bg-foreground/10 transition-colors text-left"
             >
-              <Info className="w-4 h-4" />О треке
+              <Info className="w-4 h-4" />
+              {t('fullscreen.aboutTrack')}
             </button>
             <button
               onClick={() => setShowExtras(false)}
-              title="Свернуть"
+              title={t('fullscreen.collapse')}
               className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-foreground/10 transition-colors shrink-0"
             >
               <X className="w-4 h-4" />
@@ -359,7 +395,7 @@ function CoverWithOverlay({
           <div className="flex items-center justify-around pt-1">
             <button
               onClick={handleDislike}
-              title="Не нравится"
+              title={t('fullscreen.dislike')}
               className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-foreground/10 transition-colors"
             >
               <ThumbsDown className="w-5 h-5" />
@@ -369,7 +405,7 @@ function CoverWithOverlay({
             <FullscreenSettings />
             <button
               onClick={() => toggleShuffle()}
-              title="Перемешать"
+              title={t('fullscreen.shuffle')}
               className={`w-10 h-10 rounded-full flex items-center justify-center hover:bg-foreground/10 transition-colors ${isShuffleActive ? 'text-primary' : ''}`}
             >
               <Shuffle className="w-5 h-5" />
@@ -405,122 +441,45 @@ function OverlayBtn({
   )
 }
 
-// ==================== АВАТАР АРТИСТА ====================
+// ==================== ИМЕНА АРТИСТОВ ====================
 
-/**
- * Круглое фото как в мобайле, но умнее:
- * - один исполнитель → фото со страницы артиста (как в плеере)
- * - несколько исполнителей → обложка трека (фото одного было бы неверно)
- * Кликабельно → страница артиста.
- */
-function ArtistAvatar({ song, centered = false }: { song: ISong; centered?: boolean }) {
-  const [albumCover, setAlbumCover] = useState<string | null>(null)
+function ArtistNames({
+  song,
+  centered = false,
+}: {
+  song: ISong
+  centered?: boolean
+}) {
   const goArtist = useGoArtist()
-  const artist = song.artist
-  const multi = !!song.artists && song.artists.length > 1
-  const clickable = !!song.artistId
-  // Фото со страницы артиста — только для сольного исполнителя
-  const { data: artistPage } = useGetArtist(!multi ? (song.artistId ?? '') : '')
-  const pageCover =
-    !multi && artistPage
-      ? ((artistPage as { coverArt?: string; artistImageUrl?: string }).coverArt ||
-        (artistPage as { coverArt?: string; artistImageUrl?: string }).artistImageUrl ||
-        null)
-      : null
-
-  useEffect(() => {
-    let cancelled = false
-    setAlbumCover(null)
-    if (pageCover || !artist) return
-    search3(artist, { artistCount: 0, albumCount: 1 })
-      .then((res) => {
-        if (!cancelled) setAlbumCover(res.albums?.[0]?.coverArt ?? null)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [artist, pageCover])
-
-  return (
-    <button
-      onClick={() => goArtist(song.artistId)}
-      disabled={!clickable}
-      title={clickable ? `Открыть: ${artist}` : artist}
-      className={`w-12 h-12 2xl:w-[52px] 2xl:h-[52px] rounded-full overflow-hidden bg-foreground/10 shrink-0 ${
-        centered ? 'mx-auto' : ''
-      } ${
-        clickable ? 'cursor-pointer hover:ring-2 hover:ring-primary/60 transition-shadow' : 'cursor-default'
-      }`}
-    >
-      {pageCover ? (
-        <ImageLoader id={pageCover} type="artist" size={100}>
-          {(src) =>
-            src ? (
-              <img src={src} alt={artist} className="w-full h-full object-cover" width="52" height="52" />
-            ) : (
-              <AvatarPlaceholder />
-            )
-          }
-        </ImageLoader>
-      ) : albumCover ? (
-        <ImageLoader id={albumCover} type="album" size={100}>
-          {(src) =>
-            src ? (
-              <img src={src} alt={artist} className="w-full h-full object-cover" width="52" height="52" />
-            ) : (
-              <AvatarPlaceholder />
-            )
-          }
-        </ImageLoader>
-      ) : song.coverArt ? (
-        <ImageLoader id={song.coverArt} type="song" size={100}>
-          {(src) =>
-            src ? (
-              <img src={src} alt={artist} className="w-full h-full object-cover" width="52" height="52" />
-            ) : (
-              <AvatarPlaceholder />
-            )
-          }
-        </ImageLoader>
-      ) : (
-        <AvatarPlaceholder />
-      )}
-    </button>
-  )
-}
-
-function AvatarPlaceholder() {
-  return (
-    <div className="w-full h-full flex items-center justify-center bg-foreground/10">
-      <Music2 className="w-5 h-5 text-foreground/30" />
-    </div>
-  )
-}
-
-function ArtistNames({ song, centered = false }: { song: ISong; centered?: boolean }) {
-  const goArtist = useGoArtist()
+  const { t } = useTranslation()
   const { artist, artists, artistId } = song
   const align = centered ? 'justify-center text-center' : ''
 
   if (artists && artists.length > 1) {
     const data = artists.slice(0, ALBUM_ARTISTS_MAX_NUMBER)
     return (
-      <div className={`flex items-center gap-1 min-w-0 ${align}`}>
+      <div
+        className={`flex items-center gap-1 min-w-0 overflow-hidden ${align}`}
+      >
         {data.map(({ id, name }, index) => (
-          <div key={id} className="flex min-w-0 items-center">
+          <div
+            key={`${id}-${name}-${index}`}
+            className="flex min-w-0 items-center shrink"
+          >
             {id ? (
               <button
                 onClick={() => goArtist(id)}
-                className="truncate text-shadow-lg hover:text-primary hover:underline transition-colors"
-                title={`Открыть: ${name}`}
+                className="truncate min-w-0 text-shadow-lg hover:text-primary hover:underline transition-colors"
+                title={t('fullscreen.openArtist', { name })}
               >
                 {name}
               </button>
             ) : (
-              <p className="truncate text-shadow-lg">{name}</p>
+              <p className="truncate min-w-0 text-shadow-lg">{name}</p>
             )}
-            {index < data.length - 1 && <span>,&nbsp;</span>}
+            {index < data.length - 1 && (
+              <span className="shrink-0">,&nbsp;</span>
+            )}
           </div>
         ))}
       </div>
@@ -531,8 +490,8 @@ function ArtistNames({ song, centered = false }: { song: ISong; centered?: boole
     return (
       <button
         onClick={() => goArtist(artistId)}
-        className={`truncate text-shadow-lg hover:text-primary hover:underline transition-colors ${centered ? 'mx-auto' : 'text-left'}`}
-        title={`Открыть: ${artist}`}
+        className={`truncate block max-w-full text-shadow-lg hover:text-primary hover:underline transition-colors ${centered ? 'mx-auto' : 'text-left'}`}
+        title={t('fullscreen.openArtist', { name: artist })}
       >
         {artist}
       </button>
@@ -573,6 +532,7 @@ function PanelHeader({
   onClose?: () => void
 }) {
   const currentSong = usePlayerStore((state) => state.songlist.currentSong)
+  const { t } = useTranslation()
   const ctx = getActiveContext(currentSong?.id)
   // Очередь = переключатель качественной панели (сейчас играет + далее).
   // Скрыли — обложка плавно центрируется (анимация ширины в page.tsx).
@@ -583,22 +543,31 @@ function PanelHeader({
     <div className="flex items-center gap-2 mb-3 shrink-0">
       {panel === 'lyrics' ? (
         <>
-          <Button variant="ghost" size="icon" onClick={() => setPanel('context')} title="Назад к очереди">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setPanel('context')}
+            title={t('fullscreen.backToQueue')}
+          >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <h3 className="text-xl font-bold flex-1 truncate">Текст</h3>
+          <h3 className="text-xl font-bold flex-1 truncate">
+            {t('fullscreen.lyrics')}
+          </h3>
         </>
       ) : (
         <>
           <div className="flex-1 min-w-0">
             <p className="text-xs text-foreground/60 truncate">{ctx.kicker}</p>
-            <h3 className="text-2xl 2xl:text-3xl font-bold truncate">{ctx.title}</h3>
+            <h3 className="text-2xl 2xl:text-3xl font-bold truncate">
+              {ctx.title}
+            </h3>
           </div>
           <Button
             variant="ghost"
             size="icon"
             onClick={toggleQueue}
-            title="Показать/скрыть очередь"
+            title={t('fullscreen.toggleQueue')}
             className={panel === 'context' ? 'text-primary' : ''}
           >
             <ListMusic className="w-5 h-5" />
@@ -607,14 +576,19 @@ function PanelHeader({
             variant="ghost"
             size="icon"
             onClick={toggleLyrics}
-            title="Текст"
+            title={t('fullscreen.lyrics')}
           >
             <Mic className="w-5 h-5" />
           </Button>
         </>
       )}
       {onClose && (
-        <Button variant="ghost" size="icon" onClick={onClose} title="Закрыть панель">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          title={t('fullscreen.closePanel')}
+        >
           <X className="w-5 h-5" />
         </Button>
       )}
@@ -626,17 +600,30 @@ function PanelHeader({
  * Шапка контекста как в Яндекс Музыке: "Сейчас играет Моя волна под занятие / Работаю".
  * Берём из сохранённого контекста последней сгенерированной Волны.
  */
-function getActiveContext(currentId?: string): { kicker: string; title: string } {
+function getActiveContext(currentId?: string): {
+  kicker: string
+  title: string
+} {
   try {
     const wave = readWaveContext()
     if (wave && currentId && wave.ids.includes(currentId)) {
+      const short = wave.source === 'brain' ? ` (${BRAIN_SHORT_NAME})` : ''
       return {
-        kicker: `Сейчас играет Моя волна${wave.source === 'brain' ? ' (Мозг)' : ''}${wave.hint ? ' под занятие' : ''}`,
-        title: wave.hint ? humanizeHint(wave.hint) : 'Моя волна',
+        kicker: wave.hint
+          ? i18n.t('fullscreen.kickerWaveActivity', { short })
+          : i18n.t('fullscreen.kickerWave', { short }),
+        title: wave.hint
+          ? humanizeHint(wave.hint)
+          : i18n.t('fullscreen.myWave'),
       }
     }
-  } catch { /* ignore */ }
-  return { kicker: 'Сейчас играет', title: 'Моя коллекция' }
+  } catch {
+    /* ignore */
+  }
+  return {
+    kicker: i18n.t('fullscreen.playing'),
+    title: i18n.t('fullscreen.defaultCollection'),
+  }
 }
 
 /** hint вида "work • unfamiliar" → красивая подпись (на случай старых сырых ключей) */
@@ -652,6 +639,7 @@ function humanizeHint(hint: string): string {
 function ContextBody() {
   const { currentList, currentSongIndex, currentSong } = usePlayerSonglist()
   const { setSongList } = usePlayerActions()
+  const { t } = useTranslation()
 
   const next = currentList.slice(currentSongIndex + 1, currentSongIndex + 9)
   // Уже сыгранные — как у Яндекса уходят под шторку: верх затухает,
@@ -673,7 +661,7 @@ function ContextBody() {
                 <button
                   key={`prev-${song.id}-${idx}`}
                   onClick={() => setSongList(currentList, idx)}
-                  title="Вернуться к треку"
+                  title={t('fullscreen.backToTrack')}
                   className="flex items-center gap-3 p-2 rounded-xl hover:bg-foreground/10 hover:opacity-100 transition-all text-left w-full group/row"
                 >
                   <span className="w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-foreground/10 grayscale-[0.4]">
@@ -714,14 +702,22 @@ function ContextBody() {
       )}
       {/* Текущий трек */}
       <button
-        onClick={() => currentSong && setSongList(currentList, currentSongIndex)}
+        onClick={() =>
+          currentSong && setSongList(currentList, currentSongIndex)
+        }
         className="flex items-center gap-3 p-2 rounded-xl bg-foreground/10 text-left w-full"
       >
         <span className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-foreground/10">
           <ImageLoader id={currentSong.coverArt} type="song" size={100}>
             {(src) =>
               src ? (
-                <img src={src} alt="" className="w-full h-full object-cover" width="48" height="48" />
+                <img
+                  src={src}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  width="48"
+                  height="48"
+                />
               ) : (
                 <span className="w-full h-full flex items-center justify-center">
                   <Music2 className="w-5 h-5 text-foreground/30" />
@@ -731,8 +727,12 @@ function ContextBody() {
           </ImageLoader>
         </span>
         <span className="flex-1 min-w-0">
-          <span className="block font-semibold truncate">{currentSong.title}</span>
-          <span className="block text-sm text-foreground/60 truncate">{currentSong.artist}</span>
+          <span className="block font-semibold truncate">
+            {currentSong.title}
+          </span>
+          <span className="block text-sm text-foreground/60 truncate">
+            {currentSong.artist}
+          </span>
         </span>
         <span className="text-sm text-foreground/60 shrink-0">
           {formatDuration(currentSong.duration)}
@@ -742,7 +742,9 @@ function ContextBody() {
       {/* Далее в очереди */}
       {next.length > 0 && (
         <div>
-          <p className="text-sm font-semibold text-foreground/70 mb-2">Далее в очереди</p>
+          <p className="text-sm font-semibold text-foreground/70 mb-2">
+            {t('fullscreen.upNext')}
+          </p>
           <div className="flex flex-col gap-1">
             {next.map((song, i) => {
               const idx = currentSongIndex + 1 + i

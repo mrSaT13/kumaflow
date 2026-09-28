@@ -3,11 +3,23 @@
  * Модальное окно с настройками персонализации
  */
 
-import { useState, useEffect } from 'react'
-import { useML } from '@/store/ml.store'
-import { isBrainActive } from '@/store/brain.store'
+import {
+  Cpu,
+  Heart,
+  Mic,
+  MonitorSmartphone,
+  Music,
+  RefreshCw,
+  Sparkles,
+  X,
+  Zap,
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'react-toastify'
-import { X, RefreshCw, Heart, Sparkles, Zap, Music, Mic, Cpu, MonitorSmartphone } from 'lucide-react'
+import i18n from '@/i18n'
+import { isBrainActive } from '@/store/brain.store'
+import { useML } from '@/store/ml.store'
 
 export const WAVE_SOURCE_KEY = 'my-wave-source'
 export type WaveSource = 'local' | 'brain'
@@ -20,7 +32,8 @@ export function getWaveSource(): WaveSource {
   }
 }
 
-/** Человеческие подписи вместо сырых ключей (wakeup/work/unfamiliar/...) */
+/** Человеческие подписи вместо сырых ключей (wakeup/work/unfamiliar/...).
+ * RU-значения — фолбэк, основной текст берётся из локали через waveLabel(). */
 export const WAVE_LABELS: Record<string, string> = {
   wakeup: 'Просыпаюсь',
   commute: 'В дороге',
@@ -40,7 +53,9 @@ export const WAVE_LABELS: Record<string, string> = {
 }
 
 export function waveLabel(key: string): string {
-  return WAVE_LABELS[key] || key
+  const k = (key || '').trim()
+  if (!k) return ''
+  return i18n.t(`wave.${k}`, { defaultValue: WAVE_LABELS[k] ?? k })
 }
 
 const WAVE_CTX_KEY = 'my-wave-last'
@@ -53,11 +68,22 @@ export interface WaveContext {
 }
 
 /** Запоминаем, что именно сейчас играет Волна — для шапки «Сейчас играет / Работаю» как в Яндексе */
-export function saveWaveContext(ids: string[], hint: string, source: WaveSource) {
+export function saveWaveContext(
+  ids: string[],
+  hint: string,
+  source: WaveSource,
+) {
   try {
-    const ctx: WaveContext = { ids: ids.slice(0, 100), hint, source, at: Date.now() }
+    const ctx: WaveContext = {
+      ids: ids.slice(0, 100),
+      hint,
+      source,
+      at: Date.now(),
+    }
     localStorage.setItem(WAVE_CTX_KEY, JSON.stringify(ctx))
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export function readWaveContext(): WaveContext | null {
@@ -78,9 +104,14 @@ interface MyWaveSettingsProps {
   onApplied?: () => void
 }
 
-export default function MyWaveSettings({ isOpen, onClose, onApplied }: MyWaveSettingsProps) {
+export default function MyWaveSettings({
+  isOpen,
+  onClose,
+  onApplied,
+}: MyWaveSettingsProps) {
   const { profile } = useML()
-  
+  const { t } = useTranslation()
+
   // Состояния настроек
   const [activity, setActivity] = useState<string>('')
   const [characteristic, setCharacteristic] = useState<string>('')
@@ -101,31 +132,43 @@ export default function MyWaveSettings({ isOpen, onClose, onApplied }: MyWaveSet
       setLanguage(raw.language || '')
       setSource(getWaveSource())
       setBrainOn(isBrainActive())
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [isOpen])
 
   if (!isOpen) return null
 
-  const activeHint = [activity, characteristic, mood, language].filter(Boolean).map(waveLabel).join(' • ')
+  const activeHint = [activity, characteristic, mood, language]
+    .filter(Boolean)
+    .map(waveLabel)
+    .join(' • ')
 
   const handleSave = () => {
     // Сохраняем настройки в localStorage
     const settings = { activity, characteristic, mood, language }
     localStorage.setItem('my-wave-settings', JSON.stringify(settings))
     localStorage.setItem(WAVE_SOURCE_KEY, source)
-    
+
     console.log('Saving My Wave settings:', settings, 'source:', source)
 
     if (source === 'brain' && !isBrainActive()) {
-      toast.warning('Мозг не подключен — сыграет локальная Волна. Включи мозг в Настройки → Внешние API.', {
+      toast.warning(t('brain.waveNotConnected'), {
         autoClose: 4000,
       })
     } else {
-      toast.success(activeHint ? `Волна (${source === 'brain' ? 'Мозг' : 'локально'}): ${activeHint}` : 'Настройки сохранены!', {
-        autoClose: 1500,
-      })
+      const sourceLabel =
+        source === 'brain' ? t('brain.waveSourceLabel') : t('brain.waveLocal')
+      toast.success(
+        activeHint
+          ? t('brain.waveApplied', { source: sourceLabel, hint: activeHint })
+          : t('brain.settingsSaved'),
+        {
+          autoClose: 1500,
+        },
+      )
     }
-    
+
     onClose()
     // Как в мобайле (_applyWave): применить = сразу перегенерировать
     onApplied?.()
@@ -140,18 +183,29 @@ export default function MyWaveSettings({ isOpen, onClose, onApplied }: MyWaveSet
 
   return (
     <div className="my-wave-settings-overlay" onClick={onClose}>
-      <div className="my-wave-settings-modal glass-dialog" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="my-wave-settings-modal glass-dialog"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Заголовок */}
         <div className="settings-header">
           <div className="header-left">
             <Music className="w-6 h-6 text-orange-500" />
-            <h2 className="settings-title">Настроить Мою Волну</h2>
+            <h2 className="settings-title">{t('wave.title')}</h2>
           </div>
           <div className="header-right">
-            <button className="icon-button reset" onClick={handleReset} title="Сбросить">
+            <button
+              className="icon-button reset"
+              onClick={handleReset}
+              title={t('wave.reset')}
+            >
               <RefreshCw className="w-5 h-5" />
             </button>
-            <button className="icon-button close" onClick={onClose} title="Закрыть">
+            <button
+              className="icon-button close"
+              onClick={onClose}
+              title={t('wave.close')}
+            >
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -159,157 +213,191 @@ export default function MyWaveSettings({ isOpen, onClose, onApplied }: MyWaveSet
 
         {/* Под занятие */}
         <div className="settings-section">
-          <h3 className="section-title">Под занятие</h3>
+          <h3 className="section-title">{t('wave.byActivity')}</h3>
           <div className="oval-buttons">
             <button
               className={`oval-button ${activity === 'wakeup' ? 'active' : ''}`}
               onClick={() => setActivity(activity === 'wakeup' ? '' : 'wakeup')}
             >
-              ☀️ Просыпаюсь
+              ☀️ {t('wave.wakeup')}
             </button>
             <button
               className={`oval-button ${activity === 'commute' ? 'active' : ''}`}
-              onClick={() => setActivity(activity === 'commute' ? '' : 'commute')}
+              onClick={() =>
+                setActivity(activity === 'commute' ? '' : 'commute')
+              }
             >
-              🚗 В дороге
+              🚗 {t('wave.commute')}
             </button>
             <button
               className={`oval-button ${activity === 'work' ? 'active' : ''}`}
               onClick={() => setActivity(activity === 'work' ? '' : 'work')}
             >
-              💻 Работаю
+              💻 {t('wave.work')}
             </button>
             <button
               className={`oval-button ${activity === 'workout' ? 'active' : ''}`}
-              onClick={() => setActivity(activity === 'workout' ? '' : 'workout')}
+              onClick={() =>
+                setActivity(activity === 'workout' ? '' : 'workout')
+              }
             >
-              🏋️ Тренируюсь
+              🏋️ {t('wave.workout')}
             </button>
             <button
               className={`oval-button ${activity === 'sleep' ? 'active' : ''}`}
               onClick={() => setActivity(activity === 'sleep' ? '' : 'sleep')}
             >
-              🌙 Засыпаю
+              🌙 {t('wave.sleep')}
             </button>
           </div>
         </div>
 
         {/* По характеру */}
         <div className="settings-section">
-          <h3 className="section-title">По характеру</h3>
+          <h3 className="section-title">{t('wave.byCharacter')}</h3>
           <div className="character-buttons">
             <button
               className={`character-button ${characteristic === 'favorite' ? 'active' : ''}`}
-              onClick={() => setCharacteristic(characteristic === 'favorite' ? '' : 'favorite')}
+              onClick={() =>
+                setCharacteristic(
+                  characteristic === 'favorite' ? '' : 'favorite',
+                )
+              }
             >
-              <Heart className={`w-5 h-5 ${characteristic === 'favorite' ? 'fill-red-500 text-red-500' : ''}`} />
-              <span>Любимое</span>
+              <Heart
+                className={`w-5 h-5 ${characteristic === 'favorite' ? 'fill-red-500 text-red-500' : ''}`}
+              />
+              <span>{t('wave.favorite')}</span>
             </button>
             <button
               className={`character-button ${characteristic === 'unfamiliar' ? 'active' : ''}`}
-              onClick={() => setCharacteristic(characteristic === 'unfamiliar' ? '' : 'unfamiliar')}
+              onClick={() =>
+                setCharacteristic(
+                  characteristic === 'unfamiliar' ? '' : 'unfamiliar',
+                )
+              }
             >
-              <Sparkles className={`w-5 h-5 ${characteristic === 'unfamiliar' ? 'fill-purple-500 text-purple-500' : ''}`} />
-              <span>Незнакомое</span>
+              <Sparkles
+                className={`w-5 h-5 ${characteristic === 'unfamiliar' ? 'fill-purple-500 text-purple-500' : ''}`}
+              />
+              <span>{t('wave.unfamiliar')}</span>
             </button>
             <button
               className={`character-button ${characteristic === 'popular' ? 'active' : ''}`}
-              onClick={() => setCharacteristic(characteristic === 'popular' ? '' : 'popular')}
+              onClick={() =>
+                setCharacteristic(characteristic === 'popular' ? '' : 'popular')
+              }
             >
-              <Zap className={`w-5 h-5 ${characteristic === 'popular' ? 'fill-yellow-500 text-yellow-500' : ''}`} />
-              <span>Популярное</span>
+              <Zap
+                className={`w-5 h-5 ${characteristic === 'popular' ? 'fill-yellow-500 text-yellow-500' : ''}`}
+              />
+              <span>{t('wave.popular')}</span>
             </button>
           </div>
         </div>
 
         {/* По настроению */}
         <div className="settings-section">
-          <h3 className="section-title">По настроению</h3>
+          <h3 className="section-title">{t('wave.byMood')}</h3>
           <div className="mood-buttons">
             <button
               className={`mood-button energetic ${mood === 'energetic' ? 'active' : ''}`}
               onClick={() => setMood(mood === 'energetic' ? '' : 'energetic')}
             >
-              Бодрое
+              {t('wave.energetic')}
             </button>
             <button
               className={`mood-button happy ${mood === 'happy' ? 'active' : ''}`}
               onClick={() => setMood(mood === 'happy' ? '' : 'happy')}
             >
-              Весёлое
+              {t('wave.happy')}
             </button>
             <button
               className={`mood-button calm ${mood === 'calm' ? 'active' : ''}`}
               onClick={() => setMood(mood === 'calm' ? '' : 'calm')}
             >
-              Спокойное
+              {t('wave.calm')}
             </button>
             <button
               className={`mood-button sad ${mood === 'sad' ? 'active' : ''}`}
               onClick={() => setMood(mood === 'sad' ? '' : 'sad')}
             >
-              Грустное
+              {t('wave.sad')}
             </button>
           </div>
         </div>
 
         {/* По языку */}
         <div className="settings-section">
-          <h3 className="section-title">По языку</h3>
+          <h3 className="section-title">{t('wave.byLanguage')}</h3>
           <div className="language-buttons">
             <button
               className={`language-button ${language === 'russian' ? 'active' : ''}`}
-              onClick={() => setLanguage(language === 'russian' ? '' : 'russian')}
+              onClick={() =>
+                setLanguage(language === 'russian' ? '' : 'russian')
+              }
             >
-              🇷🇺 Русский
+              🇷🇺 {t('wave.russian')}
             </button>
             <button
               className={`language-button ${language === 'foreign' ? 'active' : ''}`}
-              onClick={() => setLanguage(language === 'foreign' ? '' : 'foreign')}
+              onClick={() =>
+                setLanguage(language === 'foreign' ? '' : 'foreign')
+              }
             >
-              🌍 Иностранный
+              🌍 {t('wave.foreign')}
             </button>
             <button
               className={`language-button ${language === 'instrumental' ? 'active' : ''}`}
-              onClick={() => setLanguage(language === 'instrumental' ? '' : 'instrumental')}
+              onClick={() =>
+                setLanguage(language === 'instrumental' ? '' : 'instrumental')
+              }
             >
               <Mic className="w-4 h-4" />
-              Без слов
+              {t('wave.instrumental')}
             </button>
           </div>
         </div>
 
-        {/* Источник Волны — как в мобайле: локальный AutoDJ или Brain */}
+        {/* Источник Волны — как в мобайле: локальный AutoDJ или KFB */}
         <div className="settings-section">
-          <h3 className="section-title">Источник</h3>
+          <h3 className="section-title">{t('wave.source')}</h3>
           <div className="language-buttons">
             <button
               className={`language-button ${source === 'local' ? 'active' : ''}`}
               onClick={() => setSource('local')}
             >
               <MonitorSmartphone className="w-4 h-4" />
-              Локальный
+              {t('wave.local')}
             </button>
             <button
               className={`language-button ${source === 'brain' ? 'active' : ''}`}
               onClick={() => setSource('brain')}
             >
               <Cpu className="w-4 h-4" />
-              Мозг
+              {t('brain.short')}
             </button>
           </div>
-          <p style={{ fontSize: 12, color: brainOn ? '#16a34a' : '#999', marginTop: 8 }}>
-            {brainOn ? '● Мозг подключен' : '○ Мозг выключен — будет играть локальная Волна (мозг включается в Настройки → Внешние API)'}
+          <p
+            style={{
+              fontSize: 12,
+              color: brainOn ? '#16a34a' : '#999',
+              marginTop: 8,
+            }}
+          >
+            {brainOn ? t('brain.waveStatusOn') : t('brain.waveStatusOff')}
           </p>
         </div>
 
         {/* Кнопка сохранить */}
         <div className="settings-footer">
           {activeHint ? (
-            <p className="wave-hint">Волна: {activeHint}</p>
+            <p className="wave-hint">
+              {t('wave.waveHint', { hint: activeHint })}
+            </p>
           ) : null}
           <button className="save-button" onClick={handleSave}>
-            Применить
+            {t('wave.apply')}
           </button>
         </div>
       </div>

@@ -1,6 +1,6 @@
 /**
- * KumaFlow 1.6.2 — Brain wave
- * wave/continue + seeds + publish (throttle 5с). Источник внутри SmartAutoDJ.
+ * KumaFlow 1.6.4 — Brain wave
+ * wave/continue + seeds + publish (throttle 5с) + resume. Источник внутри SmartAutoDJ.
  */
 
 import { brainGet, brainPost, brainRaw } from './brain-client'
@@ -87,8 +87,48 @@ export async function waveSeeds(characteristic?: string, limit = 5): Promise<str
 
 /** Живая очередь: fire-and-forget, throttle 5с, одинаковый ключ не шлём.
  * Шлём только вперёд от текущего (без истории) + интра-дедуп по id,
- * иначе веб-зеркало показывает сыгранное как «дальше» и дубли. */
-export function wavePublish(queue: string[], currentTrackId?: string | null): void {
+ * иначе веб-зеркало показывает сыгранное как «дальше» и дубли.
+ * 1.6.4: позиция/длительность/пауза/имя устройства; force обходит троттлинг
+ * (seek/pause/heartbeat). Мозг лишние поля игнорирует — контракт обратно совместим. */
+export interface WavePublishExtra {
+  positionSec?: number
+  durationSec?: number
+  paused?: boolean
+  deviceName?: string
+  /** Обойти троттлинг: seek/pause/heartbeat должны уходить сразу */
+  force?: boolean
+}
+
+let cachedDeviceName = ''
+
+export function getWaveDeviceName(): string {
+  if (cachedDeviceName) return cachedDeviceName
+  try {
+    const saved = localStorage.getItem('wave_device_name')
+    if (saved && saved.trim()) {
+      cachedDeviceName = saved.trim().slice(0, 80)
+      return cachedDeviceName
+    }
+  } catch { /* ignore */ }
+  let fallback = 'Desktop'
+  try {
+    const ua = typeof navigator !== 'undefined' ? (navigator.platform || '') : ''
+    if (ua) fallback = `Desktop (${ua})`
+  } catch { /* ignore */ }
+  cachedDeviceName = fallback
+  return cachedDeviceName
+}
+
+export function formatResumeTime(totalSec: number): string {
+  const s = Math.max(0, Math.floor(totalSec || 0))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+export function wavePublish(
+  queue: string[],
+  currentTrackId?: string | null,
+  extra?: WavePublishExtra,
+): void {
   const st = useBrainStore.getState()
   if (!isBrainActive() || !st.userId) return
   let q = (queue ?? []).filter(Boolean)
@@ -100,16 +140,30 @@ export function wavePublish(queue: string[], currentTrackId?: string | null): vo
   const seen = new Set<string>()
   q = q.filter((id) => (seen.has(id) ? false : (seen.add(id), true)))
   q = q.slice(0, 100)
+  const positionSec = Math.max(0, Math.floor(extra?.positionSec ?? NaN))
+  const durationSec = Math.max(0, Math.floor(extra?.durationSec ?? NaN))
+  const hasPos = Number.isFinite(positionSec)
+  const hasDur = Number.isFinite(durationSec)
+  const paused = extra?.paused ?? false
+  const deviceName = (extra?.deviceName ?? getWaveDeviceName()).slice(0, 80)
   const now = Date.now()
-  const key = `${st.userId}|${currentTrackId ?? ''}|${q.length}|${q.slice(0, 3).join(',')}`
-  if (now - lastPublishAt < 5000 && key === lastPublishKey) return
+  // Позиция бакетом по 10с: heartbeat/таймапдейты не спамят, но движение видно.
+  const posBucket = hasPos ? Math.floor(positionSec / 10) : -1
+  const key = `${st.userId}|${currentTrackId ?? ''}|${q.length}|${q.slice(0, 3).join(',')}|${paused ? 1 : 0}|${posBucket}|${hasDur ? durationSec : -1}`
+  if (!extra?.force && now - lastPublishAt < 5000 && key === lastPublishKey) return
   lastPublishAt = now
   lastPublishKey = key
-  const payload = {
+  const payload: Record<string, unknown> = {
     user_id: st.userId,
     queue: q,
     current_track_id: currentTrackId ?? null,
+    paused,
+    // Дуплет имени флага: мозг может ждать is_paused, шлём оба.
+    is_paused: paused,
+    device_name: deviceName,
   }
+  if (hasPos) payload.position_sec = positionSec
+  if (hasDur) payload.duration_sec = durationSec
   void (async () => {
     const res = await brainRaw(`/api/wave/publish`, {
       method: 'POST',
@@ -127,6 +181,40 @@ export function wavePublish(queue: string[], currentTrackId?: string | null): vo
       )
     }
   })().catch(() => undefined)
+}
+
+/** Продолжить с телефона: что играло на другом устройстве.
+ * Пробуем /api/wave/resume, фолбек — /api/wave/state (старые сборки мозга).
+ * Мозг не трогаем: только читаем то, что он и так отдаёт. */
+export interface WaveResume {
+  track_id: string
+  external_id?: string | null
+  position_sec?: number
+  duration_sec?: number
+  queue?: string[]
+  device_name?: string | null
+  updated_at?: string | null
+}
+
+export async function waveResume(): Promise<WaveResume | null> {
+  const st = useBrainStore.getState()
+  if (!isBrainActive() || !st.userId) return null
+  const q = new URLSearchParams({ user_id: st.userId })
+  const res =
+    (await brainGet<WaveResume>(`/api/wave/resume?${q.toString()}`)) ??
+    (await brainGet<WaveResume>(`/api/wave/state?${q.toString()}`))
+  if (!res) return null
+  const trackId = (res.track_id ?? res.external_id ?? '').trim()
+  if (!trackId) return null
+  return {
+    track_id: trackId,
+    external_id: res.external_id ?? null,
+    position_sec: Number.isFinite(Number(res.position_sec)) ? Math.floor(Number(res.position_sec)) : 0,
+    duration_sec: Number.isFinite(Number(res.duration_sec)) ? Math.floor(Number(res.duration_sec)) : 0,
+    queue: Array.isArray(res.queue) ? res.queue.filter(Boolean).slice(0, 100) : [],
+    device_name: res.device_name ?? null,
+    updated_at: res.updated_at ?? null,
+  }
 }
 
 /** Нужно ли дозапрашивать волну: в очереди осталось ≤5 */

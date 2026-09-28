@@ -19,7 +19,7 @@ import { cacheService } from '@/service/cache-service'
 import { useAppStore } from './app.store'
 import { behaviorTracker } from '@/service/behavior-tracker'
 import { queueBrainEvent } from '@/service/brain-events'
-import { wavePublish } from '@/service/brain-wave'
+import { getWaveDeviceName, wavePublish } from '@/service/brain-wave'
 import { moodDriftDetector } from '@/service/mood-drift-detector'
 import { timeAwareHistory } from '@/service/time-aware-history'
 import { myWaveDiscoveryTracker } from '@/service/mywave-discoveries'
@@ -967,7 +967,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                   position: currentSong.duration || 0,
                 })
 
-                // === BRAIN 1.6.2: complete + живая очередь ===
+                // === BRAIN 1.6.4: complete + живая очередь (с позицией/паузой/устройством) ===
                 queueBrainEvent({
                   track_id: currentSong.id,
                   action: 'complete',
@@ -979,6 +979,12 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                   wavePublish(
                     q.map((s) => s.id).filter(Boolean),
                     currentSong.id,
+                    {
+                      positionSec: Math.floor(currentSong.duration || 0),
+                      durationSec: Math.floor(currentSong.duration || 0),
+                      paused: false,
+                      deviceName: getWaveDeviceName(),
+                    },
                   )
                   void idx
                 } catch { /* best-effort */ }
@@ -1068,19 +1074,11 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
         name: 'player_store',
         version: 1,
         merge: (persistedState, currentState) => {
-          let merged = merge(currentState, persistedState)
-
-          idbStorage.getItem<ISongList>(miniStores.songlist, (value) => {
-            if (!value) return
-
-            const newState = {
-              songlist: value,
-            }
-
-            merged = merge(merged, newState)
-          })
-
-          return merged
+          // Синхронный merge localStorage-части. Очередь (songlist) живет
+          // только в IndexedDB и грузится АСИНХРОННО ниже отдельным шагом:
+          // колбэк внутри merge приходил после return и результат терялся
+          // (очередь после рестарта пустая при живом IDB).
+          return merge(currentState, persistedState)
         },
         partialize: (state) => {
           const { isPlaying, audioPlayerRef, mainDrawerState, queueState, lyricsState, ...restPlayerState } = state.playerState
@@ -1114,6 +1112,45 @@ usePlayerStore.subscribe(
     equalityFn: shallow,
   },
 )
+
+// before-quit flush: один awaited IDB-write очереди вместо эвристики.
+// Main дергает window.__kumaflowFlushQueue через executeJavaScript и ЖДЕТ
+// результат: последний set() в IndexedDB точно завершен до app.quit().
+// Без этого очередь терялась при рестарте (in-flight write не успевал).
+export async function flushSonglistToIdb(): Promise<{ ok: boolean; n: number }> {
+  try {
+    const { set } = await import('idb-keyval')
+    const songlist = usePlayerStore.getState().songlist
+    await set(miniStores.songlist, songlist)
+    const n = Array.isArray(songlist?.currentList) ? songlist.currentList.length : 0
+    return { ok: true, n }
+  } catch {
+    return { ok: false, n: -1 }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  ;(window as unknown as { __kumaflowFlushQueue?: typeof flushSonglistToIdb }).__kumaflowFlushQueue =
+    flushSonglistToIdb
+}
+
+// Дозагрузка очереди из IndexedDB после rehydrate.
+// merge() синхронен и ждать IDB не умеет, поэтому songlist читаем
+// отдельным awaited шагом и кладем через setState.
+// Гард: не затираем очередь, если туда уже что-то попало
+// (пользователь успел включить трек раньше, чем прилетел IDB).
+;(async () => {
+  try {
+    const saved = await idbStorage.getItemAsync<ISongList>(miniStores.songlist)
+    if (!saved || !Array.isArray(saved.currentList) || saved.currentList.length === 0) return
+    const cur = usePlayerStore.getState().songlist
+    const curEmpty = !cur || !Array.isArray(cur.currentList) || cur.currentList.length === 0
+    if (!curEmpty) return
+    usePlayerStore.setState({ songlist: saved })
+  } catch {
+    // Старт без очереди — штатно, молчим
+  }
+})()
 
 usePlayerStore.subscribe(
   (state) => [state.songlist.currentList, state.songlist.currentSongIndex],

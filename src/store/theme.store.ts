@@ -7,6 +7,19 @@ import { getValidThemeFromEnv } from '@/utils/theme'
 
 const appThemeFromEnv = getValidThemeFromEnv()
 
+// Polar — общая дефолтная тема из иконки (navy/steel/ice/glacier).
+// Адаптив: первый запуск без сохранённой темы — по prefers-color-scheme.
+function getSystemPolar(): Theme {
+  try {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      if (window.matchMedia('(prefers-color-scheme: light)').matches) return Theme.PolarLight
+    }
+  } catch {
+    // ignore — fallback ниже
+  }
+  return Theme.PolarDark
+}
+
 // Проверка на существование темы
 function isValidTheme(theme: string): boolean {
   return Object.values(Theme).includes(theme as Theme)
@@ -17,7 +30,7 @@ export const useThemeStore = createWithEqualityFn<IThemeContext>()(
     persist(
       devtools(
         immer((set) => ({
-          theme: appThemeFromEnv || Theme.Dark,
+          theme: appThemeFromEnv || getSystemPolar(),
           setTheme: (theme: Theme) => {
             set((state) => {
               state.theme = theme

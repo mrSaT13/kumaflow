@@ -1,14 +1,20 @@
 import { useState } from 'react'
-import { useExternalApi } from '@/store/external-api.store'
-import { Button } from '@/app/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
-import { Input } from '@/app/components/ui/input'
-import { Switch } from '@/app/components/ui/switch'
-import { Label } from '@/app/components/ui/label'
 import { toast } from 'react-toastify'
 import { LastFmAuth } from '@/app/components/settings/pages/content/lastfm-auth'
-import { ListenBrainzSettings } from '@/app/components/settings/pages/external/listenbrainz'
 import { BrainSettings } from '@/app/components/settings/pages/external/brain'
+import { ListenBrainzSettings } from '@/app/components/settings/pages/external/listenbrainz'
+import { Button } from '@/app/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/app/components/ui/card'
+import { Input } from '@/app/components/ui/input'
+import { Label } from '@/app/components/ui/label'
+import { Switch } from '@/app/components/ui/switch'
+import { useExternalApi } from '@/store/external-api.store'
 
 export default function ExternalApiSettings() {
   const {
@@ -25,7 +31,9 @@ export default function ExternalApiSettings() {
 
   const [lastFmInput, setLastFmInput] = useState(settings.lastFmApiKey)
   const [fanartInput, setFanartInput] = useState(settings.fanartApiKey)
-  const [fanartClientInput, setFanartClientInput] = useState(settings.fanartClientKey)
+  const [fanartClientInput, setFanartClientInput] = useState(
+    settings.fanartClientKey,
+  )
 
   const handleSaveLastFm = () => {
     setLastFmApiKey(lastFmInput)
@@ -92,7 +100,11 @@ export default function ExternalApiSettings() {
                 onChange={(e) => setLastFmInput(e.target.value)}
                 className="flex-1 min-w-0"
               />
-              <Button onClick={handleSaveLastFm} variant="secondary" className="whitespace-nowrap">
+              <Button
+                onClick={handleSaveLastFm}
+                variant="secondary"
+                className="whitespace-nowrap"
+              >
                 Сохранить
               </Button>
             </div>
@@ -109,11 +121,9 @@ export default function ExternalApiSettings() {
           </div>
 
           {settings.lastFmEnabled && settings.lastFmApiKey && (
-            <div className="text-xs text-green-600">
-              ✅ Last.fm подключён
-            </div>
+            <div className="text-xs text-green-600">✅ Last.fm подключён</div>
           )}
-          
+
           {!settings.lastFmEnabled && settings.lastFmApiKey && (
             <div className="text-xs text-blue-600">
               ℹ️ Last.fm API ключ сохранён (используется для обложек артистов)
@@ -133,7 +143,7 @@ export default function ExternalApiSettings() {
           <ListenBrainzSettings />
         </div>
 
-        {/* Brain: Моя волна */}
+        {/* KumaFlow Brain: Моя волна */}
         <div className="pt-4 border-t">
           <BrainSettings />
         </div>
@@ -164,7 +174,11 @@ export default function ExternalApiSettings() {
                 onChange={(e) => setFanartInput(e.target.value)}
                 className="flex-1 min-w-0"
               />
-              <Button onClick={handleSaveFanart} variant="secondary" className="whitespace-nowrap">
+              <Button
+                onClick={handleSaveFanart}
+                variant="secondary"
+                className="whitespace-nowrap"
+              >
                 Сохранить
               </Button>
             </div>
@@ -181,7 +195,9 @@ export default function ExternalApiSettings() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="fanart-client-key">Personal API Key (опционально)</Label>
+            <Label htmlFor="fanart-client-key">
+              Personal API Key (опционально)
+            </Label>
             <div className="flex gap-2 flex-wrap">
               <Input
                 id="fanart-client-key"
@@ -191,7 +207,11 @@ export default function ExternalApiSettings() {
                 onChange={(e) => setFanartClientInput(e.target.value)}
                 className="flex-1 min-w-0"
               />
-              <Button onClick={handleSaveFanartClient} variant="secondary" className="whitespace-nowrap">
+              <Button
+                onClick={handleSaveFanartClient}
+                variant="secondary"
+                className="whitespace-nowrap"
+              >
                 Сохранить
               </Button>
             </div>
@@ -201,9 +221,7 @@ export default function ExternalApiSettings() {
           </div>
 
           {settings.fanartEnabled && settings.fanartApiKey && (
-            <div className="text-xs text-green-600">
-              ✅ Fanart.tv подключён
-            </div>
+            <div className="text-xs text-green-600">✅ Fanart.tv подключён</div>
           )}
 
           {/* Чекбокс "Включить баннер артиста" */}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'react-toastify'
 import { isDesktop } from 'react-device-detect'
 import { RouterProvider } from 'react-router-dom'
 import { Linux } from '@/app/components/controls/linux'
@@ -30,7 +31,9 @@ import { getFavoriteArtists } from '@/service/subsonic-api'
 import { checkAndGenerateHolidayPlaylists } from '@/service/holiday-playlist-generator'  // 🆕
 import { startBrainFlushLoop } from '@/service/brain-events'  // 1.6.2: Brain flush
 import { startBrainAutoSyncLoop } from '@/service/brain-autosync'  // Автосинк вкусов (вкл по умолчанию)
-import { wavePublish } from '@/service/brain-wave'  // 1.6.2: живая очередь мозгу
+import { formatResumeTime, getWaveDeviceName, wavePublish, waveResume } from '@/service/brain-wave'  // 1.6.4: живая очередь + resume
+import { subsonic } from '@/service/subsonic'
+import type { ISong } from '@/types/responses/song'
 import { isBrainActive } from '@/store/brain.store'
 import { usePlayerStore } from '@/store/player.store'
 
@@ -104,22 +107,144 @@ function App() {
     // Работает только если мозг включен и настроен; тумблер — в настройках мозга.
     startBrainAutoSyncLoop()
 
-    // 1.6.2: живая очередь мозгу при ЛЮБОМ изменении очереди/текущего трека
-    // (троттлинг 5с внутри wavePublish, best-effort)
+    // 1.6.4: живая очередь мозгу — позиция/длительность/пауза/имя устройства.
+    // Смена очереди/трека (throttle 5с внутри) + force-отправка на паузу/плей
+    // + heartbeat ~15с пока играет. Best-effort, мозг не трогаем.
+    const publishWaveSnapshot = (force = false) => {
+      if (!isBrainActive()) return
+      try {
+        const st = usePlayerStore.getState()
+        const audio = st.playerState.audioPlayerRef as HTMLAudioElement | null
+        const posFromAudio =
+          audio && Number.isFinite(audio.currentTime) ? Math.floor(audio.currentTime) : NaN
+        const posFromStore = Math.floor(st.playerProgress.progress ?? NaN)
+        const positionSec = Number.isFinite(posFromAudio)
+          ? posFromAudio
+          : Number.isFinite(posFromStore)
+            ? posFromStore
+            : 0
+        const durFromStore = Math.floor(st.playerState.currentDuration ?? NaN)
+        const durFromAudio =
+          audio && Number.isFinite(audio.duration) ? Math.floor(audio.duration) : NaN
+        const durationSec =
+          Number.isFinite(durFromStore) && durFromStore > 0
+            ? durFromStore
+            : Number.isFinite(durFromAudio)
+              ? durFromAudio
+              : 0
+        wavePublish(
+          st.songlist.currentList.map((t) => t.id).filter(Boolean),
+          st.songlist.currentSong?.id ?? null,
+          {
+            positionSec,
+            durationSec,
+            paused: !st.playerState.isPlaying,
+            deviceName: getWaveDeviceName(),
+            force,
+          },
+        )
+      } catch { /* best-effort */ }
+    }
     const unsubBrainQueue = usePlayerStore.subscribe(
       (s) =>
         `${s.songlist.currentList.map((t) => t.id).join(',')}|${s.songlist.currentSong?.id ?? ''}`,
       () => {
-        if (!isBrainActive()) return
-        const st = usePlayerStore.getState()
-        wavePublish(
-          st.songlist.currentList.map((t) => t.id).filter(Boolean),
-          st.songlist.currentSong?.id ?? null,
-        )
+        publishWaveSnapshot(false)
       },
     )
+    // Пауза/плей — сразу, мимо троттлинга
+    const unsubBrainPlaying = usePlayerStore.subscribe(
+      (s) => s.playerState.isPlaying,
+      () => {
+        publishWaveSnapshot(true)
+      },
+    )
+    // Heartbeat ~15с, только пока играет
+    const brainHeartbeat = setInterval(() => {
+      try {
+        if (!isBrainActive()) return
+        if (!usePlayerStore.getState().playerState.isPlaying) return
+        publishWaveSnapshot(true)
+      } catch { /* best-effort */ }
+    }, 15000)
 
-    return () => unsubBrainQueue()
+    // 1.6.4: продолжить с телефона — тост при старте.
+    // getSong(external_id) → очередь из resume.queue → play → seek.
+    const seekWaveResume = (positionSec: number) => {
+      const pos = Math.max(0, Math.floor(positionSec || 0))
+      if (pos <= 0) return
+      try {
+        usePlayerStore.getState().actions.setProgress(pos)
+      } catch { /* best-effort */ }
+      let attempts = 0
+      const timer = setInterval(() => {
+        attempts += 1
+        try {
+          const audio = usePlayerStore.getState().playerState.audioPlayerRef as HTMLAudioElement | null
+          if (audio && Number.isFinite(audio.duration) && audio.duration > 0) {
+            try {
+              audio.currentTime = Math.min(pos, Math.max(0, Math.floor(audio.duration) - 1))
+            } catch { /* best-effort */ }
+            try {
+              usePlayerStore.getState().actions.setProgress(pos)
+            } catch { /* best-effort */ }
+          }
+        } catch { /* best-effort */ }
+        if (attempts >= 12) clearInterval(timer)
+      }, 500)
+    }
+    const checkWaveResume = async () => {
+      if (!isBrainActive()) return
+      try {
+        const resume = await waveResume()
+        if (!resume) return
+        const targetId = (resume.external_id || resume.track_id || '').trim()
+        if (!targetId) return
+        const pos = Math.floor(resume.position_sec ?? 0)
+        if (pos < 5) return // нечего продолжать
+        if (resume.device_name && resume.device_name === getWaveDeviceName()) return // сами играли
+        const local = usePlayerStore.getState()
+        const localId = local.songlist.currentSong?.id
+        if (localId && (localId === targetId || localId === resume.track_id)) return
+        const continueFromPhone = async () => {
+          try {
+            const song = await subsonic.songs.getSong(targetId).catch(() => null)
+            if (!song) {
+              toast.error('Трек с телефона не найден в библиотеке')
+              return
+            }
+            const restIds = (resume.queue ?? [])
+              .filter((qid) => qid && qid !== targetId && qid !== resume.track_id)
+              .slice(0, 30)
+            const rest = (
+              await Promise.all(restIds.map((qid) => subsonic.songs.getSong(qid).catch(() => null)))
+            ).filter((s): s is ISong => !!s)
+            usePlayerStore.getState().actions.setSongList([song as ISong, ...rest], 0)
+            seekWaveResume(pos)
+            toast.success('Продолжили с телефона', { autoClose: 2000 })
+          } catch {
+            toast.error('Не получилось продолжить с телефона')
+          }
+        }
+        toast.info(`Продолжить с телефона — ${formatResumeTime(pos)}`, {
+          autoClose: 20000,
+          onClick: () => {
+            void continueFromPhone()
+          },
+        })
+      } catch { /* best-effort */ }
+    }
+    // Пауза 4с: даём очереди восстановиться из IDB, чтобы не предлагать тот же трек.
+    const resumeTimer = setTimeout(() => {
+      void checkWaveResume()
+    }, 4000)
+
+    return () => {
+      unsubBrainQueue()
+      unsubBrainPlaying()
+      clearInterval(brainHeartbeat)
+      clearTimeout(resumeTimer)
+    }
   }, [initializeServices, initializeListenBrainz])
 
   // Функция синхронизации лайкнутых артистов

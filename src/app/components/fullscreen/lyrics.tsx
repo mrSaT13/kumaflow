@@ -1,20 +1,23 @@
 import { useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
+import { ExternalLink } from 'lucide-react'
 import { ComponentPropsWithoutRef, useEffect, useRef, useState } from 'react'
 import { isSafari } from 'react-device-detect'
 import { useTranslation } from 'react-i18next'
 import { Lrc } from 'react-lrc'
+import { Button } from '@/app/components/ui/button'
 import {
   ScrollArea,
   scrollAreaViewportSelector,
 } from '@/app/components/ui/scroll-area'
+import {
+  getGeniusSearchUrl,
+  searchLyrics,
+} from '@/service/lyrics-multi-provider' // 🆕 Multi-provider
+import { trackViewLyrics } from '@/service/ml-event-tracker'
 import { subsonic } from '@/service/subsonic'
-import { searchLyrics, getGeniusSearchUrl } from '@/service/lyrics-multi-provider'  // 🆕 Multi-provider
 import { usePlayerRef, usePlayerSonglist } from '@/store/player.store'
 import { ILyric } from '@/types/responses/song'
-import { trackViewLyrics } from '@/service/ml-event-tracker'
-import { Button } from '@/app/components/ui/button'
-import { ExternalLink } from 'lucide-react'
 
 interface LyricProps {
   lyrics: ILyric
@@ -23,9 +26,11 @@ interface LyricProps {
 export function LyricsTab() {
   const { currentSong } = usePlayerSonglist()
   const { t } = useTranslation()
-  const [multiProviderLyrics, setMultiProviderLyrics] = useState<ILyric | null>(null)
+  const [multiProviderLyrics, setMultiProviderLyrics] = useState<ILyric | null>(
+    null,
+  )
   const [geniusUrl, setGeniusUrl] = useState<string>('')
-  const [activeSource, setActiveSource] = useState<string>('subsonic')  // 🆕 Активный источник
+  const [activeSource, setActiveSource] = useState<string>('subsonic') // 🆕 Активный источник
 
   const { id, artist, title, duration } = currentSong
 
@@ -72,7 +77,14 @@ export function LyricsTab() {
   useEffect(() => {
     if (!isLoading && (lyrics || multiProviderLyrics)) {
       trackViewLyrics(id, !!(lyrics?.value || multiProviderLyrics?.value))
-      console.log('[Lyrics] View tracked:', artist, '-', title, 'hasLyrics:', !!(lyrics?.value || multiProviderLyrics?.value))
+      console.log(
+        '[Lyrics] View tracked:',
+        artist,
+        '-',
+        title,
+        'hasLyrics:',
+        !!(lyrics?.value || multiProviderLyrics?.value),
+      )
     }
   }, [id, artist, title, isLoading, lyrics, multiProviderLyrics])
 
@@ -94,7 +106,14 @@ export function LyricsTab() {
         {/* Бейдж источника */}
         <div className="absolute top-2 right-2 z-10">
           <span className="text-xs px-2 py-1 rounded-full bg-black/60 text-white/80 backdrop-blur-sm">
-            Источник: {activeSource === 'lrclib' ? 'LRCLIB' : activeSource === 'netease' ? 'NetEase' : activeSource === 'simpmusic' ? 'SimpMusic' : 'Genius'}
+            {t('fullscreen.source')}{' '}
+            {activeSource === 'lrclib'
+              ? 'LRCLIB'
+              : activeSource === 'netease'
+                ? 'NetEase'
+                : activeSource === 'simpmusic'
+                  ? 'SimpMusic'
+                  : 'Genius'}
           </span>
         </div>
         {areLyricsSynced(multiProviderLyrics) ? (
@@ -116,7 +135,7 @@ export function LyricsTab() {
             size="sm"
           >
             <ExternalLink className="w-4 h-4 mr-2" />
-            Искать на Genius
+            {t('fullscreen.searchGenius')}
           </Button>
         </div>
       </CenteredMessage>
