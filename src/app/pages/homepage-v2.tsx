@@ -7,52 +7,58 @@
  * - ML рекомендации вместо "AI-сет"
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { useML, useMLStore } from '@/store/ml.store'
-import { usePlayerActions, usePlayerStore } from '@/store/player.store'
-import { useMLPlaylists } from '@/store/ml-playlists.store'
-import { useMLPlaylistsStateActions } from '@/store/ml-playlists-state.store'
-import { generateMyWavePlaylist } from '@/service/ml-wave-service'
+import { useQuery } from '@tanstack/react-query'
+import {
+  Activity,
+  BarChart3,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Disc,
+  Heart,
+  History,
+  Mic2,
+  Music2,
+  Pause,
+  Play,
+  Settings,
+  Sparkles,
+  Star,
+  TrendingUp,
+  Zap,
+} from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Link, useNavigate } from 'react-router-dom'
+import { toast } from 'react-toastify'
+import { getSimpleCoverArtUrl } from '@/api/httpClient'
 import MyWaveSettings, {
   getWaveSource,
   readWaveContext,
   saveWaveContext,
   waveLabel,
 } from '@/app/components/homepage/my-wave-settings'
-import { isBrainActive } from '@/store/brain.store'
-import { mapWaveSettings, waveContinue } from '@/service/brain-wave'
 import { getRecentBrainEvents } from '@/service/brain-events'
+import { mapWaveSettings, waveContinue } from '@/service/brain-wave'
+import { generateMyWavePlaylist } from '@/service/ml-wave-service'
+import { myWaveDiscoveryTracker } from '@/service/mywave-discoveries'
 import { subsonic } from '@/service/subsonic'
+import {
+  getGenres,
+  getRandomSongs,
+  getSongsByGenre,
+  getStarredArtists,
+} from '@/service/subsonic-api'
+import { useAppStore } from '@/store/app.store'
+import { isBrainActive } from '@/store/brain.store'
+import { useML, useMLStore } from '@/store/ml.store'
+import { useMLPlaylists } from '@/store/ml-playlists.store'
+import { useMLPlaylistsStateActions } from '@/store/ml-playlists-state.store'
+import { usePlayerActions, usePlayerStore } from '@/store/player.store'
+import { useThemeStore } from '@/store/theme.store'
 import type { ISong } from '@/types/responses/song'
 import { generateCSSGradient } from '@/utils/genreColors'
-import { getGenres, getSongsByGenre, getRandomSongs, getStarredArtists } from '@/service/subsonic-api'
-import { getSimpleCoverArtUrl } from '@/api/httpClient'
-import { toast } from 'react-toastify'
-import { useQuery } from '@tanstack/react-query'
-import {
-  Play,
-  Pause,
-  BarChart3,
-  Settings,
-  Sparkles,
-  TrendingUp,
-  Heart,
-  Zap,
-  Disc,
-  Mic2,
-  ChevronRight,
-  ChevronLeft,
-  Activity,
-  History,
-  Star,
-  Calendar,
-  Music2,
-} from 'lucide-react'
-import { useThemeStore } from '@/store/theme.store'
 import { isDarkTheme } from '@/utils/theme'
-import { myWaveDiscoveryTracker } from '@/service/mywave-discoveries'
-import { useAppStore } from '@/store/app.store'
 
 // ==================== ХУКИ ====================
 
@@ -110,7 +116,12 @@ interface GenreButtonProps {
   isGenerating: boolean
 }
 
-function GenreButton({ genre, songCount, onClick, isGenerating }: GenreButtonProps) {
+function GenreButton({
+  genre,
+  songCount,
+  onClick,
+  isGenerating,
+}: GenreButtonProps) {
   const gradientIndex = genre.length % 8
   const gradients = [
     'from-red-500 via-red-400 to-orange-400',
@@ -129,11 +140,17 @@ function GenreButton({ genre, songCount, onClick, isGenerating }: GenreButtonPro
       disabled={isGenerating}
       className="relative rounded-xl overflow-hidden aspect-square shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.05] disabled:opacity-50 disabled:cursor-not-allowed group"
     >
-      <div className={`absolute inset-0 bg-gradient-to-br ${gradients[gradientIndex]} transition-transform duration-300 group-hover:scale-110`} />
+      <div
+        className={`absolute inset-0 bg-gradient-to-br ${gradients[gradientIndex]} transition-transform duration-300 group-hover:scale-110`}
+      />
       <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors" />
       <div className="relative p-3 flex flex-col items-center justify-center h-full text-white">
-        <span className="text-sm font-bold text-center line-clamp-2 drop-shadow-sm">{genre}</span>
-        {songCount > 0 && <span className="text-xs opacity-80 mt-1">{songCount}+</span>}
+        <span className="text-sm font-bold text-center line-clamp-2 drop-shadow-sm">
+          {genre}
+        </span>
+        {songCount > 0 && (
+          <span className="text-xs opacity-80 mt-1">{songCount}+</span>
+        )}
       </div>
       <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-all duration-300">
         <Play className="w-8 h-8 text-white drop-shadow-lg fill-white" />
@@ -150,7 +167,13 @@ interface QuickAccessCardProps {
   gradient: string
 }
 
-function QuickAccessCard({ icon, label, subtitle, route, gradient }: QuickAccessCardProps) {
+function QuickAccessCard({
+  icon,
+  label,
+  subtitle,
+  route,
+  gradient,
+}: QuickAccessCardProps) {
   const navigate = useNavigate()
   const t = useThemeClasses()
 
@@ -159,14 +182,24 @@ function QuickAccessCard({ icon, label, subtitle, route, gradient }: QuickAccess
       onClick={() => navigate(route)}
       className={`glass-card relative flex items-center gap-4 p-4 rounded-2xl ${t.cardBg} border shadow-sm hover:shadow-xl transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5 text-left group overflow-hidden ${t.cardHover}`}
     >
-      <div className={`p-3 rounded-2xl bg-gradient-to-br ${gradient} text-white group-hover:scale-110 transition-transform duration-300 shadow-md`}>
+      <div
+        className={`p-3 rounded-2xl bg-gradient-to-br ${gradient} text-white group-hover:scale-110 transition-transform duration-300 shadow-md`}
+      >
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        <span className={`font-semibold block truncate ${t.text.primary}`}>{label}</span>
-        {subtitle && <span className={`text-xs mt-0.5 block ${t.text.secondary}`}>{subtitle}</span>}
+        <span className={`font-semibold block truncate ${t.text.primary}`}>
+          {label}
+        </span>
+        {subtitle && (
+          <span className={`text-xs mt-0.5 block ${t.text.secondary}`}>
+            {subtitle}
+          </span>
+        )}
       </div>
-      <ChevronRight className={`w-5 h-5 group-hover:translate-x-1 transition-all ${t.text.muted}`} />
+      <ChevronRight
+        className={`w-5 h-5 group-hover:translate-x-1 transition-all ${t.text.muted}`}
+      />
     </button>
   )
 }
@@ -178,12 +211,22 @@ interface MLPlaylistCardProps {
   icon: React.ReactNode
   tags?: string[]
   onClick: () => void
-  onPlay?: () => void  // Опциональная кнопка Play
+  onPlay?: () => void // Опциональная кнопка Play
 }
 
-function MLPlaylistCard({ title, description, gradient, icon, tags, onClick, onPlay }: MLPlaylistCardProps) {
+function MLPlaylistCard({
+  title,
+  description,
+  gradient,
+  icon,
+  tags,
+  onClick,
+  onPlay,
+}: MLPlaylistCardProps) {
   return (
-    <div className={`relative rounded-2xl overflow-hidden aspect-square bg-gradient-to-br ${gradient} text-white text-left group`}>
+    <div
+      className={`relative rounded-2xl overflow-hidden aspect-square bg-gradient-to-br ${gradient} text-white text-left group`}
+    >
       {/* Основная карточка - клик для открытия */}
       <button
         onClick={onClick}
@@ -195,12 +238,19 @@ function MLPlaylistCard({ title, description, gradient, icon, tags, onClick, onP
           {icon}
         </div>
         <div className="relative z-10">
-          <h3 className="font-bold text-lg mb-1 group-hover:text-xl transition-all duration-300">{title}</h3>
+          <h3 className="font-bold text-lg mb-1 group-hover:text-xl transition-all duration-300">
+            {title}
+          </h3>
           <p className="text-sm opacity-90 line-clamp-2">{description}</p>
           {tags && tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-3">
               {tags.slice(0, 2).map((tag, i) => (
-                <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">{tag}</span>
+                <span
+                  key={i}
+                  className="text-xs px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm"
+                >
+                  {tag}
+                </span>
               ))}
             </div>
           )}
@@ -227,7 +277,11 @@ function MLPlaylistCard({ title, description, gradient, icon, tags, onClick, onP
  * 🆕 ViralArtistsSection — артисты из истории с лайками
  * Показывает артистов которых пользователь недавно лайкал
  */
-function ViralArtistsSection({ onArtistClick }: { onArtistClick: (artistId: string, artistName: string) => void }) {
+function ViralArtistsSection({
+  onArtistClick,
+}: {
+  onArtistClick: (artistId: string, artistName: string) => void
+}) {
   const { ratings } = useMLStore()
   const [viralArtists, setViralArtists] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -239,9 +293,15 @@ function ViralArtistsSection({ onArtistClick }: { onArtistClick: (artistId: stri
     const loadViralArtists = async () => {
       // Берём треки с лайками из ratings
       const likedRatings = Object.entries(ratings)
-        .filter(([_, rating]) => rating.like === true && rating.songInfo?.artistId)
-        .sort((a, b) => new Date(b[1].lastPlayed || 0).getTime() - new Date(a[1].lastPlayed || 0).getTime())
-        .slice(0, 15)  // Топ-15 лайкнутых треков
+        .filter(
+          ([_, rating]) => rating.like === true && rating.songInfo?.artistId,
+        )
+        .sort(
+          (a, b) =>
+            new Date(b[1].lastPlayed || 0).getTime() -
+            new Date(a[1].lastPlayed || 0).getTime(),
+        )
+        .slice(0, 15) // Топ-15 лайкнутых треков
 
       // Загружаем лайкнутых артистов для обложек
       const starredArtists = await getStarredArtists()
@@ -258,7 +318,7 @@ function ViralArtistsSection({ onArtistClick }: { onArtistClick: (artistId: stri
           artistMap.set(artistId, {
             id: artistId,
             name: rating.songInfo!.artist || 'Unknown',
-            coverArt: artistCoverMap.get(artistId),  // Добавляем coverArt
+            coverArt: artistCoverMap.get(artistId), // Добавляем coverArt
             likedCount: 0,
             lastLiked: rating.lastPlayed,
           })
@@ -269,24 +329,33 @@ function ViralArtistsSection({ onArtistClick }: { onArtistClick: (artistId: stri
 
       const artists = Array.from(artistMap.values())
         .sort((a, b) => b.likedCount - a.likedCount)
-        .slice(0, 12)  // Топ-12 артистов по лайкам
+        .slice(0, 12) // Топ-12 артистов по лайкам
 
       if (!cancelled) {
-        console.log('[ViralArtists] Found', artists.length, 'artists from liked history')
+        console.log(
+          '[ViralArtists] Found',
+          artists.length,
+          'artists from liked history',
+        )
         setViralArtists(artists)
         setLoading(false)
       }
     }
 
     loadViralArtists()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [ratings])
 
   if (loading) {
     return (
       <div className="flex gap-4 overflow-x-auto pb-4">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex-shrink-0 w-[140px] flex flex-col items-center">
+          <div
+            key={i}
+            className="flex-shrink-0 w-[140px] flex flex-col items-center"
+          >
             <div className="w-[120px] h-[120px] rounded-full bg-muted animate-pulse" />
             <div className="mt-3 w-20 h-3 rounded-full bg-muted" />
           </div>
@@ -297,7 +366,9 @@ function ViralArtistsSection({ onArtistClick }: { onArtistClick: (artistId: stri
 
   if (viralArtists.length === 0) {
     return (
-      <div className={`text-center py-8 rounded-2xl border border-dashed ${themeClasses.cardBg} ${themeClasses.borderDashed}`}>
+      <div
+        className={`text-center py-8 rounded-2xl border border-dashed ${themeClasses.cardBg} ${themeClasses.borderDashed}`}
+      >
         <Mic2 className={`w-10 h-10 mx-auto mb-2 ${themeClasses.text.muted}`} />
         <p className={`text-sm ${themeClasses.text.secondary}`}>
           Лайкайте треки — здесь появятся артисты из вашей истории
@@ -322,11 +393,11 @@ function ViralArtistsSection({ onArtistClick }: { onArtistClick: (artistId: stri
 /**
  * 🆕 InStyleArtistsSection — все лайкнутые артисты, рандомно при каждом запуске
  */
-function InStyleArtistsSection({ 
-  artists, 
-  isLoading, 
-  onArtistClick 
-}: { 
+function InStyleArtistsSection({
+  artists,
+  isLoading,
+  onArtistClick,
+}: {
   artists: any[]
   isLoading: boolean
   onArtistClick: (artistId: string, artistName: string) => void
@@ -337,17 +408,20 @@ function InStyleArtistsSection({
   // Рандомизируем артисты при каждом монтировании
   useEffect(() => {
     if (artists.length === 0) return
-    
+
     // Перемешиваем массив
     const shuffled = [...artists].sort(() => Math.random() - 0.5)
-    setRandomizedArtists(shuffled.slice(0, 15))  // Показываем до 15
+    setRandomizedArtists(shuffled.slice(0, 15)) // Показываем до 15
   }, [artists])
 
   if (isLoading) {
     return (
       <div className="flex gap-4 overflow-x-auto pb-4">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex-shrink-0 w-[140px] flex flex-col items-center">
+          <div
+            key={i}
+            className="flex-shrink-0 w-[140px] flex flex-col items-center"
+          >
             <div className="w-[120px] h-[120px] rounded-full bg-muted animate-pulse" />
             <div className="mt-3 w-20 h-3 rounded-full bg-muted" />
           </div>
@@ -358,7 +432,9 @@ function InStyleArtistsSection({
 
   if (randomizedArtists.length === 0) {
     return (
-      <div className={`text-center py-8 rounded-2xl border border-dashed ${themeClasses.cardBg} ${themeClasses.borderDashed}`}>
+      <div
+        className={`text-center py-8 rounded-2xl border border-dashed ${themeClasses.cardBg} ${themeClasses.borderDashed}`}
+      >
         <Mic2 className={`w-10 h-10 mx-auto mb-2 ${themeClasses.text.muted}`} />
         <p className={`text-sm ${themeClasses.text.secondary}`}>
           Лайкайте треки — здесь появятся любимые артисты
@@ -381,7 +457,12 @@ function InStyleArtistsSection({
 }
 
 interface ArtistCircleProps {
-  artist: { id: string; name: string; coverArt?: string; artistImageUrl?: string }
+  artist: {
+    id: string
+    name: string
+    coverArt?: string
+    artistImageUrl?: string
+  }
   onClick: () => void
   discoveryInfo?: any
 }
@@ -395,7 +476,10 @@ function ArtistCircle({ artist, onClick, discoveryInfo }: ArtistCircleProps) {
   return (
     <div className="flex-shrink-0 w-[210px] group flex flex-col items-center relative">
       {/* Круглая картинка - клик для радио */}
-      <button onClick={onClick} className="w-[200px] h-[200px] rounded-full overflow-hidden shadow-md group-hover:shadow-xl transition-all hover:scale-105 bg-gradient-to-br from-gray-300 to-gray-400 relative">
+      <button
+        onClick={onClick}
+        className="w-[200px] h-[200px] rounded-full overflow-hidden shadow-md group-hover:shadow-xl transition-all hover:scale-105 bg-gradient-to-br from-gray-300 to-gray-400 relative"
+      >
         {coverUrl ? (
           <img
             src={coverUrl}
@@ -403,7 +487,12 @@ function ArtistCircle({ artist, onClick, discoveryInfo }: ArtistCircleProps) {
             className="w-full h-full object-cover"
             onError={(e) => {
               const target = e.target as HTMLImageElement
-              console.log('[ArtistCircle] Image error for:', artist.name, 'URL:', coverUrl)
+              console.log(
+                '[ArtistCircle] Image error for:',
+                artist.name,
+                'URL:',
+                coverUrl,
+              )
               target.style.display = 'none'
             }}
           />
@@ -417,7 +506,7 @@ function ArtistCircle({ artist, onClick, discoveryInfo }: ArtistCircleProps) {
           <Play className="w-8 h-8 text-white fill-white" />
         </div>
       </button>
-      
+
       {/* Имя артиста - кликабельная ссылка */}
       <div className="mt-3 text-center w-[170px]">
         <Link
@@ -425,13 +514,15 @@ function ArtistCircle({ artist, onClick, discoveryInfo }: ArtistCircleProps) {
           className="text-sm font-semibold truncate w-full px-1 block transition-colors cursor-pointer"
           style={{ color: 'var(--theme-accent)' }}
           title={artist.name}
-          onClick={(e) => e.stopPropagation()}  // Не вызывать радио при клике на имя
+          onClick={(e) => e.stopPropagation()} // Не вызывать радио при клике на имя
         >
           {artist.name}
         </Link>
         {discoveryInfo && (
           <div className="text-[10px] text-gray-500 mt-0.5 truncate px-1">
-            {myWaveDiscoveryTracker.formatDiscoveryDate(discoveryInfo.discoveredAt)}
+            {myWaveDiscoveryTracker.formatDiscoveryDate(
+              discoveryInfo.discoveredAt,
+            )}
           </div>
         )}
       </div>
@@ -448,10 +539,15 @@ interface SectionHeaderProps {
 function SectionHeader({ title, action, onAction }: SectionHeaderProps) {
   return (
     <div className="flex items-center justify-between mb-4 px-1">
-      <h2 className="text-xl font-bold" style={{ color: 'var(--theme-foreground)' }}>{title}</h2>
+      <h2
+        className="text-xl font-bold"
+        style={{ color: 'var(--theme-foreground)' }}
+      >
+        {title}
+      </h2>
       {action && (
-        <button 
-          onClick={onAction} 
+        <button
+          onClick={onAction}
           className="text-sm font-medium flex items-center gap-1 transition-colors"
           style={{ color: 'var(--theme-accent)' }}
         >
@@ -529,6 +625,7 @@ function ScrollContainer({ children }: { children: React.ReactNode }) {
 // ==================== ГЛАВНЫЙ КОМПОНЕНТ ====================
 
 export default function NewHomepage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [isGenerating, setIsGenerating] = useState<string | null>(null)
   const [myWaveArtists, setMyWaveArtists] = useState<any[]>([])
@@ -553,7 +650,9 @@ export default function NewHomepage() {
   const clearWaveHint = useCallback(() => {
     try {
       localStorage.setItem('my-wave-settings', JSON.stringify({}))
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setWaveHint('')
   }, [])
   const { getProfile, ratings } = useML()
@@ -590,7 +689,7 @@ export default function NewHomepage() {
 
     try {
       const playlist = getPlaylist(type)
-      
+
       if (!playlist || !playlist.songs || playlist.songs.length === 0) {
         toast.warning('Сначала сгенерируйте плейлист!', { type: 'warning' })
         setIsGenerating(null)
@@ -615,7 +714,10 @@ export default function NewHomepage() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
     .map(([genre]) => genre)
-  const myWaveGradient = generateCSSGradient(topGenres, profile.preferredGenres || {})
+  const myWaveGradient = generateCSSGradient(
+    topGenres,
+    profile.preferredGenres || {},
+  )
 
   // Приветствие по времени суток + имя пользователя
   const hour = new Date().getHours()
@@ -627,7 +729,9 @@ export default function NewHomepage() {
   // Получаем имя пользователя из app store
   const appState = useAppStore.getState()
   const userName = appState.data?.username || ''
-  const displayName = userName ? userName.charAt(0).toUpperCase() + userName.slice(1) : ''
+  const displayName = userName
+    ? userName.charAt(0).toUpperCase() + userName.slice(1)
+    : ''
 
   // ✅ Исправлено: likedSongs = локальные + Navidrome starred
   const localLikedCount = profile.likedSongs?.length || 0
@@ -646,7 +750,7 @@ export default function NewHomepage() {
   const navidromeLikedCount = navidromeStarredSongs.length || 0
   // Общее количество: локальные + Navidrome (без дублей — используем Set по ID)
   const localLikedIds = new Set(profile.likedSongs || [])
-  const navidromeLikedIds = new Set(navidromeStarredSongs.map(s => s.id))
+  const navidromeLikedIds = new Set(navidromeStarredSongs.map((s) => s.id))
   const allLikedIds = new Set([...localLikedIds, ...navidromeLikedIds])
   const likedCount = allLikedIds.size
 
@@ -683,7 +787,7 @@ export default function NewHomepage() {
       // Приоритет 1: лайкнутые артисты
       if (starredArtists && starredArtists.length > 0) {
         if (!cancelled) {
-          const artists = starredArtists.map(a => ({
+          const artists = starredArtists.map((a) => ({
             id: a.id,
             name: a.name,
             coverArt: a.coverArt,
@@ -713,7 +817,11 @@ export default function NewHomepage() {
         }
         const artists = Array.from(artistMap.values())
         if (!cancelled) {
-          console.log('[Homepage] Using', artists.length, 'artists from random songs')
+          console.log(
+            '[Homepage] Using',
+            artists.length,
+            'artists from random songs',
+          )
           setArtistsToUse(artists)
           setArtistsLoading(false)
         }
@@ -726,22 +834,24 @@ export default function NewHomepage() {
     }
 
     extractArtists()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [starredArtists, randomSongs])
 
   // Загружаем артистов из Моей волны при монтировании
   useEffect(() => {
     const discoveries = myWaveDiscoveryTracker.getQualifiedArtists()
-    
+
     // Маппим на формат ArtistCircle
-    const artistData = discoveries.map(d => ({
+    const artistData = discoveries.map((d) => ({
       id: d.artistId,
       name: d.artistName,
       coverArt: d.artistImageUrl,
       artistImageUrl: d.artistImageUrl,
       discoveryInfo: d,
     }))
-    
+
     setMyWaveArtists(artistData)
   }, [])
 
@@ -768,7 +878,9 @@ export default function NewHomepage() {
       // Источник как в мобайле: Brain (если выбран и подключен) → иначе локальный ML
       if (getWaveSource() === 'brain' && isBrainActive()) {
         try {
-          const settingsRaw = JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
+          const settingsRaw = JSON.parse(
+            localStorage.getItem('my-wave-settings') || '{}',
+          )
           const res = await waveContinue({
             queue: [],
             count: trackCount,
@@ -778,7 +890,11 @@ export default function NewHomepage() {
           })
           if (res && res.tracks.length > 0) {
             const loaded = await Promise.all(
-              res.tracks.map((t) => subsonic.songs.getSong(t.external_id || t.track_id).catch(() => null)),
+              res.tracks.map((t) =>
+                subsonic.songs
+                  .getSong(t.external_id || t.track_id)
+                  .catch(() => null),
+              ),
             )
             const songs = loaded.filter((s): s is ISong => !!s)
             if (songs.length > 0) {
@@ -789,7 +905,9 @@ export default function NewHomepage() {
                 'brain',
               )
               setSongList(songs, 0)
-              toast.success(`Мозг: волна (${songs.length} треков)`, { type: 'success' })
+              toast.success(t('brain.waveReady', { count: songs.length }), {
+                type: 'success',
+              })
               return
             }
           }
@@ -799,7 +917,12 @@ export default function NewHomepage() {
       }
 
       const likedSongIds = profile.likedSongs || []
-      const playlist = await generateMyWavePlaylist(likedSongIds, ratings, trackCount, true)
+      const playlist = await generateMyWavePlaylist(
+        likedSongIds,
+        ratings,
+        trackCount,
+        true,
+      )
 
       if (playlist.songs.length > 0) {
         waveSongIds.current = new Set(playlist.songs.map((s: any) => s.id))
@@ -840,9 +963,12 @@ export default function NewHomepage() {
         toast.error(`Нет треков в жанре "${genreName}"`)
         return
       }
-      
+
       setSongList(songs as any, 0)
-      toast.success(`${genreName} — ${songs.length} треков`, { type: 'success', autoClose: 2000 })
+      toast.success(`${genreName} — ${songs.length} треков`, {
+        type: 'success',
+        autoClose: 2000,
+      })
     } catch (error) {
       console.error('Failed to generate genre playlist:', error)
       toast.error(`Ошибка: ${genreName}`)
@@ -861,7 +987,10 @@ export default function NewHomepage() {
 
       if (result.songs.length > 0) {
         setSongList(result.songs as any, 0)
-        toast.success(`▶️ В стиле ${artistName}: ${result.songs.length} треков`, { type: 'success', autoClose: 3000 })
+        toast.success(
+          `▶️ В стиле ${artistName}: ${result.songs.length} треков`,
+          { type: 'success', autoClose: 3000 },
+        )
       } else {
         toast.info(`Нет треков для артиста ${artistName}`, { autoClose: 2000 })
       }
@@ -876,12 +1005,12 @@ export default function NewHomepage() {
   // ==================== РЕНДЕР ====================
 
   return (
-    <div 
+    <div
       className="w-full min-h-screen pb-24"
-      style={{ 
-        backgroundColor: 'var(--theme-background)', 
+      style={{
+        backgroundColor: 'var(--theme-background)',
         color: 'var(--theme-foreground)',
-        animation: 'fadeIn 0.3s ease-in-out'
+        animation: 'fadeIn 0.3s ease-in-out',
       }}
     >
       <style>{`
@@ -893,24 +1022,51 @@ export default function NewHomepage() {
       <style>{GRADIENT_ANIMATION}</style>
 
       {/* Hero секция */}
-      <div 
+      <div
         className="relative w-full pb-8"
         style={{ backgroundColor: 'var(--theme-background-alternate)' }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <p className="text-sm mb-1" style={{ color: 'var(--theme-muted-foreground)' }}>
-                {timeGreeting}{displayName ? `, ${displayName}` : ''}
+              <p
+                className="text-sm mb-1"
+                style={{ color: 'var(--theme-muted-foreground)' }}
+              >
+                {timeGreeting}
+                {displayName ? `, ${displayName}` : ''}
               </p>
-              <h1 className="text-3xl font-bold" style={{ color: 'var(--theme-foreground)' }}>Главная</h1>
+              <h1
+                className="text-3xl font-bold"
+                style={{ color: 'var(--theme-foreground)' }}
+              >
+                Главная
+              </h1>
             </div>
-            <button onClick={() => navigate('/search')} className="p-2.5 rounded-full transition-colors"
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--theme-background-alternate)'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            <button
+              onClick={() => navigate('/search')}
+              className="p-2.5 rounded-full transition-colors"
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.backgroundColor =
+                  'var(--theme-background-alternate)')
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.backgroundColor = 'transparent')
+              }
             >
-              <svg className="w-5 h-5" style={{ color: 'var(--theme-muted-foreground)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <svg
+                className="w-5 h-5"
+                style={{ color: 'var(--theme-muted-foreground)' }}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
               </svg>
             </button>
           </div>
@@ -921,7 +1077,7 @@ export default function NewHomepage() {
             style={{
               background: myWaveGradient,
               backgroundSize: '200% 200%',
-              animation: 'gradientShift 15s ease infinite'
+              animation: 'gradientShift 15s ease infinite',
             }}
           >
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -935,15 +1091,20 @@ export default function NewHomepage() {
             </div>
 
             <div className="relative z-10 p-8 sm:p-10 flex flex-col sm:flex-row items-center sm:items-start gap-8">
-              <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-3xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-2xl"
-                style={{ animation: 'pulse-glow 3s ease-in-out infinite' }}>
+              <div
+                className="w-28 h-28 sm:w-36 sm:h-36 rounded-3xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-2xl"
+                style={{ animation: 'pulse-glow 3s ease-in-out infinite' }}
+              >
                 <Activity className="w-14 h-14 sm:w-16 sm:h-16 text-white" />
               </div>
 
               <div className="flex-1 text-center sm:text-left">
-                <h2 className="text-3xl sm:text-4xl font-bold text-white mb-3 tracking-tight">Моя волна</h2>
+                <h2 className="text-3xl sm:text-4xl font-bold text-white mb-3 tracking-tight">
+                  Моя волна
+                </h2>
                 <p className="text-white/90 mb-6 max-w-lg text-base sm:text-lg">
-                  Персональная музыкальная лента, адаптированная под ваши предпочтения
+                  Персональная музыкальная лента, адаптированная под ваши
+                  предпочтения
                 </p>
 
                 <div className="flex flex-wrap justify-center sm:justify-start items-center gap-3">
@@ -951,7 +1112,13 @@ export default function NewHomepage() {
                     onClick={handleWaveButton}
                     disabled={!!isGenerating}
                     className="px-5 py-3.5 rounded-2xl font-semibold bg-white text-gray-900 hover:bg-gray-50 active:scale-95 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative group"
-                    title={isWaveActive ? (isPlaying ? 'Пауза' : 'Продолжить') : 'Запустить Мою волну'}
+                    title={
+                      isWaveActive
+                        ? isPlaying
+                          ? 'Пауза'
+                          : 'Продолжить'
+                        : 'Запустить Мою волну'
+                    }
                   >
                     {isGenerating === 'mywave' ? (
                       <div className="w-5 h-5 border-2 border-gray-400 border-t-gray-900 rounded-full animate-spin" />
@@ -998,10 +1165,14 @@ export default function NewHomepage() {
 
       {/* Основной контент */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-10">
-
         {/* Быстрый доступ */}
         <div>
-          <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--theme-foreground)' }}>Быстрый доступ</h2>
+          <h2
+            className="text-xl font-bold mb-4"
+            style={{ color: 'var(--theme-foreground)' }}
+          >
+            Быстрый доступ
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <QuickAccessCard
               icon={<Sparkles className="w-6 h-6" />}
@@ -1036,11 +1207,18 @@ export default function NewHomepage() {
 
         {/* ML Рекомендации (вместо "Свели в AI-сет") */}
         <div>
-          <SectionHeader title="ML Рекомендации" action="Все" onAction={() => navigate('/ml/for-you')} />
+          <SectionHeader
+            title="ML Рекомендации"
+            action="Все"
+            onAction={() => navigate('/ml/for-you')}
+          />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <MLPlaylistCard
-              title={dailyMixPL?.name || "Дейли Микс"}
-              description={dailyMixPL?.description || "Обновляется каждый день на основе ваших вкусов"}
+              title={dailyMixPL?.name || 'Дейли Микс'}
+              description={
+                dailyMixPL?.description ||
+                'Обновляется каждый день на основе ваших вкусов'
+              }
               gradient={CARD_GRADIENTS.ml}
               icon={<Zap className="w-10 h-10" />}
               tags={topGenres.slice(0, 2)}
@@ -1048,8 +1226,10 @@ export default function NewHomepage() {
               onPlay={() => handlePlayMLPlaylist('daily-mix')}
             />
             <MLPlaylistCard
-              title={discoverPL?.name || "Открытия недели"}
-              description={discoverPL?.description || "Новая музыка каждую неделю"}
+              title={discoverPL?.name || 'Открытия недели'}
+              description={
+                discoverPL?.description || 'Новая музыка каждую неделю'
+              }
               gradient={CARD_GRADIENTS.workout}
               icon={<Star className="w-10 h-10" />}
               tags={['новинки', 'открытия']}
@@ -1057,8 +1237,10 @@ export default function NewHomepage() {
               onPlay={() => handlePlayMLPlaylist('discover-weekly')}
             />
             <MLPlaylistCard
-              title={myWavePL?.name || "Моя Волна"}
-              description={myWavePL?.description || "Персональная музыкальная лента"}
+              title={myWavePL?.name || 'Моя Волна'}
+              description={
+                myWavePL?.description || 'Персональная музыкальная лента'
+              }
               gradient={CARD_GRADIENTS.myWave}
               icon={<Activity className="w-10 h-10" />}
               tags={['персональное', 'волна']}
@@ -1066,8 +1248,10 @@ export default function NewHomepage() {
               onPlay={() => handlePlayMLPlaylist('my-wave')}
             />
             <MLPlaylistCard
-              title={moodMixPL?.name || "Муд Микс"}
-              description={moodMixPL?.description || "Подборка под ваше настроение"}
+              title={moodMixPL?.name || 'Муд Микс'}
+              description={
+                moodMixPL?.description || 'Подборка под ваше настроение'
+              }
               gradient={CARD_GRADIENTS.relax}
               icon={<Disc className="w-10 h-10" />}
               tags={['настроение', 'vibe']}
@@ -1075,8 +1259,8 @@ export default function NewHomepage() {
               onPlay={() => handlePlayMLPlaylist('mood')}
             />
             <MLPlaylistCard
-              title={timeMixPL?.name || "Время Микс"}
-              description={timeMixPL?.description || "Музыка для времени суток"}
+              title={timeMixPL?.name || 'Время Микс'}
+              description={timeMixPL?.description || 'Музыка для времени суток'}
               gradient={CARD_GRADIENTS.work}
               icon={<Calendar className="w-10 h-10" />}
               tags={['время', 'контекст']}
@@ -1088,28 +1272,42 @@ export default function NewHomepage() {
 
         {/* Встречали в Моей волне (артисты из истории с лайками) */}
         <div>
-          <SectionHeader title="Встречали в Моей волне" action="Все" onAction={() => navigate('/ml/my-wave-encounters')} />
+          <SectionHeader
+            title="Встречали в Моей волне"
+            action="Все"
+            onAction={() => navigate('/ml/my-wave-encounters')}
+          />
           <ViralArtistsSection onArtistClick={handleArtistRadio} />
         </div>
 
         {/* В стиле (все лайкнутые артисты, рандомно при каждом запуске) */}
         <div>
-          <SectionHeader title="В стиле" action="Все" onAction={() => navigate('/ml/in-style-artists')} />
-          <InStyleArtistsSection 
-            artists={artistsToUse} 
-            isLoading={artistsLoading} 
+          <SectionHeader
+            title="В стиле"
+            action="Все"
+            onAction={() => navigate('/ml/in-style-artists')}
+          />
+          <InStyleArtistsSection
+            artists={artistsToUse}
+            isLoading={artistsLoading}
             onArtistClick={handleArtistRadio}
           />
         </div>
 
         {/* Жанры */}
         <div>
-          <SectionHeader title="Жанры" action="Все" onAction={() => navigate('/genres')} />
+          <SectionHeader
+            title="Жанры"
+            action="Все"
+            onAction={() => navigate('/genres')}
+          />
           {allGenres.length > 0 ? (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
               {allGenres
                 .filter((g: any) => g.songCount && g.songCount > 0)
-                .sort((a: any, b: any) => (b.songCount || 0) - (a.songCount || 0))
+                .sort(
+                  (a: any, b: any) => (b.songCount || 0) - (a.songCount || 0),
+                )
                 .slice(0, 16)
                 .map((genre: any) => (
                   <GenreButton
@@ -1122,13 +1320,18 @@ export default function NewHomepage() {
                 ))}
             </div>
           ) : (
-            <div className={`text-center py-12 rounded-2xl border border-dashed ${themeClasses.cardBg} ${themeClasses.borderDashed}`}>
-              <Music2 className={`w-12 h-12 mx-auto mb-3 ${themeClasses.text.muted}`} />
-              <p className={`font-medium ${themeClasses.text.secondary}`}>Загрузка жанров...</p>
+            <div
+              className={`text-center py-12 rounded-2xl border border-dashed ${themeClasses.cardBg} ${themeClasses.borderDashed}`}
+            >
+              <Music2
+                className={`w-12 h-12 mx-auto mb-3 ${themeClasses.text.muted}`}
+              />
+              <p className={`font-medium ${themeClasses.text.secondary}`}>
+                Загрузка жанров...
+              </p>
             </div>
           )}
         </div>
-
       </div>
 
       {/* Шит настроек Волны как в мобайле — открывается шестерёнкой, битого /settings/ml больше нет */}

@@ -7,6 +7,10 @@ import { devtools, persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { createWithEqualityFn } from 'zustand/traditional'
 
+/** Отображаемое имя внешнего мозга: полное — в заголовках/тостах, короткое — в тесных местах. */
+export const BRAIN_NAME = 'KumaFlow Brain'
+export const BRAIN_SHORT_NAME = 'KFB'
+
 export interface BrainState {
   enabled: boolean
   baseUrl: string
@@ -25,7 +29,11 @@ export interface BrainState {
   setUserId: (v: string | null) => void
   setProfileVersion: (v: number) => void
   setLastSyncAt: (v: string | null) => void
-  setLastPublish: (at: string | null, ok: boolean | null, err: string | null) => void
+  setLastPublish: (
+    at: string | null,
+    ok: boolean | null,
+    err: string | null,
+  ) => void
   setAutoSync: (v: boolean) => void
 }
 
@@ -43,18 +51,40 @@ export const useBrainStore = createWithEqualityFn<BrainState>()(
         lastPublishOk: null,
         lastPublishError: null,
         autoSync: true,
-        setEnabled: (v) => set((s) => { s.enabled = v }),
-        setBaseUrl: (v) => set((s) => { s.baseUrl = v.trim() }),
-        setToken: (v) => set((s) => { s.token = v.trim() }),
-        setUserId: (v) => set((s) => { s.userId = v }),
-        setProfileVersion: (v) => set((s) => { s.profileVersion = v }),
-        setLastSyncAt: (v) => set((s) => { s.lastSyncAt = v }),
-        setAutoSync: (v) => set((s) => { s.autoSync = v }),
-        setLastPublish: (at, ok, err) => set((s) => {
-          s.lastPublishAt = at
-          s.lastPublishOk = ok
-          s.lastPublishError = err
-        }),
+        setEnabled: (v) =>
+          set((s) => {
+            s.enabled = v
+          }),
+        setBaseUrl: (v) =>
+          set((s) => {
+            s.baseUrl = v.trim()
+          }),
+        setToken: (v) =>
+          set((s) => {
+            s.token = v.trim()
+          }),
+        setUserId: (v) =>
+          set((s) => {
+            s.userId = v
+          }),
+        setProfileVersion: (v) =>
+          set((s) => {
+            s.profileVersion = v
+          }),
+        setLastSyncAt: (v) =>
+          set((s) => {
+            s.lastSyncAt = v
+          }),
+        setAutoSync: (v) =>
+          set((s) => {
+            s.autoSync = v
+          }),
+        setLastPublish: (at, ok, err) =>
+          set((s) => {
+            s.lastPublishAt = at
+            s.lastPublishOk = ok
+            s.lastPublishError = err
+          }),
       })),
       { name: 'brain_store_dev' },
     ),

@@ -3,21 +3,34 @@ import { ImageLoader } from '@/app/components/image-loader'
 import { AspectRatio } from '@/app/components/ui/aspect-ratio'
 import { usePlayerStore } from '@/store/player.store'
 
-export function FullscreenSongImage({ centered = false }: { centered?: boolean }) {
+export function FullscreenSongImage({
+  centered = false,
+}: {
+  centered?: boolean
+}) {
   const { coverArt, artist, title } = usePlayerStore(({ songlist }) => {
     return songlist.currentSong
   })
 
   // Для аудиокниг используем прямой URL обложки
-  const isAudiobook = (usePlayerStore.getState().songlist.currentSong as any)?.isAudiobook
-  const coverUrl = (usePlayerStore.getState().songlist.currentSong as any)?.coverUrl
+  const isAudiobook = (usePlayerStore.getState().songlist.currentSong as any)
+    ?.isAudiobook
+  const coverUrl = (usePlayerStore.getState().songlist.currentSong as any)
+    ?.coverUrl
+
+  // Центрированная обложка зависит от обоих размеров окна:
+  // минимум окна 960x600 + масштаб Windows режут высоту, vh-only давал переполнение.
+  const centeredStyle = centered
+    ? { width: 'min(64vw, 38dvh, 400px)' }
+    : undefined
 
   return (
     <div
+      style={centeredStyle}
       className={
         centered
-          // Как в мобайле: большая обложка по центру колонки
-          ? 'w-[min(44vh,400px)] max-w-full aspect-square flex shrink-0'
+          ? // Как в мобайле: большая обложка по центру колонки
+            'max-w-full aspect-square flex shrink-0 min-h-0'
           : '2xl:w-[33%] h-full max-w-[450px] max-h-[450px] 2xl:max-w-[550px] 2xl:max-h-[550px] items-end flex aspect-square'
       }
     >
