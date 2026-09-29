@@ -4,22 +4,31 @@
  */
 
 import {
+  Brain,
+  Briefcase,
+  Car,
   Cpu,
+  Dumbbell,
+  Flag,
   Heart,
+  Languages,
   Mic,
   MonitorSmartphone,
+  Moon,
   Music,
   RefreshCw,
   Sparkles,
+  Sunrise,
   X,
   Zap,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'react-toastify'
 import i18n from '@/i18n'
 import { isBrainActive } from '@/store/brain.store'
 import { useML } from '@/store/ml.store'
+import { fetchBrainMoods } from '@/service/brain-wave'
 
 export const WAVE_SOURCE_KEY = 'my-wave-source'
 export type WaveSource = 'local' | 'brain'
@@ -56,6 +65,26 @@ export function waveLabel(key: string): string {
   const k = (key || '').trim()
   if (!k) return ''
   return i18n.t(`wave.${k}`, { defaultValue: WAVE_LABELS[k] ?? k })
+}
+
+/** Раскраска мозговых настроений по типу (W5b): одинаковый teal
+ * ничего не говорит, цвет должен совпадать со смыслом.
+ * Ключи — lowercase, сервер отдаёт mood_labels в нижнем регистре. */
+export function brainMoodGradient(mood: string): string {
+  const m = (mood || '').trim().toLowerCase()
+  const has = (...keys: string[]) => keys.some((k) => m.includes(k))
+  if (has('energetic', 'энергичн', 'бодр')) return 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
+  if (has('happy', 'весел', 'счастлив', 'радост')) return 'linear-gradient(135deg, #fccb90 0%, #d57eeb 100%)'
+  if (has('calm', 'спокой', 'chill', 'чил')) return 'linear-gradient(135deg, #5ee7df 0%, #b490ca 100%)'
+  if (has('sad', 'груст', 'меланхол', 'melanchol')) return 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+  if (has('dark', 'тёмн', 'темн')) return 'linear-gradient(135deg, #232526 0%, #414345 100%)'
+  if (has('warm', 'тёпл', 'тепл')) return 'linear-gradient(135deg, #ff9a3c 0%, #ff6a88 100%)'
+  if (has('aggress', 'агресс')) return 'linear-gradient(135deg, #cb2d3e 0%, #ef473a 100%)'
+  if (has('romant', 'романт', 'love', 'любов')) return 'linear-gradient(135deg, #ff758f 0%, #ff7eb3 100%)'
+  if (has('focus', 'фокус', 'сосредоточ', 'работ')) return 'linear-gradient(135deg, #00c9ff 0%, #92fe9d 100%)'
+  if (has('party', 'вечерин', 'танц', 'dance')) return 'linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)'
+  if (has('sleep', 'сон', 'night', 'ноч')) return 'linear-gradient(135deg, #0f2027 0%, #2c5364 100%)'
+  return 'linear-gradient(135deg, #43cea2 0%, #185a9d 100%)'
 }
 
 const WAVE_CTX_KEY = 'my-wave-last'
@@ -120,6 +149,13 @@ export default function MyWaveSettings({
   // Источник Волны как в мобайле (локальный AutoDJ / Brain)
   const [source, setSource] = useState<WaveSource>('local')
   const [brainOn, setBrainOn] = useState<boolean>(false)
+  // Настроения с мозга (W5b): пинг waveContinue(queue=[], count=5) → distinct moods.
+  // Стандартные 4 пилюли всегда на месте, мозговые — довеском (могут совпадать).
+  const [brainMoods, setBrainMoods] = useState<string[]>([])
+  const [brainMoodsLoading, setBrainMoodsLoading] = useState(false)
+  const [brainMoodsNote, setBrainMoodsNote] = useState<string | null>(null)
+  // Зеркало для then-колбэка (без stale closure при переоткрытии окна)
+  const brainMoodsRef = useRef<string[]>([])
 
   // Подгружаем сохраненные настройки при открытии (как в мобайле: initState из prefs)
   useEffect(() => {
@@ -134,6 +170,41 @@ export default function MyWaveSettings({
       setBrainOn(isBrainActive())
     } catch {
       /* ignore */
+    }
+    // Мозговые настроения — фоном, окно не ждёт
+    setBrainMoodsNote(null)
+    if (isBrainActive()) {
+      setBrainMoodsLoading(true)
+      fetchBrainMoods()
+        .then(({ moods: ms, reason }) => {
+          const fresh = ms.filter((m) => m && m.length <= 24).slice(0, 10)
+          // Пустой ответ не затирает ранее подгруженные (анализ частичный —
+          // было «то есть, то нет»). Затираем только непустым.
+          if (fresh.length > 0) {
+            brainMoodsRef.current = fresh
+            setBrainMoods(fresh)
+            setBrainMoodsNote(null)
+            return
+          }
+          if (brainMoodsRef.current.length > 0) return // кэш жив, ноту не показываем
+          if (reason === 'unavailable') {
+            setBrainMoodsNote(
+              t('brain.moodsUnavailable', {
+                defaultValue: 'Мозг не ответил (401/сеть) — проверь токен Brain',
+              }),
+            )
+          } else if (reason === 'empty') {
+            setBrainMoodsNote(
+              t('brain.moodsEmpty', {
+                defaultValue: 'На сервере нет sonic-анализа — запусти анализ библиотеки',
+              }),
+            )
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => setBrainMoodsLoading(false))
+    } else {
+      setBrainMoods([])
     }
   }, [isOpen])
 
@@ -175,10 +246,19 @@ export default function MyWaveSettings({
   }
 
   const handleReset = () => {
+    // Сброс = как будто ничего не выбрано: чистим стейт, сохраняем пусто,
+    // закрываем и сразу перегенерируем волну (onApplied).
     setActivity('')
     setCharacteristic('')
     setMood('')
     setLanguage('')
+    try {
+      localStorage.setItem('my-wave-settings', JSON.stringify({}))
+    } catch {
+      /* ignore */
+    }
+    onClose()
+    onApplied?.()
   }
 
   return (
@@ -219,7 +299,8 @@ export default function MyWaveSettings({
               className={`oval-button ${activity === 'wakeup' ? 'active' : ''}`}
               onClick={() => setActivity(activity === 'wakeup' ? '' : 'wakeup')}
             >
-              ☀️ {t('wave.wakeup')}
+              <Sunrise className="w-4 h-4" />
+              {t('wave.wakeup')}
             </button>
             <button
               className={`oval-button ${activity === 'commute' ? 'active' : ''}`}
@@ -227,13 +308,15 @@ export default function MyWaveSettings({
                 setActivity(activity === 'commute' ? '' : 'commute')
               }
             >
-              🚗 {t('wave.commute')}
+              <Car className="w-4 h-4" />
+              {t('wave.commute')}
             </button>
             <button
               className={`oval-button ${activity === 'work' ? 'active' : ''}`}
               onClick={() => setActivity(activity === 'work' ? '' : 'work')}
             >
-              💻 {t('wave.work')}
+              <Briefcase className="w-4 h-4" />
+              {t('wave.work')}
             </button>
             <button
               className={`oval-button ${activity === 'workout' ? 'active' : ''}`}
@@ -241,13 +324,15 @@ export default function MyWaveSettings({
                 setActivity(activity === 'workout' ? '' : 'workout')
               }
             >
-              🏋️ {t('wave.workout')}
+              <Dumbbell className="w-4 h-4" />
+              {t('wave.workout')}
             </button>
             <button
               className={`oval-button ${activity === 'sleep' ? 'active' : ''}`}
               onClick={() => setActivity(activity === 'sleep' ? '' : 'sleep')}
             >
-              🌙 {t('wave.sleep')}
+              <Moon className="w-4 h-4" />
+              {t('wave.sleep')}
             </button>
           </div>
         </div>
@@ -324,7 +409,31 @@ export default function MyWaveSettings({
             >
               {t('wave.sad')}
             </button>
+            {/* Мозговые настроения (W5b): есть в твоей библиотеке прямо сейчас */}
+            {brainMoods
+              .filter((m) => !['energetic', 'happy', 'calm', 'sad'].includes(m))
+              .map((m) => (
+                <button
+                  key={`brain-mood-${m}`}
+                  className={`mood-button brain-mood ${mood === m ? 'active' : ''}`}
+                  style={{ background: brainMoodGradient(m) }}
+                  title={t('brain.moodFromBrain', { defaultValue: 'Из твоей библиотеки (мозг)' })}
+                  onClick={() => setMood(mood === m ? '' : m)}
+                >
+                  <Brain className="w-4 h-4" />
+                  {waveLabel(m)}
+                </button>
+              ))}
           </div>
+          {brainMoodsLoading ? (
+            <p style={{ fontSize: 12, color: '#999', marginTop: 8 }}>
+              {t('brain.moodsLoading', { defaultValue: 'Подгружаем настроения с мозга…' })}
+            </p>
+          ) : brainMoodsNote ? (
+            <p style={{ fontSize: 12, color: '#b45309', marginTop: 8 }}>
+              ⚠️ {brainMoodsNote}
+            </p>
+          ) : null}
         </div>
 
         {/* По языку */}
@@ -337,7 +446,8 @@ export default function MyWaveSettings({
                 setLanguage(language === 'russian' ? '' : 'russian')
               }
             >
-              🇷🇺 {t('wave.russian')}
+              <Flag className="w-4 h-4" />
+              {t('wave.russian')}
             </button>
             <button
               className={`language-button ${language === 'foreign' ? 'active' : ''}`}
@@ -345,7 +455,8 @@ export default function MyWaveSettings({
                 setLanguage(language === 'foreign' ? '' : 'foreign')
               }
             >
-              🌍 {t('wave.foreign')}
+              <Languages className="w-4 h-4" />
+              {t('wave.foreign')}
             </button>
             <button
               className={`language-button ${language === 'instrumental' ? 'active' : ''}`}
@@ -500,6 +611,9 @@ export default function MyWaveSettings({
         }
 
         .oval-button {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
           padding: 10px 20px;
           border-radius: 9999px;
           border: 2px solid hsl(var(--border));
@@ -571,6 +685,16 @@ export default function MyWaveSettings({
           transition: all 200ms ease;
           color: white;
           text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          padding: 8px;
+        }
+
+        .mood-button.brain-mood {
+          background: linear-gradient(135deg, #43cea2 0%, #185a9d 100%);
         }
 
         .mood-button.energetic {

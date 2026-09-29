@@ -324,6 +324,19 @@ function SongRow({ song, index, playCount, onPlay, isLiked, currentRating, onPla
           <Radio className="w-4 h-4 mr-2" />
           {isTrackRadioGenerating ? 'Генерация...' : 'Радио трека'}
         </ContextMenuItem>
+        <ContextMenuItem
+          onClick={() => {
+            void (async () => {
+              const { playBrainSeedRadio } = await import('@/service/brain-seed-play')
+              const ok = await playBrainSeedRadio('track', song.id)
+              if (!ok) onPlayTrackRadio?.(song)
+            })()
+          }}
+          disabled={isTrackRadioGenerating}
+        >
+          <Radio className="w-4 h-4 mr-2" />
+          📻 Радио трека (мозг)
+        </ContextMenuItem>
         <ContextMenuItem onClick={() => onVibeSimilarity?.(song)} disabled={isVibeGenerating}>
           <Music2 className="w-4 h-4 mr-2" />
           {isVibeGenerating ? 'Генерация...' : 'Vibe Similarity'}
@@ -797,6 +810,10 @@ export default function NewArtistPage() {
     if (isGeneratingRadio || !artistId) return
     setIsGeneratingRadio(true)
     try {
+      // W4: сначала пробуем радио с мозга (POST /api/wave/seed), иначе локалка
+      const { playBrainSeedRadio } = await import('@/service/brain-seed-play')
+      const ok = await playBrainSeedRadio('artist', artist?.name || '')
+      if (ok) return
       const result = await generateArtistRadio(artistId, 25)
       if (result.songs.length > 0) { setSongList(result.songs, 0, false); toast.success(`▶️ Радио: ${artist?.name}`, { autoClose: 2000 }) }
     } catch (error) { toast.error('Не удалось запустить радио') }

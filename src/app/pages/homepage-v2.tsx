@@ -39,7 +39,7 @@ import MyWaveSettings, {
   waveLabel,
 } from '@/app/components/homepage/my-wave-settings'
 import { getRecentBrainEvents } from '@/service/brain-events'
-import { mapWaveSettings, waveContinue } from '@/service/brain-wave'
+import { mapWaveSettings, resetBrainSessionId, waveContinue } from '@/service/brain-wave'
 import { generateMyWavePlaylist } from '@/service/ml-wave-service'
 import { myWaveDiscoveryTracker } from '@/service/mywave-discoveries'
 import { subsonic } from '@/service/subsonic'
@@ -875,18 +875,22 @@ export default function NewHomepage() {
     })()
 
     try {
-      // Источник как в мобайле: Brain (если выбран и подключен) → иначе локальный ML
+      // Источник как в мобайле: Brain (если выбран и подключен) → иначе локальный ML.
+      // Brain-режим: играет РОВНО то, что отдал мозг (сколько отдал — столько играет),
+      // trackCount — только размер запроса (фолбек-значение). Без допаддинга локалкой.
       if (getWaveSource() === 'brain' && isBrainActive()) {
         try {
           const settingsRaw = JSON.parse(
             localStorage.getItem('my-wave-settings') || '{}',
           )
+          resetBrainSessionId() // новая волна = новая сессия для мозга
           const res = await waveContinue({
             queue: [],
             count: trackCount,
             settings: mapWaveSettings(settingsRaw),
-            excludeIds: [],
+            excludeIds: [...(profile.dislikedSongs ?? [])],
             recentEvents: getRecentBrainEvents(),
+            context: { source: 'my-wave' },
           })
           if (res && res.tracks.length > 0) {
             const loaded = await Promise.all(

@@ -3,25 +3,150 @@
  * В стиле Яндекс.Музыки с размытым анимированным градиентом
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useML } from '@/store/ml.store'
-import { usePlayerActions } from '@/store/player.store'
+import { usePlayerActions, usePlayerStore } from '@/store/player.store'
 import { generateMyWavePlaylist } from '@/service/ml-wave-service'
 import { toast } from 'react-toastify'
-import { Play, Settings } from 'lucide-react'
+import { Play, Settings, Smartphone } from 'lucide-react'
 import MyWaveSettings from './my-wave-settings'
 import { saveWaveContext, waveLabel } from './my-wave-settings'
+import { isBrainActive } from '@/store/brain.store'
+import {
+  formatResumeTime,
+  getWaveDeviceId,
+  getWaveDeviceName,
+  waveResume,
+  waveSeedClear,
+  waveSeedGet,
+  type BrainSeed,
+} from '@/service/brain-wave'
+import { subsonic } from '@/service/subsonic'
+import type { ISong } from '@/types/responses/song'
+
+interface ResumePill {
+  targetId: string
+  trackId: string
+  pos: number
+  queue: string[]
+  deviceLabel: string
+}
 
 export default function HeroMyWave() {
   const navigate = useNavigate()
   const [isGenerating, setIsGenerating] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  // W5a: пилюля «Продолжить с …» — персистентная, не только тост при старте.
+  // Мобайл шлёт device='android' (не UUID), поэтому чужим считаем всё,
+  // что не равно нашему UUID (имя — только фолбек для старых слотов).
+  const [resumePill, setResumePill] = useState<ResumePill | null>(null)
+  // W4: капсула активного сида радио («волна по X»)
+  const [seedCapsule, setSeedCapsule] = useState<BrainSeed | null>(null)
 
   const { getProfile, ratings, profile } = useML()
   const { setSongList } = usePlayerActions()
 
   const currentProfile = getProfile()
+
+  const refreshResumePill = async () => {
+    try {
+      if (!isBrainActive()) {
+        setResumePill(null)
+        return
+      }
+      const resume = await waveResume()
+      if (!resume) {
+        setResumePill(null)
+        return
+      }
+      const targetId = (resume.external_id || resume.track_id || '').trim()
+      if (!targetId) {
+        setResumePill(null)
+        return
+      }
+      if (resume.device && resume.device === getWaveDeviceId()) return // сами играли
+      if (!resume.device && resume.device_name && resume.device_name === getWaveDeviceName()) return
+      const pos = Math.floor(resume.position_sec ?? 0)
+      const queue = (resume.queue ?? []).filter(Boolean).slice(0, 30)
+      // Показываем если есть позиция ИЛИ хвост очереди (раньше требовали pos>=5
+      // и только тост — поэтому «при запуске не отображает»)
+      if (pos < 5 && queue.length === 0) {
+        setResumePill(null)
+        return
+      }
+      setResumePill({
+        targetId,
+        trackId: resume.track_id,
+        pos,
+        queue: queue.filter((q) => q !== targetId && q !== resume.track_id),
+        deviceLabel: resume.device_name || resume.device || 'другого устройства',
+      })
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  const refreshSeedCapsule = async () => {
+    try {
+      if (!isBrainActive()) {
+        setSeedCapsule(null)
+        return
+      }
+      setSeedCapsule(await waveSeedGet())
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  useEffect(() => {
+    void refreshResumePill()
+    void refreshSeedCapsule()
+    const t = setInterval(() => {
+      void refreshResumePill()
+      void refreshSeedCapsule()
+    }, 30000)
+    const onSeed = () => void refreshSeedCapsule()
+    try {
+      window.addEventListener('kfbrain-seed-changed', onSeed)
+    } catch { /* ignore */ }
+    return () => {
+      clearInterval(t)
+      try {
+        window.removeEventListener('kfbrain-seed-changed', onSeed)
+      } catch { /* ignore */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleResumePill = async () => {
+    if (!resumePill) return
+    try {
+      const song = await subsonic.songs.getSong(resumePill.targetId).catch(() => null)
+      if (!song) {
+        toast.error('Трек с телефона не найден в библиотеке')
+        return
+      }
+      const rest = (
+        await Promise.all(
+          resumePill.queue.map((qid) => subsonic.songs.getSong(qid).catch(() => null)),
+        )
+      ).filter((s): s is ISong => !!s)
+      setSongList([song as ISong, ...rest], 0)
+      if (resumePill.pos > 0) {
+        const pos = resumePill.pos
+        setTimeout(() => {
+          try {
+            usePlayerStore.getState().actions.setProgress(pos)
+          } catch { /* best-effort */ }
+        }, 800)
+      }
+      toast.success('Продолжили с телефона', { autoClose: 2000 })
+      setResumePill(null)
+    } catch {
+      toast.error('Не получилось продолжить с телефона')
+    }
+  }
 
   // Генерация плейлиста "Моя Волна"
   const handlePlayMyWave = async () => {
@@ -125,6 +250,44 @@ export default function HeroMyWave() {
             Настроить
           </button>
         </div>
+
+        {/* W5a: пилюля «Продолжить с …» — персистентная */}
+        {resumePill ? (
+          <button
+            className="hero-resume-pill"
+            onClick={() => void handleResumePill()}
+            title={`Продолжить с ${resumePill.deviceLabel}`}
+          >
+            <Smartphone className="w-4 h-4" />
+            Продолжить с {resumePill.deviceLabel}
+            {resumePill.pos > 0 ? ` — ${formatResumeTime(resumePill.pos)}` : ''}
+          </button>
+        ) : null}
+
+        {/* W4: капсула активного сида радио */}
+        {seedCapsule ? (
+          <div className="hero-seed-capsule">
+            <span className="hero-seed-label">
+              📻 Волна по {seedCapsule.label || seedCapsule.ref}
+            </span>
+            <button
+              className="hero-seed-clear"
+              title="Сбросить сид (волна снова обычная)"
+              onClick={() => {
+                void (async () => {
+                  if (await waveSeedClear()) {
+                    setSeedCapsule(null)
+                    try {
+                      window.dispatchEvent(new Event('kfbrain-seed-changed'))
+                    } catch { /* ignore */ }
+                  }
+                })()
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        ) : null}
 
         {/* Модальное окно настроек */}
         <MyWaveSettings 
@@ -269,6 +432,59 @@ export default function HeroMyWave() {
         .hero-button.secondary:hover {
           background: rgba(255, 255, 255, 0.3);
           transform: translateY(-2px);
+        }
+
+        .hero-resume-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 16px;
+          padding: 10px 20px;
+          border-radius: 999px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          border: 1px solid rgba(255, 255, 255, 0.4);
+          background: rgba(0, 0, 0, 0.35);
+          color: white;
+          backdrop-filter: blur(10px);
+          transition: all 200ms ease;
+          animation: fadeInUp 600ms ease-out 400ms backwards;
+        }
+
+        .hero-resume-pill:hover {
+          background: rgba(0, 0, 0, 0.55);
+          transform: translateY(-2px);
+        }
+
+        .hero-seed-capsule {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 12px;
+          margin-left: 8px;
+          padding: 8px 14px;
+          border-radius: 999px;
+          font-size: 13px;
+          font-weight: 600;
+          background: rgba(0, 0, 0, 0.35);
+          color: white;
+          border: 1px dashed rgba(255, 255, 255, 0.4);
+          backdrop-filter: blur(10px);
+          animation: fadeInUp 600ms ease-out 450ms backwards;
+        }
+
+        .hero-seed-clear {
+          cursor: pointer;
+          border: none;
+          background: transparent;
+          color: rgba(255, 255, 255, 0.7);
+          font-size: 13px;
+          padding: 0 2px;
+        }
+
+        .hero-seed-clear:hover {
+          color: white;
         }
 
         @keyframes fadeInUp {
