@@ -1,4 +1,7 @@
-# 🎵 KumaFlow 
+ <img width="192" height="192" alt="app_icon" src="https://github.com/user-attachments/assets/c926b19d-e610-435b-84f0-90973c206c19" />
+ 
+ # 🎵 KumaFlow
+
 
 **Современный музыкальный плеер для Navidrome/Subsonic с ML-рекомендациями, Vibe Similarity и полной кастомизацией**
 
@@ -10,7 +13,8 @@
 ---
 
 ## 📖 О проекте
-<img width="1015" height="759" alt="home" src="https://github.com/user-attachments/assets/82642d04-27cc-4a53-b3bb-a6e97d0a0ace" />
+
+
 
 **KumaFlow** — это глубоко переработанный форк [Aonsoku](https://github.com/victoralvesf/aonsoku)  с  **полностью переработанными ML-рекомендациями**, уникальной системой **Vibe Similarity** и **расширенной интеграцией Audiobookshelf**.
 
@@ -22,12 +26,15 @@
 
 ##  Главное окно (Home Page)
 #### 🔹 Hero-секция "Моя волна"
+<img width="1328" height="992" alt="изображение" src="https://github.com/user-attachments/assets/f5c81f88-0743-4782-a82d-72b4963221f3" />
+
 **Особенности:**
 - Анимированный градиентный фон
 - Динамически меняется от предпочтений
 - Быстрый запуск персонального плейлиста
 
 #### 🔹 Секция жанров (цветные карточки)
+<img width="1338" height="673" alt="изображение" src="https://github.com/user-attachments/assets/31d0b4e9-799c-4e4c-a1d5-43de9242391b" />
 
 **Особенности:**
 - Уникальные градиенты для каждого жанра
@@ -36,6 +43,7 @@
 - 16 самых популярных жанров
 
 #### 🔹 Настраиваемые секции
+<img width="915" height="508" alt="изображение" src="https://github.com/user-attachments/assets/3420b70c-f677-4acf-808a-2f548e42b1c2" />
 
 **Особенности:**
 - Включение/выключение секций
@@ -44,6 +52,8 @@
 
 ---
 #### 🔹 Библиотека книг
+<img width="1326" height="402" alt="изображение" src="https://github.com/user-attachments/assets/6ec31055-a52c-4f69-98b1-527a4aa61d68" />
+
 **Особенности:**
 - Прогресс чтения на карточке
 - Фильтры: "Все", "Читаю", "Прочитано"
@@ -63,7 +73,8 @@
 
 ##  ML Статистика
 #### 🔹 Дашборд статистики
- 
+ <img width="1302" height="543" alt="изображение" src="https://github.com/user-attachments/assets/e89b83e6-90ac-4d43-9347-a62b1c90ea41" />
+
 **Особенности:**
 - Общая статистика
 - Распределение по жанрам
