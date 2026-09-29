@@ -4,8 +4,14 @@
  */
 
 import { isBrainActive } from '@/store/brain.store'
-import { mapWaveSettings, waveContinue, waveNeedsRefill } from './brain-wave'
+import {
+  getBrainSessionId,
+  mapWaveSettings,
+  waveContinue,
+  waveNeedsRefill,
+} from './brain-wave'
 import { getRecentBrainEvents } from './brain-events'
+import type { BrainRating } from './brain-sync'
 import type { ISong } from '@/types/responses/song'
 
 /** Кэш несматченных external_id: мозг не должен возвращать их по кругу. */
@@ -42,20 +48,41 @@ export async function tryBrainAutoDJ(opts: {
   count: number
   poolByExternalId: Map<string, ISong>
   waveSettings?: Record<string, unknown>
+  /** Свежие лайки/дизлайки локального ML (W2) → ratings_delta мозга */
+  ratingsDelta?: BrainRating[]
+  /** Локальные негативы (W2): сейчас это пост-фильтр, мозг их тоже должен знать */
+  dislikedIds?: string[]
+  bannedArtists?: string[]
+  recentlyPlayedIds?: string[]
+  /** Контекст плеера (W1): shuffle/loop/source — сервер принимает опционально */
+  context?: Record<string, unknown>
 }): Promise<BrainAutoDJResult> {
   const empty: BrainAutoDJResult = { songs: [], fromBrain: false, excludeIds: [] }
   if (!isBrainActive()) return empty
   try {
     const remaining = opts.queue.length
     if (!waveNeedsRefill(opts.queue.length, remaining)) return empty
+    // Негативы — в exclude_ids (плюс несматченные из missingCache ниже)
+    const excludeIdSet = new Set<string>([...missingCache])
+    for (const id of opts.dislikedIds ?? []) if (id) excludeIdSet.add(id)
+    for (const id of opts.recentlyPlayedIds ?? []) if (id) excludeIdSet.add(id)
     const res = await waveContinue({
       queue: opts.queue.map((s) => s.id),
       currentTrackId: opts.current?.id ?? null,
       count: Math.min(20, Math.max(10, opts.count)),
       settings: mapWaveSettings(opts.waveSettings ?? {}),
-      excludeIds: [...missingCache],
+      excludeIds: [...excludeIdSet],
       // Поведенческий контекст: мозг учтёт свежие скипы/завершения при докрутке
       recentEvents: getRecentBrainEvents(),
+      ratingsDelta: opts.ratingsDelta ?? [],
+      context: {
+        ...(opts.context ?? {}),
+        // Имена забаненных артистов сервер резолвит сам; шлём как есть
+        ...(opts.bannedArtists && opts.bannedArtists.length > 0
+          ? { banned_artists: opts.bannedArtists }
+          : {}),
+        session_id: getBrainSessionId(),
+      },
     })
     if (!res || res.tracks.length === 0) return empty
     const songs: ISong[] = []
@@ -72,6 +99,10 @@ export async function tryBrainAutoDJ(opts: {
         const k = songKey(local)
         if (seenKeys.has(k)) continue
         seenKeys.add(k)
+        // W3: «почему этот трек» с мозга — для тултипа в очереди
+        if (t.reason) (local as unknown as Record<string, unknown>).brainReason = t.reason
+        const moods = [...(t.moods ?? []), ...(t.mood ? [t.mood] : [])].filter(Boolean)
+        if (moods.length > 0) (local as unknown as Record<string, unknown>).brainMoods = moods
         songs.push(local)
       }
       else excludeIds.push(ext)

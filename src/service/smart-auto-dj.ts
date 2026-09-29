@@ -179,11 +179,34 @@ export async function generateSmartAutoDJ(
   try {
     const poolByExternalId = new Map<string, ISong>()
     for (const s of [...songlist, ...candidates]) poolByExternalId.set(s.id, s)
+    // W1: реальные настройки волны (пилюли) + контекст плеера.
+    // Раньше сюда уходило mapWaveSettings({}) → бесконтекстная добивка.
+    let waveSettingsRaw: Record<string, unknown> = {}
+    try {
+      waveSettingsRaw = JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
+    } catch { /* ignore */ }
+    let shuffle = false
+    let loop = 'off'
+    try {
+      const { usePlayerStore } = await import('@/store/player.store')
+      const pst = usePlayerStore.getState()
+      shuffle = (pst.songlist.shuffledList?.length ?? 0) > 0
+      // LoopState enum: 0=Off,1=All,2=One (числовой) — шлём строкой
+      const ls = pst.playerState.loopState as unknown
+      loop = ls === 1 || String(ls).toLowerCase().includes('all') ? 'all'
+        : ls === 2 || String(ls).toLowerCase().includes('one') ? 'one' : 'off'
+    } catch { /* best-effort */ }
     const brain = await tryBrainAutoDJ({
       queue: songlist,
       current: currentSong,
       count,
       poolByExternalId,
+      waveSettings: waveSettingsRaw,
+      // W2: локальные негативы едут в мозг, а не только пост-фильтром
+      dislikedIds: profile.dislikedSongs ?? [],
+      bannedArtists,
+      recentlyPlayedIds: [...playedIds],
+      context: { shuffle, loop, source: 'autodj' },
     })
     if (brain.fromBrain && brain.songs.length > 0) {
       const seen = new Set(candidates.map((s) => s.id))

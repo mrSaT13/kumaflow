@@ -13,31 +13,54 @@ export function ExplanationTooltip({ song, children }: ExplanationTooltipProps) 
   const [showTooltip, setShowTooltip] = useState(false)
   
   const { getProfile, ratings } = useML()
-  
+
+  // W3: причина с мозга — первее локального объяснения
+  const brainReason = (song as unknown as Record<string, unknown>).brainReason as string | undefined
+  const brainMoods = (song as unknown as Record<string, unknown>).brainMoods as string[] | undefined
+
   const explanations = useMemo(() => {
     const profile = getProfile()
     return explainRecommendation(song, profile, ratings)
   }, [song, getProfile, ratings])
-  
+
+  const hasBrain = !!brainReason || (brainMoods && brainMoods.length > 0)
+
   return (
-    <div 
+    <div
       className="relative inline-block"
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
       {children}
-      
-      {showTooltip && explanations.length > 0 && (
+
+      {showTooltip && (hasBrain || explanations.length > 0) && (
         <div className="absolute z-50 bottom-full left-0 mb-2 w-72 bg-popover text-popover-foreground rounded-lg shadow-lg border p-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
           <div className="space-y-2">
             <div className="flex items-center gap-2 pb-2 border-b">
               <Info className="w-4 h-4 text-muted-foreground" />
               <h4 className="text-sm font-medium">Рекомендовано, потому что:</h4>
             </div>
-            
+
+            {hasBrain ? (
+              <ul className="space-y-1.5 pb-2 border-b">
+                {brainReason ? (
+                  <li className="text-xs text-muted-foreground flex items-start gap-1.5">
+                    <span className="text-primary mt-0.5">🧠</span>
+                    <span>{brainReason}</span>
+                  </li>
+                ) : null}
+                {brainMoods && brainMoods.length > 0 ? (
+                  <li className="text-xs text-muted-foreground flex items-start gap-1.5">
+                    <span className="text-primary mt-0.5">🎭</span>
+                    <span>{brainMoods.join(' • ')}</span>
+                  </li>
+                ) : null}
+              </ul>
+            ) : null}
+
             <ul className="space-y-1.5">
               {explanations.map((exp, index) => (
-                <li 
+                <li
                   key={index}
                   className="text-xs text-muted-foreground flex items-start gap-1.5"
                 >

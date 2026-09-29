@@ -21,10 +21,34 @@ export interface WaveTrack {
   score: number
   reason?: string
   external_id?: string
+  /** Первая метка настроения с мозга (server/app/api/wave.py:615) */
+  mood?: string | null
+  /** Все метки настроения трека (до 3) */
+  moods?: string[]
 }
 
 let lastPublishAt = 0
 let lastPublishKey = ''
+
+/** ID сессии очереди: мозг различает «новая волна» vs «продолжение».
+ * Живёт пока живёт очередь; сбрасывается при старте новой волны. */
+let brainSessionId = ''
+export function getBrainSessionId(): string {
+  if (!brainSessionId) {
+    try {
+      brainSessionId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `sess-${Date.now()}-${Math.floor(Math.random() * 1e9)}`
+    } catch {
+      brainSessionId = `sess-${Date.now()}-${Math.floor(Math.random() * 1e9)}`
+    }
+  }
+  return brainSessionId
+}
+export function resetBrainSessionId(): void {
+  brainSessionId = ''
+}
 
 /** Маппинг локальных настроек волны в формат мозга */
 export function mapWaveSettings(local: Record<string, unknown>): WaveSettings {
@@ -48,6 +72,8 @@ export async function waveContinue(opts: {
   excludeIds?: string[]
   recentEvents?: BrainEvent[]
   ratingsDelta?: BrainRating[]
+  /** Контекст воспроизведения: shuffle/loop/source/session_id (W1, сервер принимает опционально) */
+  context?: Record<string, unknown>
 }): Promise<{ tracks: WaveTrack[]; seeds?: string[]; profile_version?: number } | null> {
   const st = useBrainStore.getState()
   if (!isBrainActive() || !st.userId) return null
@@ -70,10 +96,112 @@ export async function waveContinue(opts: {
     })),
     ratings_delta: opts.ratingsDelta ?? [],
     profile_version: st.profileVersion ?? undefined,
+    ...(opts.context && Object.keys(opts.context).length > 0
+      ? { context: opts.context }
+      : {}),
   })
   if (!res) return null
   if (typeof res.profile_version === 'number') st.setProfileVersion(res.profile_version)
-  return { tracks: res.tracks ?? [], seeds: res.seeds, profile_version: res.profile_version }
+  const tracks = (res.tracks ?? []).map((t) => ({
+    ...t,
+    moods: Array.isArray((t as WaveTrack).moods)
+      ? (t as WaveTrack).moods
+      : (t as WaveTrack).mood
+        ? [(t as WaveTrack).mood as string]
+        : [],
+  }))
+  return { tracks, seeds: res.seeds, profile_version: res.profile_version }
+}
+
+/** Настроения с мозга: пинг waveContinue с пустой очередью,
+ * забираем distinct mood-метки (как home_screen в мобайле).
+ * count=40 (не 5): анализ библиотеки обычно частичный, и пятёрка
+ * легко промахивается мимо размеченных треков — было «то есть, то нет».
+ * Best-effort: мозг выкл → {reason:'off'}, continue не ответил
+ * (401/403/сеть, детали в консоли [Brain]) → {reason:'unavailable'},
+ * треки без mood_labels (нет sonic-анализа) → {reason:'empty'}. */
+export async function fetchBrainMoods(): Promise<{
+  moods: string[]
+  reason: 'ok' | 'off' | 'unavailable' | 'empty' | 'error'
+}> {
+  const st = useBrainStore.getState()
+  if (!isBrainActive() || !st.userId) return { moods: [], reason: 'off' }
+  try {
+    const res = await waveContinue({ queue: [], count: 40 })
+    if (!res) return { moods: [], reason: 'unavailable' }
+    const out = new Set<string>()
+    for (const t of res.tracks) {
+      for (const m of t.moods ?? []) {
+        const v = (m || '').trim().toLowerCase()
+        if (v) out.add(v)
+      }
+      const single = (t.mood || '').trim().toLowerCase()
+      if (single) out.add(single)
+    }
+    if (out.size === 0) {
+      console.warn('[Brain] wave/continue 200, но mood/moods пустые — на сервере нет sonic-анализа (mood_labels)')
+      return { moods: [], reason: 'empty' }
+    }
+    return { moods: [...out], reason: 'ok' }
+  } catch {
+    return { moods: [], reason: 'error' }
+  }
+}
+
+export interface BrainSeed {
+  kind: string
+  ref: string
+  label: string
+  playlist_id?: string | null
+  created_at?: string | null
+}
+
+/** Радио по сиду (W4): POST /api/wave/seed {kind: artist|track}.
+ * Возвращает внутренние track_id мозга — резолвить в локальные
+ * через GET /api/tracks/{id} → external_id → subsonic.getSong. */
+export async function waveSeedStart(
+  kind: 'artist' | 'track',
+  ref: string,
+): Promise<{ seed: BrainSeed | null; trackIds: string[]; playlistId?: string } | null> {
+  const st = useBrainStore.getState()
+  if (!isBrainActive() || !st.userId) return null
+  const body: Record<string, unknown> =
+    kind === 'artist'
+      ? { user_id: st.userId, kind, artist_name: ref }
+      : { user_id: st.userId, kind, track_id: ref }
+  const res = await brainPost<{
+    seed?: BrainSeed | null
+    tracks?: string[]
+    playlist_id?: string
+  }>(`/api/wave/seed`, body)
+  if (!res) return null
+  return {
+    seed: res.seed ?? null,
+    trackIds: Array.isArray(res.tracks) ? res.tracks.filter(Boolean) : [],
+    playlistId: res.playlist_id,
+  }
+}
+
+/** Капсула «волна по X» для главной: GET /api/wave/seed → seed | null */
+export async function waveSeedGet(): Promise<BrainSeed | null> {
+  const st = useBrainStore.getState()
+  if (!isBrainActive() || !st.userId) return null
+  const q = new URLSearchParams({ user_id: st.userId })
+  const res = await brainGet<{ seed?: BrainSeed | null }>(`/api/wave/seed?${q.toString()}`)
+  return res?.seed ?? null
+}
+
+/** Сброс сида: DELETE /api/wave/seed (плейлист остаётся, волна снова обычная) */
+export async function waveSeedClear(): Promise<boolean> {
+  const st = useBrainStore.getState()
+  if (!isBrainActive() || !st.userId) return false
+  const q = new URLSearchParams({ user_id: st.userId })
+  try {
+    const r = await brainRaw(`/api/wave/seed?${q.toString()}`, { method: 'DELETE' })
+    return !!r && r.status >= 200 && r.status < 300
+  } catch {
+    return false
+  }
 }
 
 export interface BrainSimilarItem {
@@ -242,6 +370,32 @@ export function wavePublish(
       )
     }
   })().catch(() => undefined)
+}
+
+/** Резолв внутренних track_id сида в external_id (Navidrome) для плеера.
+ * GET /api/tracks/{id} → external_id; concurrency 6, кап 60. */
+export async function resolveSeedExternalIds(trackIds: string[]): Promise<string[]> {
+  const ids = (trackIds ?? []).filter(Boolean).slice(0, 60)
+  if (ids.length === 0) return []
+  const out: (string | null)[] = new Array(ids.length).fill(null)
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < ids.length) {
+      const i = cursor
+      cursor += 1
+      try {
+        const t = await brainGet<{ external_id?: string | null; track_id?: string }>(
+          `/api/tracks/${encodeURIComponent(ids[i])}`,
+        )
+        const ext = (t?.external_id || '').trim()
+        out[i] = ext || ids[i]
+      } catch {
+        out[i] = ids[i]
+      }
+    }
+  }
+  await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()])
+  return (out.filter(Boolean) as string[]).slice(0, 60)
 }
 
 /** Продолжить с телефона: что играло на другом устройстве.

@@ -257,6 +257,19 @@ function SongRow({ song, index, playCount, onPlay, onPlayNext, onAddToEnd, onTog
           <Radio className="w-4 h-4 mr-2" />
           {isTrackRadioGenerating ? 'Генерация...' : 'Радио трека'}
         </ContextMenuItem>
+        <ContextMenuItem
+          onClick={() => {
+            void (async () => {
+              const { playBrainSeedRadio } = await import('@/service/brain-seed-play')
+              const ok = await playBrainSeedRadio('track', song.id)
+              if (!ok) onPlayTrackRadio?.(song)
+            })()
+          }}
+          disabled={isTrackRadioGenerating}
+        >
+          <Radio className="w-4 h-4 mr-2" />
+          📻 Радио трека (мозг)
+        </ContextMenuItem>
 
         <ContextMenuSeparator />
 
