@@ -17,11 +17,16 @@ import {
   formatResumeTime,
   getWaveDeviceId,
   getWaveDeviceName,
+  mapWaveSettings,
+  resetBrainSessionId,
+  waveContinue,
   waveResume,
   waveSeedClear,
   waveSeedGet,
   type BrainSeed,
 } from '@/service/brain-wave'
+import { getWaveSource } from './my-wave-settings'
+import { getRecentBrainEvents } from '@/service/brain-events'
 import { subsonic } from '@/service/subsonic'
 import type { ISong } from '@/types/responses/song'
 
@@ -163,6 +168,50 @@ export default function HeroMyWave() {
       const settings = hasSettings ? settingsRaw : undefined
       
       console.log('[HeroMyWave] Using settings:', settings)
+
+      // Brain первый (если выбран и подключен) — играет ровно то, что отдал мозг.
+      // Тихий фолбек на локальный ML ниже.
+      if (getWaveSource() === 'brain' && isBrainActive()) {
+        try {
+          resetBrainSessionId()
+          const res = await waveContinue({
+            queue: [],
+            count: 50,
+            settings: mapWaveSettings(settingsRaw),
+            excludeIds: [...(profile.dislikedSongs ?? [])],
+            recentEvents: getRecentBrainEvents(),
+            context: { source: 'my-wave-hero' },
+          })
+          if (res && res.tracks.length > 0) {
+            const loaded = await Promise.all(
+              res.tracks.map((t) =>
+                subsonic.songs.getSong(t.external_id || t.track_id).catch(() => null),
+              ),
+            )
+            const songs = loaded.filter((s): s is ISong => !!s)
+            if (songs.length > 0) {
+              let hint = ''
+              try {
+                const s = settings ?? settingsRaw
+                hint = [s.activity, s.characteristic, s.mood, s.language]
+                  .filter(Boolean)
+                  .map((v: string) => waveLabel(v))
+                  .join(' • ')
+              } catch { /* ignore */ }
+              saveWaveContext(
+                songs.map((s) => s.id),
+                hint,
+                'brain',
+              )
+              setSongList(songs, 0, false)
+              toast.success('🎵 Моя Волна: плейлист готов!', { autoClose: 2000 })
+              return
+            }
+          }
+        } catch {
+          // тихий фолбек на локальную Волну
+        }
+      }
 
       const playlist = await generateMyWavePlaylist(
         profile.likedSongIds || [],

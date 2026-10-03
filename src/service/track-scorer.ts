@@ -65,7 +65,7 @@ export interface ScoringContext {
   /** Текущее время (час 0-23) */
   currentHour: number
   /** Выбранная активность */
-  activity?: 'wakeup' | 'commute' | 'work' | 'workout' | 'sleep' | ''
+  activity?: 'wakeup' | 'commute' | 'work' | 'workout' | 'sleep' | 'study' | 'party' | 'walk' | 'rest' | ''
   /** Выбранное настроение */
   mood?: 'energetic' | 'happy' | 'calm' | 'sad' | ''
   /** Уже добавленные в плейлист артисты (для diversity penalty) */
@@ -414,6 +414,26 @@ export class TrackScorer {
     if (activity === 'workout' || isSportHours) {
       if (features.bpm > 110) bonus += 0.1
       if (features.energy > 0.7) bonus += 0.1
+    }
+
+    // Новые занятия (зеркало ACTIVITY_PRESETS мозга — офлайн должен уметь то же)
+    if (activity === 'study') {
+      if (features.energy >= 0.3 && features.energy <= 0.6) bonus += 0.1
+      if ((features.bpm || 0) <= 120) bonus += 0.05
+    }
+
+    if (activity === 'party') {
+      if (features.energy >= 0.7) bonus += 0.1
+      if ((features.bpm || 0) >= 115) bonus += 0.1
+    }
+
+    if (activity === 'walk') {
+      if (features.energy >= 0.4 && features.energy <= 0.7) bonus += 0.1
+      if (features.valence >= 0.4) bonus += 0.05
+    }
+
+    if (activity === 'rest') {
+      if (features.energy <= 0.5) bonus += 0.1
     }
 
     if (mood === 'calm' || activity === 'sleep' || isRestHours) {

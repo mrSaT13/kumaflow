@@ -5,7 +5,7 @@ import { initAutoUpdater, isUpdateDownloaded, quitAndInstallOnQuit } from './cor
 import { createWindow, mainWindow, sendToRenderer } from './window'
 import { initAudiobookshelfIPC } from './core/audiobookshelf'
 import { setupLocalMusicHandlers } from './core/local-music-handler'
-import { startRemoteServer, stopRemoteServer, updateRemoteState, setRemoteMainWindow, getRemoteStatus, setRemotePort, setRemoteBaseAppUrl, setupRemoteQueueHandler, getConnectedClients } from '../../src/service/remote-server'
+import { startRemoteServer, stopRemoteServer, updateRemoteState, setRemoteMainWindow, getRemoteStatus, setRemotePort, setRemoteBaseAppUrl, setupRemoteQueueHandler, getConnectedClients, loadRemoteControlSettings, saveRemoteControlSettings } from '../../src/service/remote-server'
 // 🆕 DLNA - dynamic import чтобы не тянуть localStorage в main process
 // 🆕 DLNA - lazy getter чтобы не тянуть localStorage при старте
 let _dlnaService: any = null
@@ -138,6 +138,20 @@ if (!instanceLock) {
     // Настраиваем обработчик очереди для remote
     setupRemoteQueueHandler()
 
+    // Автозапуск Remote Control, если был включён до рестарта.
+    // Настройки (enabled/port/ip) лежат в userData/remote-control-config.json.
+    loadRemoteControlSettings().then(async (saved) => {
+      try {
+        if (saved.ip) selectedRemoteIp = saved.ip
+        if (!saved.enabled) return
+        if (saved.port) setRemotePort(saved.port)
+        await startRemoteServer({ enabled: true, port: saved.port || 4333 })
+        console.log('[Main] Remote Control autostarted (was enabled)')
+      } catch (e) {
+        console.warn('[Main] Remote Control autostart failed:', e)
+      }
+    })
+
     // Инициализация Remote Control
     console.log('[Main] Initializing Remote Control...')
     
@@ -171,11 +185,13 @@ if (!instanceLock) {
         setRemotePort(port)
       }
       await startRemoteServer({ enabled: true, port: port || 4333 })
+      await saveRemoteControlSettings({ enabled: true, port: port || undefined })
       return getRemoteStatus()
     })
 
     ipcMain.handle('remote-control:stop', async () => {
       await stopRemoteServer()
+      await saveRemoteControlSettings({ enabled: false })
       return getRemoteStatus()
     })
 
@@ -206,9 +222,10 @@ if (!instanceLock) {
       return ips
     })
 
-    ipcMain.handle('remote-control:set-ip', (event, ip: string) => {
+    ipcMain.handle('remote-control:set-ip', async (event, ip: string) => {
       selectedRemoteIp = ip
       console.log(`[Remote] IP set to: ${ip}`)
+      await saveRemoteControlSettings({ selectedIp: ip })
       return true
     })
 
@@ -216,14 +233,27 @@ if (!instanceLock) {
       return getRemoteStatus().port
     })
 
-    ipcMain.handle('remote-control:set-port', (event, port: number) => {
-      return setRemotePort(port)
+    ipcMain.handle('remote-control:set-port', async (event, port: number) => {
+      const ok = setRemotePort(port)
+      if (ok) await saveRemoteControlSettings({ port })
+      return ok
     })
 
     // Установка Subsonic сервера для remote проксирования
     ipcMain.handle('remote-control:set-subsonic-url', async (event, url: string, username: string, password: string, authType: 'token' | 'password') => {
       await setRemoteBaseAppUrl(url, username, password, authType)
       return true
+    })
+
+    // PIN доступа к Remote Control (обязателен при включении)
+    ipcMain.handle('remote-control:set-pin', async (event, pin: string) => {
+      const { setRemotePin } = await import('../../src/service/remote-server')
+      return setRemotePin(pin)
+    })
+
+    ipcMain.handle('remote-control:has-pin', async () => {
+      const { hasRemotePin } = await import('../../src/service/remote-server')
+      return hasRemotePin()
     })
 
     // Проверка есть ли сохранённые учётные данные

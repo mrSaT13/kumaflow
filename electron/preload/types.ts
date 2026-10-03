@@ -135,6 +135,8 @@ export interface IKumaFlowAPI {
     setSubsonicUrl: (url: string, username: string, password: string, authType: 'token' | 'password') => Promise<boolean>
     hasSavedCredentials: () => Promise<boolean>
     loadSettings: () => Promise<{ enabled?: boolean; port?: number; ip?: string }>
+    setPin: (pin: string) => Promise<{ ok: boolean; error?: string }>
+    hasPin: () => Promise<boolean>
   }
   // DLNA
   dlna: {

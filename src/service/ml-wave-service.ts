@@ -21,7 +21,7 @@ export interface MLWavePlaylist {
 }
 
 export interface MyWaveSettings {
-  activity?: 'wakeup' | 'commute' | 'work' | 'workout' | 'sleep' | ''
+  activity?: 'wakeup' | 'commute' | 'work' | 'workout' | 'sleep' | 'study' | 'party' | 'walk' | 'rest' | ''
   characteristic?: 'favorite' | 'unfamiliar' | 'popular' | ''
   mood?: 'energetic' | 'happy' | 'calm' | 'sad' | ''
   language?: 'russian' | 'foreign' | 'instrumental' | ''

@@ -53,6 +53,79 @@ interface RemoteControlConfig {
   enabled?: boolean
   port?: number
   selectedIp?: string
+  remotePinHash?: string  // sha256 PIN доступа (не сам PIN)
+}
+
+/**
+ * PIN доступа к Remote Control: любой в LAN без него — только смотрит
+ * страницу, управлять не может. Храним sha256, не сам PIN.
+ */
+export function hashRemotePin(pin: string): string {
+  return crypto.createHash('sha256').update(`kumaflow-remote-pin:${pin}`, 'utf8').digest('hex')
+}
+
+export async function setRemotePin(pin: string): Promise<{ ok: boolean; error?: string }> {
+  const v = (pin || '').trim()
+  if (!v) {
+    // Сброс PIN (разрешено только при выключенном сервере — иначе дыра)
+    if (settings.enabled) return { ok: false, error: 'Сначала выключи Remote Control' }
+    try {
+      const configPath = getConfigPath()
+      let config: RemoteControlConfig = {}
+      try {
+        config = JSON.parse(await readFile(configPath, 'utf-8'))
+      } catch { /* нет файла */ }
+      delete config.remotePinHash
+      await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8')
+      return { ok: true }
+    } catch {
+      return { ok: false, error: 'Не удалось сохранить' }
+    }
+  }
+  if (v.length < 4 || v.length > 12) {
+    return { ok: false, error: 'PIN: 4–12 символов' }
+  }
+  try {
+    const configPath = getConfigPath()
+    let config: RemoteControlConfig = {}
+    try {
+      config = JSON.parse(await readFile(configPath, 'utf-8'))
+    } catch { /* нет файла */ }
+    config.remotePinHash = hashRemotePin(v)
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8')
+    return { ok: true }
+  } catch {
+    return { ok: false, error: 'Не удалось сохранить' }
+  }
+}
+
+export async function hasRemotePin(): Promise<boolean> {
+  try {
+    const config: RemoteControlConfig = JSON.parse(await readFile(getConfigPath(), 'utf-8'))
+    return !!config.remotePinHash
+  } catch {
+    return false
+  }
+}
+
+function verifyRemotePin(pin: string, hash: string): boolean {
+  try {
+    const h = hashRemotePin(pin || '')
+    const a = Buffer.from(h, 'hex')
+    const b = Buffer.from(hash, 'hex')
+    return a.length === b.length && crypto.timingSafeEqual(a, b)
+  } catch {
+    return false
+  }
+}
+
+async function getRemotePinHash(): Promise<string | null> {
+  try {
+    const config: RemoteControlConfig = JSON.parse(await readFile(getConfigPath(), 'utf-8'))
+    return config.remotePinHash || null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -126,6 +199,28 @@ export async function loadRemoteControlSettings(): Promise<{ enabled?: boolean; 
   }
 }
 
+/**
+ * Сохранить настройки Remote Control (переживают рестарт).
+ * Без пароля — он хранится отдельно в зашифрованном виде.
+ */
+export async function saveRemoteControlSettings(patch: { enabled?: boolean; port?: number; selectedIp?: string }): Promise<void> {
+  try {
+    const configPath = getConfigPath()
+    let config: RemoteControlConfig = {}
+    try {
+      config = JSON.parse(await readFile(configPath, 'utf-8'))
+    } catch {
+      // файла ещё нет — создаём
+    }
+    if (patch.enabled !== undefined) config.enabled = patch.enabled
+    if (patch.port !== undefined) config.port = patch.port
+    if (patch.selectedIp !== undefined) config.selectedIp = patch.selectedIp
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8')
+  } catch (error) {
+    console.error('[Remote] Failed to save settings:', error)
+  }
+}
+
 interface RemoteConfig {
   enabled: boolean
   port: number
@@ -141,6 +236,7 @@ interface SubsonicAuth {
 
 interface ClientWebSocket extends WebSocket {
   isAlive: boolean
+  authed?: boolean
 }
 
 let server: Server | undefined
@@ -369,9 +465,20 @@ export async function startRemoteServer(config: RemoteConfig): Promise<void> {
         connectedClients.push(clientInfo)
         console.log(`[Remote] 📱 Client connected from ${clientIp} (${userAgent.substring(0, 50)}...) Total: ${connectedClients.length}`)
 
-        // Отправляем текущее состояние при подключении
-        send(ws, 'connected', { message: 'Connected to KumaFlow Remote' })
-        send(ws, 'state-update', currentState)
+        // PIN-защита: без верного PIN клиент получает только auth-required,
+        // управлять и видеть состояние не может.
+        ws.authed = false
+        getRemotePinHash().then((pinHash) => {
+          try {
+            if (!pinHash) {
+              ws.authed = true
+              send(ws, 'connected', { message: 'Connected to KumaFlow Remote' })
+              send(ws, 'state-update', currentState)
+            } else {
+              send(ws, 'auth-required', {})
+            }
+          } catch { /* сокет уже закрыт */ }
+        })
 
         ws.on('pong', () => {
           ws.isAlive = true
@@ -380,7 +487,7 @@ export async function startRemoteServer(config: RemoteConfig): Promise<void> {
         ws.on('message', (data) => {
           try {
             const message = JSON.parse(data.toString())
-            handleRemoteMessage(message)
+            void handleRemoteMessage(ws, message)
           } catch (error) {
             console.error('[Remote] Parse error:', error)
           }
@@ -466,14 +573,40 @@ export function stopRemoteServer() {
 }
 
 /**
- * Обработка сообщений от remote клиентов
+ * Обработка сообщений от remote клиентов.
+ * Без пройденного PIN (когда он задан) — только событие 'auth'.
  */
-function handleRemoteMessage(message: any) {
-  console.log('[Remote] Message:', message)
+async function handleRemoteMessage(ws: ClientWebSocket, message: any) {
+  console.log('[Remote] Message:', message?.event || message)
 
   if (!mainWindow) {
     console.error('[Remote] Main window not available')
     return
+  }
+
+  if (!ws.authed) {
+    if (message?.event === 'auth') {
+      // Клиенты шлют PIN по-разному: remote.tsx — {event:'auth', pin},
+      // standalone html — {event:'auth', data:{pin}}. Принимаем обе формы.
+      const pin = String(message?.pin ?? message?.data?.pin ?? '')
+      const pinHash = await getRemotePinHash()
+      if (pinHash && verifyRemotePin(pin, pinHash)) {
+        ws.authed = true
+        send(ws, 'auth-ok', {})
+        send(ws, 'connected', { message: 'Connected to KumaFlow Remote' })
+        send(ws, 'state-update', currentState)
+      } else {
+        send(ws, 'auth-fail', {})
+      }
+      return
+    }
+    // PIN задан, клиент не авторизован — остальное игнорируем
+    const pinHash = await getRemotePinHash()
+    if (pinHash) {
+      send(ws, 'auth-required', {})
+      return
+    }
+    ws.authed = true
   }
 
   // Преобразуем в формат плеера

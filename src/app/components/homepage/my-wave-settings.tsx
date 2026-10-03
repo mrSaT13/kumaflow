@@ -28,14 +28,18 @@ import { toast } from 'react-toastify'
 import i18n from '@/i18n'
 import { isBrainActive } from '@/store/brain.store'
 import { useML } from '@/store/ml.store'
-import { fetchBrainMoods } from '@/service/brain-wave'
+import { fetchBrainMoods, fetchWaveOptions } from '@/service/brain-wave'
 
 export const WAVE_SOURCE_KEY = 'my-wave-source'
 export type WaveSource = 'local' | 'brain'
+export type WaveSourceSel = WaveSource | 'auto'
 
+/** Эффективный источник: явный выбор, иначе авто (мозг когда подключён). */
 export function getWaveSource(): WaveSource {
   try {
-    return localStorage.getItem(WAVE_SOURCE_KEY) === 'brain' ? 'brain' : 'local'
+    const v = localStorage.getItem(WAVE_SOURCE_KEY)
+    if (v === 'brain' || v === 'local') return v
+    return isBrainActive() ? 'brain' : 'local'
   } catch {
     return 'local'
   }
@@ -49,6 +53,10 @@ export const WAVE_LABELS: Record<string, string> = {
   work: 'Работаю',
   workout: 'Тренируюсь',
   sleep: 'Засыпаю',
+  study: 'Учёба / фокус',
+  party: 'Вечеринка',
+  walk: 'Прогулка',
+  rest: 'Отдых',
   favorite: 'Любимое',
   unfamiliar: 'Незнакомое',
   popular: 'Популярное',
@@ -146,14 +154,19 @@ export default function MyWaveSettings({
   const [characteristic, setCharacteristic] = useState<string>('')
   const [mood, setMood] = useState<string>('')
   const [language, setLanguage] = useState<string>('')
-  // Источник Волны как в мобайле (локальный AutoDJ / Brain)
-  const [source, setSource] = useState<WaveSource>('local')
+  // Источник Волны: Авто (мозг когда подключён, иначе локалка) либо явный пин.
+  const [source, setSource] = useState<WaveSourceSel>('auto')
   const [brainOn, setBrainOn] = useState<boolean>(false)
   // Настроения с мозга (W5b): пинг waveContinue(queue=[], count=5) → distinct moods.
   // Стандартные 4 пилюли всегда на месте, мозговые — довеском (могут совпадать).
   const [brainMoods, setBrainMoods] = useState<string[]>([])
   const [brainMoodsLoading, setBrainMoodsLoading] = useState(false)
   const [brainMoodsNote, setBrainMoodsNote] = useState<string | null>(null)
+  // Занятия с мозга (GET /api/wave/options): канон списков — сервер.
+  // Зашитые 5 кнопок всегда на месте (офлайн), серверные — довеском + кэш.
+  const [serverActivities, setServerActivities] = useState<
+    { code: string; label: string; hint?: string }[]
+  >([])
   // Зеркало для then-колбэка (без stale closure при переоткрытии окна)
   const brainMoodsRef = useRef<string[]>([])
 
@@ -166,45 +179,81 @@ export default function MyWaveSettings({
       setCharacteristic(raw.characteristic || '')
       setMood(raw.mood || '')
       setLanguage(raw.language || '')
-      setSource(getWaveSource())
+      try {
+        const sv = localStorage.getItem(WAVE_SOURCE_KEY)
+        setSource(sv === 'brain' ? 'brain' : sv === 'local' ? 'local' : 'auto')
+      } catch {
+        setSource('auto')
+      }
       setBrainOn(isBrainActive())
     } catch {
       /* ignore */
     }
-    // Мозговые настроения — фоном, окно не ждёт
+    // Опции с мозга (каталог) + настроения. Окно не ждёт, всё фоном.
+    // Каталог — полный список (а не слепок из 40 треков), кэшируем на случай офлайна.
     setBrainMoodsNote(null)
     if (isBrainActive()) {
       setBrainMoodsLoading(true)
-      fetchBrainMoods()
-        .then(({ moods: ms, reason }) => {
-          const fresh = ms.filter((m) => m && m.length <= 24).slice(0, 10)
-          // Пустой ответ не затирает ранее подгруженные (анализ частичный —
-          // было «то есть, то нет»). Затираем только непустым.
-          if (fresh.length > 0) {
-            brainMoodsRef.current = fresh
-            setBrainMoods(fresh)
-            setBrainMoodsNote(null)
-            return
-          }
-          if (brainMoodsRef.current.length > 0) return // кэш жив, ноту не показываем
-          if (reason === 'unavailable') {
-            setBrainMoodsNote(
-              t('brain.moodsUnavailable', {
-                defaultValue: 'Мозг не ответил (401/сеть) — проверь токен Brain',
-              }),
+      fetchWaveOptions()
+        .then((opts) => {
+          if (opts) {
+            const acts = (opts.activities ?? []).filter(
+              (a) => a && a.code && !['wakeup', 'commute', 'work', 'workout', 'sleep'].includes(a.code),
             )
-          } else if (reason === 'empty') {
-            setBrainMoodsNote(
-              t('brain.moodsEmpty', {
-                defaultValue: 'На сервере нет sonic-анализа — запусти анализ библиотеки',
-              }),
-            )
+            setServerActivities(acts)
+            const ms = (opts.moods ?? [])
+              .map((m) => (m.name || '').trim().toLowerCase())
+              .filter((m) => m && m.length <= 24)
+              .slice(0, 12)
+            if (ms.length > 0) {
+              brainMoodsRef.current = ms
+              setBrainMoods(ms)
+              setBrainMoodsNote(null)
+            }
+            try {
+              localStorage.setItem('wave-options-cache', JSON.stringify({ acts, ms, at: Date.now() }))
+            } catch {
+              /* ignore */
+            }
+            if (ms.length > 0) return
           }
+          // Каталога нет (старый мозг) — старый путь: проба настроений.
+          return fetchBrainMoods().then(({ moods: pm, reason }) => {
+            const fresh = pm.filter((m) => m && m.length <= 24).slice(0, 10)
+            if (fresh.length > 0) {
+              brainMoodsRef.current = fresh
+              setBrainMoods(fresh)
+              setBrainMoodsNote(null)
+              return
+            }
+            if (brainMoodsRef.current.length > 0) return
+            if (reason === 'unavailable') {
+              setBrainMoodsNote(
+                t('brain.moodsUnavailable', {
+                  defaultValue: 'Мозг не ответил (401/сеть) — проверь токен Brain',
+                }),
+              )
+            } else if (reason === 'empty') {
+              setBrainMoodsNote(
+                t('brain.moodsEmpty', {
+                  defaultValue: 'На сервере нет sonic-анализа — запусти анализ библиотеки',
+                }),
+              )
+            }
+          })
         })
         .catch(() => undefined)
         .finally(() => setBrainMoodsLoading(false))
     } else {
       setBrainMoods([])
+      // Офлайн: подставляем кэшированные занятия с мозга, локалка их тоже умеет.
+      try {
+        const cached = JSON.parse(localStorage.getItem('wave-options-cache') || 'null')
+        if (cached && Array.isArray(cached.acts)) setServerActivities(cached.acts)
+        else setServerActivities([])
+      } catch {
+        setServerActivities([])
+      }
     }
   }, [isOpen])
 
@@ -219,17 +268,24 @@ export default function MyWaveSettings({
     // Сохраняем настройки в localStorage
     const settings = { activity, characteristic, mood, language }
     localStorage.setItem('my-wave-settings', JSON.stringify(settings))
-    localStorage.setItem(WAVE_SOURCE_KEY, source)
+    // Авто = ключ убираем (эффективный решит getWaveSource), иначе пиним выбор.
+    try {
+      if (source === 'auto') localStorage.removeItem(WAVE_SOURCE_KEY)
+      else localStorage.setItem(WAVE_SOURCE_KEY, source)
+    } catch {
+      /* ignore */
+    }
+    const effSource: WaveSource = source === 'auto' ? getWaveSource() : source
 
-    console.log('Saving My Wave settings:', settings, 'source:', source)
+    console.log('Saving My Wave settings:', settings, 'source:', effSource)
 
-    if (source === 'brain' && !isBrainActive()) {
+    if (effSource === 'brain' && !isBrainActive()) {
       toast.warning(t('brain.waveNotConnected'), {
         autoClose: 4000,
       })
     } else {
       const sourceLabel =
-        source === 'brain' ? t('brain.waveSourceLabel') : t('brain.waveLocal')
+        effSource === 'brain' ? t('brain.waveSourceLabel') : t('brain.waveLocal')
       toast.success(
         activeHint
           ? t('brain.waveApplied', { source: sourceLabel, hint: activeHint })
@@ -334,6 +390,18 @@ export default function MyWaveSettings({
               <Moon className="w-4 h-4" />
               {t('wave.sleep')}
             </button>
+            {/* Занятия с мозга (каталог): зашитых нет — дорисовываем generic-кнопки */}
+            {serverActivities.map((a) => (
+              <button
+                key={`srv-act-${a.code}`}
+                className={`oval-button ${activity === a.code ? 'active' : ''}`}
+                title={a.hint || ''}
+                onClick={() => setActivity(activity === a.code ? '' : a.code)}
+              >
+                <Music className="w-4 h-4" />
+                {a.label || waveLabel(a.code)}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -470,10 +538,18 @@ export default function MyWaveSettings({
           </div>
         </div>
 
-        {/* Источник Волны — как в мобайле: локальный AutoDJ или KFB */}
+        {/* Источник Волны: Авто (мозг когда подключён) либо явный пин */}
         <div className="settings-section">
           <h3 className="section-title">{t('wave.source')}</h3>
           <div className="language-buttons">
+            <button
+              className={`language-button ${source === 'auto' ? 'active' : ''}`}
+              onClick={() => setSource('auto')}
+              title={t('wave.sourceAutoHint', { defaultValue: 'Мозг когда подключён, иначе локалка' })}
+            >
+              <Sparkles className="w-4 h-4" />
+              {t('wave.sourceAuto', { defaultValue: 'Авто' })}
+            </button>
             <button
               className={`language-button ${source === 'local' ? 'active' : ''}`}
               onClick={() => setSource('local')}
