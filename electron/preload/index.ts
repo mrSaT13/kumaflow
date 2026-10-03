@@ -166,6 +166,8 @@ const api: IKumaFlowAPI = {
     getConnectedClients: () => ipcRenderer.invoke('remote-control:get-connected-clients'),
     hasSavedCredentials: () => ipcRenderer.invoke('remote-control:hasSavedCredentials'),
     loadSettings: () => ipcRenderer.invoke('remote-control:loadSettings'),
+    setPin: (pin: string) => ipcRenderer.invoke('remote-control:set-pin', pin),
+    hasPin: () => ipcRenderer.invoke('remote-control:has-pin'),
   },
   // DLNA IPC
   dlna: {

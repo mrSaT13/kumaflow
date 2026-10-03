@@ -35,10 +35,23 @@ interface PlayerState {
   repeatMode: 'off' | 'all' | 'one'
 }
 
+interface QueueItem {
+  id: string
+  title: string
+  artist: string
+  album: string
+  active: boolean
+}
+
 export default function RemoteControlPage() {
   const [connected, setConnected] = useState(false)
   const [isSeeking, setIsSeeking] = useState(false)
   const [seekValue, setSeekValue] = useState(0)
+  const [queue, setQueue] = useState<QueueItem[]>([])
+  const [showQueue, setShowQueue] = useState(false)
+  // PIN-доступ: required — сервер ждёт PIN, ok — управляем, failed — неверный
+  const [auth, setAuth] = useState<'unknown' | 'required' | 'ok' | 'failed'>('unknown')
+  const [pin, setPin] = useState('')
   const [state, setState] = useState<PlayerState>({
     isPlaying: false,
     title: 'Нет трека',
@@ -73,6 +86,7 @@ export default function RemoteControlPage() {
       wsRef.current.onopen = () => {
         console.log('[Remote] Connected to WebSocket')
         setConnected(true)
+        setAuth('unknown')
         send('get-state')
       }
 
@@ -115,6 +129,20 @@ export default function RemoteControlPage() {
       switch (parsed.event) {
         case 'connected':
           console.log('[Remote] Connected:', parsed.data)
+          setAuth('ok')
+          break
+
+        case 'auth-required':
+          setAuth((a) => (a === 'ok' ? a : 'required'))
+          break
+
+        case 'auth-ok':
+          setAuth('ok')
+          send('get-state')
+          break
+
+        case 'auth-fail':
+          setAuth('failed')
           break
 
         case 'state-update':
@@ -122,6 +150,10 @@ export default function RemoteControlPage() {
           if (!isSeeking) {
             setSeekValue(parsed.data.progress || 0)
           }
+          break
+
+        case 'queue-update':
+          if (Array.isArray(parsed.data)) setQueue(parsed.data)
           break
 
         default:
@@ -195,6 +227,13 @@ export default function RemoteControlPage() {
     }
   }
 
+  const repeatTitle =
+    state.repeatMode === 'one'
+      ? 'Повтор одного трека'
+      : state.repeatMode === 'all'
+        ? 'Повтор всей очереди'
+        : 'Повтор выключен'
+
   if (!connected) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted">
@@ -216,6 +255,42 @@ export default function RemoteControlPage() {
     )
   }
 
+  const submitPin = () => {
+    if (!pin.trim()) return
+    send('auth', { pin: pin.trim() })
+  }
+
+  if (auth !== 'ok') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted">
+        <Card className="w-full max-w-md mx-4 border-0 shadow-lg">
+          <div className="p-8 text-center space-y-4">
+            <div className="text-6xl">🔐</div>
+            <h2 className="text-xl font-bold">PIN доступа</h2>
+            <p className="text-sm text-muted-foreground">
+              {auth === 'failed'
+                ? 'Неверный PIN — попробуй ещё раз'
+                : 'Плеер защищён PIN-кодом (задаётся в настройках Remote Control)'}
+            </p>
+            <input
+              type="password"
+              inputMode="numeric"
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submitPin()}
+              placeholder="••••"
+              autoFocus
+              className="w-full text-center text-2xl tracking-[0.5em] rounded-xl border border-border bg-background px-4 py-3 outline-none"
+            />
+            <Button onClick={submitPin} className="w-full" disabled={!pin.trim()}>
+              Подключиться
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted p-4 pb-8">
       <div className="max-w-md mx-auto space-y-6">
@@ -231,7 +306,7 @@ export default function RemoteControlPage() {
           </div>
         </div>
 
-        {/* Обложка - заглушка, так как проксирование не работает */}
+        {/* Обложка через прокси плеера (/getCoverArt) — сохранённый пароль подставляется сам */}
         <div className="relative group aspect-square bg-gradient-to-br from-primary/20 to-primary/5 rounded-2xl overflow-hidden shadow-2xl border border-border/50 flex items-center justify-center">
           {state.coverArt ? (
             <img
@@ -356,23 +431,57 @@ export default function RemoteControlPage() {
             variant="ghost"
             size="icon"
             onClick={handleRepeat}
+            title={repeatTitle}
             className={`w-10 h-10 rounded-full relative ${state.repeatMode !== 'off' ? 'text-primary' : ''}`}
           >
             {getRepeatIcon()}
             {state.repeatMode === 'one' && (
               <span className="absolute -top-1 -right-1 text-[8px] font-bold">1</span>
             )}
+            {state.repeatMode === 'all' && (
+              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
+            )}
           </Button>
 
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => send('get-queue')}
-            className="w-10 h-10 rounded-full"
+            onClick={() => {
+              if (!showQueue) send('get-queue')
+              setShowQueue((v) => !v)
+            }}
+            title="Очередь"
+            className={`w-10 h-10 rounded-full ${showQueue ? 'text-primary' : ''}`}
           >
             <ListMusic className="w-5 h-5" />
           </Button>
         </div>
+
+        {/* Очередь плеера */}
+        {showQueue && (
+          <div className="space-y-1 px-1 max-h-80 overflow-y-auto">
+            {queue.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">
+                Очередь пуста — запросили у плеера…
+              </p>
+            ) : (
+              queue.map((q) => (
+                <div
+                  key={q.id || `${q.title}-${q.artist}`}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${q.active ? 'bg-primary/10 font-semibold' : ''}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate">{q.title}</div>
+                    {q.artist && (
+                      <div className="truncate text-xs text-muted-foreground">{q.artist}</div>
+                    )}
+                  </div>
+                  {q.active && <span className="text-xs text-primary shrink-0">▶</span>}
+                </div>
+              ))
+            )}
+          </div>
+        )}
 
         {/* Громкость */}
         <div className="flex items-center gap-3 px-4 py-3 bg-muted/30 rounded-xl">
@@ -401,7 +510,7 @@ export default function RemoteControlPage() {
         {/* Футер */}
         <div className="text-center pt-4">
           <p className="text-xs text-muted-foreground">
-            Kumaflow Remote Control v1.5.7
+            Kumaflow Remote Control v1.6.7
           </p>
         </div>
       </div>

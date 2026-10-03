@@ -113,6 +113,27 @@ export async function waveContinue(opts: {
   return { tracks, seeds: res.seeds, profile_version: res.profile_version }
 }
 
+/** Каталог опций волны с мозга (GET /api/wave/options).
+ * Мозг — канон списков; без мозга плеер работает по зашитым (офлайн). */
+export interface WaveOptions {
+  activities: { code: string; label: string; hint?: string }[]
+  characteristics: { code: string; label: string; hint?: string }[]
+  languages: { code: string; label: string }[]
+  moods: { name: string; count: number }[]
+}
+
+export async function fetchWaveOptions(): Promise<WaveOptions | null> {
+  const st = useBrainStore.getState()
+  if (!isBrainActive() || !st.userId) return null
+  try {
+    const res = await brainGet<WaveOptions>(`/api/wave/options`)
+    if (!res || !Array.isArray(res.activities)) return null
+    return res
+  } catch {
+    return null
+  }
+}
+
 /** Настроения с мозга: пинг waveContinue с пустой очередью,
  * забираем distinct mood-метки (как home_screen в мобайле).
  * count=40 (не 5): анализ библиотеки обычно частичный, и пятёрка

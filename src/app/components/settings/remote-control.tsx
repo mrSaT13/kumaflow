@@ -31,6 +31,8 @@ export function RemoteControlSettings() {
   const [copied, setCopied] = useState(false)
   const [subsonicPassword, setSubsonicPassword] = useState('')
   const [hasSavedPassword, setHasSavedPassword] = useState(false)
+  const [remotePin, setRemotePin] = useState('')
+  const [hasRemotePin, setHasRemotePin] = useState(false)
   const [availableIps, setAvailableIps] = useState<NetworkIp[]>([])
   const [selectedIp, setSelectedIp] = useState<string>('')
   const [manualIp, setManualIp] = useState('')
@@ -72,6 +74,13 @@ export function RemoteControlSettings() {
       try {
         const hasCreds = await window.api.remoteControl.hasSavedCredentials()
         setHasSavedPassword(hasCreds)
+      } catch {
+        // API ещё не доступен
+      }
+      // Проверяем задан ли PIN доступа
+      try {
+        const pinSet = await window.api.remoteControl.hasPin()
+        setHasRemotePin(!!pinSet)
       } catch {
         // API ещё не доступен
       }
@@ -155,9 +164,39 @@ export function RemoteControlSettings() {
     toast.success(`Установлен IP: ${ip}`, { autoClose: 2000 })
   }
 
+  const handleSavePin = async () => {
+    try {
+      const r = await window.api.remoteControl.setPin(remotePin)
+      if (r?.ok) {
+        setHasRemotePin(true)
+        setRemotePin('')
+        toast.success('PIN сохранён — телефон спросит его при подключении', { autoClose: 3000 })
+      } else {
+        toast.error(r?.error || 'Не удалось сохранить PIN', { autoClose: 3000 })
+      }
+    } catch (error) {
+      console.error('[Remote] setPin error:', error)
+      toast.error('Ошибка сохранения PIN', { autoClose: 3000 })
+    }
+  }
+
   const handleToggle = async (checked: boolean) => {
     try {
       if (checked) {
+        // PIN обязателен: без него remote в LAN открыт всем
+        if (!remotePin && !hasRemotePin) {
+          toast.warn('⚠️ Задай PIN доступа ниже — без него не включаем!', { autoClose: 5000 })
+          return
+        }
+        if (remotePin) {
+          const r = await window.api.remoteControl.setPin(remotePin)
+          if (!r?.ok) {
+            toast.error(r?.error || 'Не удалось сохранить PIN', { autoClose: 4000 })
+            return
+          }
+          setHasRemotePin(true)
+          setRemotePin('')
+        }
         const portNum = parseInt(customPort) || 4333
         await window.api.remoteControl.setPort(portNum)
 
@@ -404,6 +443,40 @@ export function RemoteControlSettings() {
             {hasSavedPassword
               ? "🔒 Пароль зашифрован и сохранён. Введи новый чтобы заменить."
               : "Нужен для загрузки обложек. Пароль шифруется и сохраняется."}
+          </p>
+        </div>
+
+        <Separator />
+
+        {/* PIN доступа — обязателен: без него управлять может любой в LAN */}
+        <div className="space-y-2">
+          <Label htmlFor="remote-pin" className="flex items-center gap-2">
+            🔐 PIN доступа
+            {hasRemotePin && !remotePin && (
+              <Badge variant="outline" className="text-xs">
+                <Lock className="w-3 h-3 mr-1" />
+                Задан
+              </Badge>
+            )}
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              id="remote-pin"
+              type="password"
+              inputMode="numeric"
+              value={remotePin}
+              onChange={(e) => setRemotePin(e.target.value)}
+              placeholder={hasRemotePin ? "Задан (введи новый чтобы сменить)" : "4–12 символов, спросит на телефоне"}
+              className="flex-1"
+            />
+            <Button variant="outline" size="sm" onClick={handleSavePin} disabled={!remotePin}>
+              Сохранить
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {hasRemotePin
+              ? "🔒 Телефон спрашивает PIN при каждом подключении. Смена — вводом нового."
+              : "Без PIN remote не включится: иначе плеером управляет любой в твоей сети."}
           </p>
         </div>
 
