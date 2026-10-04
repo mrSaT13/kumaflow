@@ -9,6 +9,7 @@ import { isBrainActive, useBrainStore } from '@/store/brain.store'
 import {
   buildTasteSyncPayload,
   ensureBrainUserId,
+  pullServerTaste,
   resolveNavidromeUsername,
   syncFromMobile,
 } from './brain-sync'
@@ -37,6 +38,14 @@ export async function runBrainAutoSync(reason: string): Promise<boolean> {
     if (!uid) {
       console.warn('[BrainAutoSync] no user_id, skip')
       return false
+    }
+    // Сначала забираем серверные вкусы (баны/лайки/дизлайки) в локальный
+    // профиль — иначе свежий логин играет заблокированное до первого пуша.
+    // Union-мерж, best-effort: не блокируем пуш при ошибке.
+    try {
+      await pullServerTaste()
+    } catch {
+      /* тихо */
     }
     const { ratings, profile } = buildTasteSyncPayload()
     const res = await syncFromMobile(ratings, profile, [])

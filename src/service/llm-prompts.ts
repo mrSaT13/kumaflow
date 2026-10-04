@@ -1,6 +1,7 @@
 /**
  * LLM Prompts — Шаблоны промтов для различных задач
  */
+import { banDisplayName } from '@/service/ban-filter'
 
 export interface LLMPromptContext {
   // Доступ к данным
@@ -140,7 +141,7 @@ export function buildPlaylistGenerationPrompt(
     .map(([id]) => id)
     .join(', ')}
 
-ЗАБАНЕНЫЕ АРТИСТЫ (НЕ ВКЛЮЧАТЬ): ${context.mlProfile.bannedArtists.join(', ') || 'нет'}
+ЗАБАНЕНЫЕ АРТИСТЫ (НЕ ВКЛЮЧАТЬ): ${context.mlProfile.bannedArtists.map(banDisplayName).join(', ') || 'нет'}
 ` : ''
 
   return `${DEFAULT_SYSTEM_PROMPT}

@@ -80,6 +80,9 @@ interface MLStore {
   initializeGenresFromNavidrome: (artists: { id: string; name: string; genres?: string[] }[]) => void
   banArtist: (artistId: string, artistName: string) => void  // Заблокировать артиста
   unbanArtist: (artistId: string, artistName: string) => void  // Разблокировать артиста
+  // Подтяжка вкусов с мозга (union, только добавляет — безопасно для локали)
+  mergeServerBans: (entries: Array<{ id: string; name: string }>) => void
+  mergeServerTaste: (liked: string[], disliked: string[]) => void
   addArtistGenres: (artistId: string, artistName: string, genres: Array<{ name: string; weight: number }>) => void  // Добавить жанры артиста
   addTrackMoods: (trackId: string, moods: Array<{ name: string; weight: number }>) => void  // Добавить настроения трека
   applyDecayFactor: () => void  // Применить затухание весов
@@ -697,7 +700,7 @@ export const useMLStore = createWithEqualityFn<MLStore>()(
               if (!state.profile.bannedArtists) {
                 state.profile.bannedArtists = []
               }
-              
+
               // Добавляем в bannedArtists
               if (!state.profile.bannedArtists.includes(artistId)) {
                 state.profile.bannedArtists.push(artistId)
@@ -710,6 +713,10 @@ export const useMLStore = createWithEqualityFn<MLStore>()(
                 console.log(`[ML Store] 🗑️ Removed from preferredArtists: ${artistName}`)
               }
             })
+            // Мгновенный пуш бана в мозг (best-effort; автосинк продублирует).
+            // Динамический импорт — brain-sync статически тянет этот стор.
+            void import('@/service/brain-sync').then((m) =>
+              m.pushBrainBan(artistId, artistName)).catch(() => {})
           },
 
           unbanArtist: (artistId, artistName) => {
@@ -719,12 +726,57 @@ export const useMLStore = createWithEqualityFn<MLStore>()(
                 state.profile.bannedArtists = []
               }
 
-              // Удаляем из bannedArtists
-              const index = state.profile.bannedArtists.indexOf(artistId)
-              if (index > -1) {
-                state.profile.bannedArtists.splice(index, 1)
-                console.log(`[ML Store] ✅ Artist unbanned: ${artistName} (${artistId})`)
+              // Удаляем из bannedArtists (и ID, и именную запись с сервера)
+              for (const key of [artistId, `name:${artistName}`]) {
+                const index = state.profile.bannedArtists.indexOf(key)
+                if (index > -1) {
+                  state.profile.bannedArtists.splice(index, 1)
+                }
               }
+              console.log(`[ML Store] ✅ Artist unbanned: ${artistName} (${artistId})`)
+            })
+            void import('@/service/brain-sync').then((m) =>
+              m.pushBrainUnban(artistId, artistName)).catch(() => {})
+          },
+
+          mergeServerBans: (entries) => {
+            set((state) => {
+              if (!state.profile.bannedArtists) {
+                state.profile.bannedArtists = []
+              }
+              const have = new Set(state.profile.bannedArtists)
+              for (const e of entries || []) {
+                const id = (e?.id || '').trim()
+                const name = (e?.name || '').trim()
+                if (id && !have.has(id)) {
+                  state.profile.bannedArtists.push(id)
+                  have.add(id)
+                }
+                if (name) {
+                  const key = `name:${name}`
+                  if (!have.has(key)) {
+                    state.profile.bannedArtists.push(key)
+                    have.add(key)
+                  }
+                }
+              }
+            })
+          },
+
+          mergeServerTaste: (liked, disliked) => {
+            set((state) => {
+              const addUnion = (arr: string[], vals: string[]) => {
+                const have = new Set(arr)
+                for (const v of vals || []) {
+                  const s = (v || '').trim()
+                  if (s && !have.has(s)) {
+                    arr.push(s)
+                    have.add(s)
+                  }
+                }
+              }
+              addUnion(state.profile.likedSongs, liked)
+              addUnion(state.profile.dislikedSongs, disliked)
             })
           },
 

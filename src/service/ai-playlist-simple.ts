@@ -7,6 +7,7 @@
 import { subsonic } from '@/service/subsonic'
 import { getSongsByGenre, getTopSongs, search3 } from '@/service/subsonic-api'
 import type { ISong } from '@/types/responses/song'
+import { banDisplayName } from '@/service/ban-filter'
 
 export interface SimpleAIPlaylistConfig {
   query: string  // Запрос пользователя
@@ -75,7 +76,7 @@ function buildShortPrompt(config: SimpleAIPlaylistConfig): string {
 
 Жанры пользователя: ${topGenres || 'разные'}
 Артисты: ${topArtists || 'разные'}
-Забанены: ${config.profile.bannedArtists.slice(0, 3).join(', ') || 'нет'}
+Забанены: ${config.profile.bannedArtists.slice(0, 3).map(banDisplayName).join(', ') || 'нет'}
 
 ВЕРНИ JSON:
 {
