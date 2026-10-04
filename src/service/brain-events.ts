@@ -57,3 +57,8 @@ export function reportSeekBack(trackId: string, positionSec: number) {
 export function getLastSeekPos() {
   return lastSeekPos
 }
+
+/** Сколько событий ждёт отправки (для строки статуса синка). */
+export function pendingBrainEventsCount(): number {
+  return buffer.length
+}

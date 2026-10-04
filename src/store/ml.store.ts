@@ -83,6 +83,9 @@ interface MLStore {
   // Подтяжка вкусов с мозга (union, только добавляет — безопасно для локали)
   mergeServerBans: (entries: Array<{ id: string; name: string }>) => void
   mergeServerTaste: (liked: string[], disliked: string[]) => void
+  // Применение удалений с сервера (разбаны/анлайки новее курсора).
+  // Только вычитает совпавшее — идемпотентно, локальные новинки не трогает.
+  applyServerRemovals: (removed: Array<{ kind: string; key: string; aux: string }>) => void
   addArtistGenres: (artistId: string, artistName: string, genres: Array<{ name: string; weight: number }>) => void  // Добавить жанры артиста
   addTrackMoods: (trackId: string, moods: Array<{ name: string; weight: number }>) => void  // Добавить настроения трека
   applyDecayFactor: () => void  // Применить затухание весов
@@ -778,6 +781,42 @@ export const useMLStore = createWithEqualityFn<MLStore>()(
               addUnion(state.profile.likedSongs, liked)
               addUnion(state.profile.dislikedSongs, disliked)
             })
+          },
+
+          applyServerRemovals: (removed) => {
+            let n = 0
+            set((state) => {
+              for (const r of removed || []) {
+                const kind = r?.kind
+                const key = (r?.key ?? '').trim()
+                const aux = (r?.aux ?? '').trim()
+                if (!kind || !key) continue
+                if (kind === 'ban') {
+                  const drop = new Set(
+                    [key, aux, `name:${key}`].filter((s) => !!s),
+                  )
+                  const before = state.profile.bannedArtists.length
+                  state.profile.bannedArtists =
+                    state.profile.bannedArtists.filter((b) => !drop.has(b))
+                  n += before - state.profile.bannedArtists.length
+                } else if (kind === 'like' || kind === 'dislike') {
+                  const arr = kind === 'like'
+                    ? state.profile.likedSongs
+                    : state.profile.dislikedSongs
+                  const idx = arr.indexOf(key)
+                  if (idx > -1) {
+                    arr.splice(idx, 1)
+                    n += 1
+                  }
+                  const rt = state.ratings[key]
+                  if (rt && ((kind === 'like' && rt.like === true) ||
+                             (kind === 'dislike' && rt.like === false))) {
+                    rt.like = null
+                  }
+                }
+              }
+            })
+            if (n > 0) console.log(`[ML Store] 🧹 Server removals applied: ${n}`)
           },
 
           addArtistGenres: (artistId, artistName, genres) => {

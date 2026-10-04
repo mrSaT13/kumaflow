@@ -11,6 +11,14 @@ import { createWithEqualityFn } from 'zustand/traditional'
 export const BRAIN_NAME = 'KumaFlow Brain'
 export const BRAIN_SHORT_NAME = 'KFB'
 
+export interface TasteSyncStats {
+  at: string
+  bans: number
+  liked: number
+  disliked: number
+  removed: number
+}
+
 export interface BrainState {
   enabled: boolean
   baseUrl: string
@@ -18,6 +26,10 @@ export interface BrainState {
   userId: string | null
   profileVersion: number
   lastSyncAt: string | null
+  /** Курсор pull (server_now из прошлого ответа) — часы клиентов врут. */
+  tasteCursor: string | null
+  /** Сводка последнего pull для строки статуса. */
+  lastSyncStats: TasteSyncStats | null
   lastPublishAt: string | null
   lastPublishOk: boolean | null
   lastPublishError: string | null
@@ -29,6 +41,8 @@ export interface BrainState {
   setUserId: (v: string | null) => void
   setProfileVersion: (v: number) => void
   setLastSyncAt: (v: string | null) => void
+  setTasteCursor: (v: string | null) => void
+  setLastSyncStats: (v: TasteSyncStats | null) => void
   setLastPublish: (
     at: string | null,
     ok: boolean | null,
@@ -47,6 +61,8 @@ export const useBrainStore = createWithEqualityFn<BrainState>()(
         userId: null,
         profileVersion: 0,
         lastSyncAt: null,
+        tasteCursor: null,
+        lastSyncStats: null,
         lastPublishAt: null,
         lastPublishOk: null,
         lastPublishError: null,
@@ -74,6 +90,14 @@ export const useBrainStore = createWithEqualityFn<BrainState>()(
         setLastSyncAt: (v) =>
           set((s) => {
             s.lastSyncAt = v
+          }),
+        setTasteCursor: (v) =>
+          set((s) => {
+            s.tasteCursor = v
+          }),
+        setLastSyncStats: (v) =>
+          set((s) => {
+            s.lastSyncStats = v
           }),
         setAutoSync: (v) =>
           set((s) => {
