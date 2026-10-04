@@ -250,18 +250,34 @@ export interface ServerTastePull {
   bans: number
   liked: number
   disliked: number
+  removed: number
 }
 
-/** Подтяжка вкусов с мозга в локальный профиль (union). Вызывать при старте. */
+/** Подтяжка вкусов с мозга в локальный профиль.
+ * Курсор — server_now из прошлого ответа (часы клиентов врут), минус
+ * 15 минут запаса: применение удалений идемпотентно, пропуск — нет.
+ * Union-мерж + вычитание removed (разбаны/анлайки). Вызывать при старте.
+ */
 export async function pullServerTaste(): Promise<ServerTastePull | null> {
   const userId = brainUserId()
   if (!isBrainActive() || !userId) return null
+  const bs = useBrainStore.getState()
+  let since = bs.tasteCursor ?? bs.lastSyncAt
+  try {
+    if (since) {
+      const t = new Date(since).getTime()
+      if (Number.isFinite(t)) since = new Date(t - 15 * 60000).toISOString()
+    }
+  } catch { /* сырой курсор как есть */ }
+  const qs = since ? `?since=${encodeURIComponent(since)}` : ''
   const snap = await brainGet<{
+    server_now?: string
     bannedArtistsDetailed?: Array<{ name: string; external_id: string }>
     bannedArtists?: string[]
     likedSongs?: string[]
     dislikedSongs?: string[]
-  }>(`/api/users/${userId}/sync-to-mobile`).catch(() => null)
+    removed?: Array<{ kind: string; key: string; aux: string }>
+  }>(`/api/users/${userId}/sync-to-mobile${qs}`).catch(() => null)
   if (!snap) return null
   try {
     const detailed = snap.bannedArtistsDetailed
@@ -271,12 +287,18 @@ export async function pullServerTaste(): Promise<ServerTastePull | null> {
     const ml = useMLStore.getState()
     ml.mergeServerBans(entries.filter((e) => e.id || e.name))
     ml.mergeServerTaste(snap.likedSongs ?? [], snap.dislikedSongs ?? [])
+    const removed = Array.isArray(snap.removed) ? snap.removed : []
+    if (removed.length > 0) ml.applyServerRemovals(removed)
+    const store = useBrainStore.getState()
+    if (snap.server_now) store.setTasteCursor(snap.server_now)
     const res = {
       bans: entries.length,
       liked: (snap.likedSongs ?? []).length,
       disliked: (snap.dislikedSongs ?? []).length,
+      removed: removed.length,
     }
-    console.log(`[BrainSync] pulled taste: bans+${res.bans} liked+${res.liked} disliked+${res.disliked}`)
+    store.setLastSyncStats({ at: new Date().toISOString(), ...res })
+    console.log(`[BrainSync] pulled taste: bans+${res.bans} liked+${res.liked} disliked+${res.disliked} removed-${res.removed}`)
     return res
   } catch {
     return null

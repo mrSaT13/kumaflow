@@ -21,9 +21,11 @@ import { brainGet, brainRaw } from '@/service/brain-client'
 import {
   buildTasteSyncPayload,
   ensureBrainUserId,
+  pullServerTaste,
   resolveNavidromeUsername,
   syncFromMobile,
 } from '@/service/brain-sync'
+import { pendingBrainEventsCount } from '@/service/brain-events'
 import { useBrainStore } from '@/store/brain.store'
 
 export function BrainSettings() {
@@ -34,6 +36,7 @@ export function BrainSettings() {
     token,
     userId,
     lastSyncAt,
+    lastSyncStats,
     lastPublishAt,
     lastPublishOk,
     lastPublishError,
@@ -46,6 +49,8 @@ export function BrainSettings() {
   const [urlInput, setUrlInput] = useState(baseUrl)
   const [tokenInput, setTokenInput] = useState(token)
   const [checking, setChecking] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncReport, setSyncReport] = useState<string | null>(null)
 
   // Возраст последней публикации: старая ошибка (401 до фикса токена)
   // не должна выглядеть как текущая — publish идёт только при игре/очереди.
@@ -110,6 +115,8 @@ export function BrainSettings() {
   }
 
   const handleSync = async () => {
+    setSyncing(true)
+    setSyncReport(null)
     try {
       // Логин Navidrome живёт в accounts.store (мультиаккаунты) → app.store → auth.store.
       // Фолбека-выдумки больше нет: без логина синхру не стартуем.
@@ -123,6 +130,9 @@ export function BrainSettings() {
         toast(t('brain.toastNoUserId'), { type: 'error' })
         return
       }
+      // Сначала забираем серверное (включая снятия банов/оценок),
+      // потом отправляем локальное — как в автосинке.
+      const pulled = await pullServerTaste().catch(() => null)
       const { ratings, profile } = buildTasteSyncPayload()
       const res = await syncFromMobile(ratings, profile, [])
       if (!res) {
@@ -137,11 +147,17 @@ export function BrainSettings() {
         })
         return
       }
+      const report = t('brain.syncReport', {
+        defaultValue: `Готово: с сервера — баны +${pulled?.bans ?? 0}, лайки +${pulled?.liked ?? 0}, дизлайки +${pulled?.disliked ?? 0}, снято ${pulled?.removed ?? 0}; отправлено оценок: ${ratings.length}, новых избранных: ${res.fav_added ?? 0}`,
+      })
+      setSyncReport(report)
       toast(t('brain.toastSyncOk', { count: res.fav_added ?? 0 }), {
         type: 'success',
       })
     } catch {
       toast(t('brain.toastSyncError'), { type: 'error' })
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -194,7 +210,7 @@ export function BrainSettings() {
           >
             {t('brain.check')}
           </Button>
-          <Button variant="outline" onClick={handleSync} disabled={!enabled}>
+          <Button variant="outline" onClick={handleSync} disabled={!enabled || syncing}>
             {t('brain.syncNow')}
           </Button>
         </div>
@@ -204,6 +220,14 @@ export function BrainSettings() {
             lastSync: lastSyncAt ?? '—',
           })}
         </div>
+        <div className="text-xs text-muted-foreground">
+          {t('brain.metaTaste', {
+            defaultValue: `Вкусы: получено — баны +${lastSyncStats?.bans ?? 0}, лайки +${lastSyncStats?.liked ?? 0}, дизлайки +${lastSyncStats?.disliked ?? 0}, снято ${lastSyncStats?.removed ?? 0}; событий в очереди: ${pendingBrainEventsCount()}`,
+          })}
+        </div>
+        {syncReport ? (
+          <div className="text-xs text-muted-foreground">{syncReport}</div>
+        ) : null}
         <div className="text-xs text-muted-foreground">
           {t('brain.metaQueue', {
             value: lastPublishAt
