@@ -6,6 +6,7 @@ import { useExternalApiStore } from '@/store/external-api.store'
 import { useMLStore } from '@/store/ml.store'
 import { analyzeTrack, findSimilarTracks, vibeSimilarity } from '@/service/vibe-similarity'
 import { orchestratePlaylist, orchestratePlaylistWithBridges, createEnergyWave } from '@/service/playlist-orchestrator'
+import { isArtistBanned } from '@/service/ban-filter'
 import { playlistCache } from '@/service/playlist-cache'
 import { getSonicFingerprintRecommendations } from '@/service/sonic-fingerprint'
 import { moodDriftDetector } from '@/service/mood-drift-detector'
@@ -21,7 +22,7 @@ export interface MLWavePlaylist {
 }
 
 export interface MyWaveSettings {
-  activity?: 'wakeup' | 'commute' | 'work' | 'workout' | 'sleep' | 'study' | 'party' | 'walk' | 'rest' | ''
+  activity?: 'wakeup' | 'commute' | 'work' | 'workout' | 'sleep' | ''
   characteristic?: 'favorite' | 'unfamiliar' | 'popular' | ''
   mood?: 'energetic' | 'happy' | 'calm' | 'sad' | ''
   language?: 'russian' | 'foreign' | 'instrumental' | ''
@@ -351,21 +352,11 @@ export async function generateMyWavePlaylist(
     dislikedSongIds.forEach(id => usedSongIds.add(id))
   }
 
-  // Фильтр для проверки banned artists
+  // Фильтр для проверки banned artists (ID или имя — см. ban-filter)
   const isBannedArtist = (song: ISong): boolean => {
-    if (!song.artistId && !song.artist) return false
-    if (song.artistId && bannedArtists.includes(song.artistId)) {
-      console.log(`[MyWave] ❌ BANNED artist ID: ${song.artist} (${song.artistId})`)
-      return true
-    }
-    // Дополнительная проверка по имени артиста (если artistId не доступен)
-    if (!song.artistId && bannedArtists.some(id => 
-      song.artist && song.artist.toLowerCase().includes(id.toLowerCase())
-    )) {
-      console.log(`[MyWave] ❌ BANNED artist name: ${song.artist}`)
-      return true
-    }
-    return false
+    const hit = isArtistBanned(song.artistId, song.artist, bannedArtists)
+    if (hit) console.log(`[MyWave] 🚫 BANNED artist: ${song.artist} (${song.artistId})`)
+    return hit
   }
 
   // Исключаем треки из последних плейлистов
@@ -871,20 +862,11 @@ export async function generateArtistBasedPlaylist(
   const bannedArtists = mlState.profile.bannedArtists || []
   console.log('[ArtistBased] 🔒 Banned artists:', bannedArtists)
 
-  // Функция фильтрации по banned artists
+  // Функция фильтрации по banned artists (ID или имя — см. ban-filter)
   const isBannedArtist = (song: ISong): boolean => {
-    if (!song.artistId && !song.artist) return false
-    if (song.artistId && bannedArtists.includes(song.artistId)) {
-      console.log(`[ArtistBased] ❌ BANNED artist: ${song.artist} (${song.artistId})`)
-      return true
-    }
-    if (!song.artistId && bannedArtists.some(id =>
-      song.artist && song.artist.toLowerCase().includes(id.toLowerCase())
-    )) {
-      console.log(`[ArtistBased] ❌ BANNED artist name: ${song.artist}`)
-      return true
-    }
-    return false
+    const hit = isArtistBanned(song.artistId, song.artist, bannedArtists)
+    if (hit) console.log(`[ArtistBased] 🚫 BANNED artist: ${song.artist} (${song.artistId})`)
+    return hit
   }
 
   // 1. СНАЧАЛА берем по 2-3 трека от каждого артиста (чтобы не перегружать)
@@ -1114,20 +1096,11 @@ export async function generateDailyMix(
   const bannedArtists = mlState.profile.bannedArtists || []
   console.log('[DailyMix v2] 🔒 Banned artists:', bannedArtists)
 
-  // Функция фильтрации по banned artists
+  // Функция фильтрации по banned artists (ID или имя — см. ban-filter)
   const isBannedArtist = (song: ISong): boolean => {
-    if (!song.artistId && !song.artist) return false
-    if (song.artistId && bannedArtists.includes(song.artistId)) {
-      console.log(`[DailyMix v2] ❌ BANNED artist: ${song.artist} (${song.artistId})`)
-      return true
-    }
-    if (!song.artistId && bannedArtists.some(id =>
-      song.artist && song.artist.toLowerCase().includes(id.toLowerCase())
-    )) {
-      console.log(`[DailyMix v2] ❌ BANNED artist name: ${song.artist}`)
-      return true
-    }
-    return false
+    const hit = isArtistBanned(song.artistId, song.artist, bannedArtists)
+    if (hit) console.log(`[DailyMix v2] 🚫 BANNED artist: ${song.artist} (${song.artistId})`)
+    return hit
   }
 
   // ============================================
@@ -1485,20 +1458,11 @@ export async function generateDiscoverWeekly(
   const bannedArtists = mlState.profile.bannedArtists || []
   console.log('[DiscoverWeekly v2] 🔒 Banned artists:', bannedArtists)
 
-  // Функция фильтрации по banned artists
+  // Функция фильтрации по banned artists (ID или имя — см. ban-filter)
   const isBannedArtist = (song: ISong): boolean => {
-    if (!song.artistId && !song.artist) return false
-    if (song.artistId && bannedArtists.includes(song.artistId)) {
-      console.log(`[DiscoverWeekly v2] ❌ BANNED artist: ${song.artist} (${song.artistId})`)
-      return true
-    }
-    if (!song.artistId && bannedArtists.some(id =>
-      song.artist && song.artist.toLowerCase().includes(id.toLowerCase())
-    )) {
-      console.log(`[DiscoverWeekly v2] ❌ BANNED artist name: ${song.artist}`)
-      return true
-    }
-    return false
+    const hit = isArtistBanned(song.artistId, song.artist, bannedArtists)
+    if (hit) console.log(`[DiscoverWeekly v2] 🚫 BANNED artist: ${song.artist} (${song.artistId})`)
+    return hit
   }
 
   // ============================================
@@ -2026,8 +1990,8 @@ export async function generateArtistRadio(
           for (const track of lastFmTracks) {
             if (songs.length >= limit) break
             
-            // Пропускаем забаненных артистов
-            if (bannedArtists.includes(track.artist)) {
+            // Пропускаем забаненных артистов (ID или имя)
+            if (isArtistBanned(undefined, track.artist, bannedArtists)) {
               console.log('[ArtistRadio] Skipping banned artist:', track.artist)
               continue
             }
@@ -2095,8 +2059,8 @@ export async function generateArtistRadio(
       for (const similarArtist of artistInfo.similarArtist.slice(0, 8)) {
         if (songs.length >= limit) break
         
-        // Пропускаем забаненных артистов
-        if (bannedArtists.includes(similarArtist.name)) {
+        // Пропускаем забаненных артистов (ID или имя)
+        if (isArtistBanned(similarArtist.id, similarArtist.name, bannedArtists)) {
           console.log('[ArtistRadio] Skipping banned artist:', similarArtist.name)
           continue
         }
@@ -2162,21 +2126,11 @@ export async function generateMLRecommendations(
   const bannedArtists = mlState.profile.bannedArtists || []
   console.log('[ML Recommendations v2] 🔒 Banned artists:', bannedArtists)
 
-  // Функция фильтрации по banned artists
+  // Функция фильтрации по banned artists (ID или имя — см. ban-filter)
   const isBannedArtist = (song: ISong): boolean => {
-    if (!song.artistId && !song.artist) return false
-    if (song.artistId && bannedArtists.includes(song.artistId)) {
-      console.log(`[ML Recommendations v2] ❌ BANNED artist ID: ${song.artist} (${song.artistId})`)
-      return true
-    }
-    // Дополнительная проверка по имени артиста (если artistId не доступен)
-    if (!song.artistId && bannedArtists.some(id =>
-      song.artist && song.artist.toLowerCase().includes(id.toLowerCase())
-    )) {
-      console.log(`[ML Recommendations v2] ❌ BANNED artist name: ${song.artist}`)
-      return true
-    }
-    return false
+    const hit = isArtistBanned(song.artistId, song.artist, bannedArtists)
+    if (hit) console.log(`[ML Recommendations v2] 🚫 BANNED artist: ${song.artist} (${song.artistId})`)
+    return hit
   }
 
   // Исключаем дизлайкнутые
@@ -3240,10 +3194,10 @@ export async function generateTimeOfDayMix(
   const canAddTrack = (song: ISong): boolean => {
     if (usedSongIds.has(song.id)) return false
 
-    // Banned artists check
+    // Banned artists check (ID или имя — см. ban-filter)
     const mlState = useMLStore.getState()
     const bannedArtists = mlState.profile?.bannedArtists || []
-    if (song.artistId && bannedArtists.includes(song.artistId)) return false
+    if (isArtistBanned(song.artistId, song.artist, bannedArtists)) return false
 
     const artist = song.artist || 'Unknown'
     const currentCount = artistCount[artist] || 0

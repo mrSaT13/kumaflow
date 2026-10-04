@@ -12,6 +12,7 @@
  */
 
 import { VibeFeatures, analyzeTrack, vibeSimilarity, detectMood } from './vibe-similarity'
+import { isArtistBanned } from './ban-filter'
 import { ISong } from '@/types/responses/song'
 
 // Camelot wheel для harmonic mixing
@@ -77,19 +78,12 @@ export function orchestratePlaylist(
     ? tracks.filter(track => !excludedSongIds.has(track.id))
     : tracks
 
-  // Исключаем заблокированных артистов
+  // Исключаем заблокированных артистов (ID или имя — см. ban-filter)
   if (bannedArtists && bannedArtists.length > 0) {
     const beforeCount = filteredTracks.length
     filteredTracks = filteredTracks.filter(track => {
-      if (track.artistId && bannedArtists.includes(track.artistId)) {
+      if (isArtistBanned(track.artistId, track.artist, bannedArtists)) {
         console.log(`[Orchestrator] 🚫 Skipping banned artist: ${track.artist} (${track.artistId})`)
-        return false
-      }
-      // Проверка по имени артиста
-      if (!track.artistId && bannedArtists.some(id => 
-        track.artist && track.artist.toLowerCase().includes(id.toLowerCase())
-      )) {
-        console.log(`[Orchestrator] 🚫 Skipping banned artist: ${track.artist}`)
         return false
       }
       return true

@@ -20,6 +20,7 @@ import { orchestratePlaylist, orchestratePlaylistWithBridges, createEnergyWave }
 import { analyzeTrack, vibeSimilarity } from './vibe-similarity'
 import { generateMLRecommendations } from './ml-wave-service'
 import { tryBrainAutoDJ } from './brain-autodj'
+import { isArtistBanned } from './ban-filter'
 import { useMLStore } from '@/store/ml.store'
 import { useAutoDJStore } from '@/store/auto-dj.store'
 import type { ISong } from '@/types/responses/song'
@@ -141,21 +142,11 @@ export async function generateSmartAutoDJ(
     ...excludeRecentlyPlayed,
   ])
 
-  // Фильтр для проверки banned artists
+  // Фильтр для проверки banned artists (ID или имя — см. ban-filter)
   const isBannedArtist = (song: ISong): boolean => {
-    if (!song.artistId && !song.artist) return false
-    if (song.artistId && bannedArtists.includes(song.artistId)) {
-      console.log(`[SmartAutoDJ] 🚫 BANNED artist ID: ${song.artist} (${song.artistId})`)
-      return true
-    }
-    // Дополнительная проверка по имени артиста
-    if (!song.artistId && bannedArtists.some(id =>
-      song.artist && song.artist.toLowerCase().includes(id.toLowerCase())
-    )) {
-      console.log(`[SmartAutoDJ] 🚫 BANNED artist name: ${song.artist}`)
-      return true
-    }
-    return false
+    const hit = isArtistBanned(song.artistId, song.artist, bannedArtists)
+    if (hit) console.log(`[SmartAutoDJ] 🚫 BANNED artist: ${song.artist} (${song.artistId})`)
+    return hit
   }
 
   let candidates = mlPlaylist.songs.filter(s =>
@@ -179,34 +170,11 @@ export async function generateSmartAutoDJ(
   try {
     const poolByExternalId = new Map<string, ISong>()
     for (const s of [...songlist, ...candidates]) poolByExternalId.set(s.id, s)
-    // W1: реальные настройки волны (пилюли) + контекст плеера.
-    // Раньше сюда уходило mapWaveSettings({}) → бесконтекстная добивка.
-    let waveSettingsRaw: Record<string, unknown> = {}
-    try {
-      waveSettingsRaw = JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
-    } catch { /* ignore */ }
-    let shuffle = false
-    let loop = 'off'
-    try {
-      const { usePlayerStore } = await import('@/store/player.store')
-      const pst = usePlayerStore.getState()
-      shuffle = (pst.songlist.shuffledList?.length ?? 0) > 0
-      // LoopState enum: 0=Off,1=All,2=One (числовой) — шлём строкой
-      const ls = pst.playerState.loopState as unknown
-      loop = ls === 1 || String(ls).toLowerCase().includes('all') ? 'all'
-        : ls === 2 || String(ls).toLowerCase().includes('one') ? 'one' : 'off'
-    } catch { /* best-effort */ }
     const brain = await tryBrainAutoDJ({
       queue: songlist,
       current: currentSong,
       count,
       poolByExternalId,
-      waveSettings: waveSettingsRaw,
-      // W2: локальные негативы едут в мозг, а не только пост-фильтром
-      dislikedIds: profile.dislikedSongs ?? [],
-      bannedArtists,
-      recentlyPlayedIds: [...playedIds],
-      context: { shuffle, loop, source: 'autodj' },
     })
     if (brain.fromBrain && brain.songs.length > 0) {
       const seen = new Set(candidates.map((s) => s.id))

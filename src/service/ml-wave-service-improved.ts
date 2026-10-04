@@ -9,6 +9,7 @@ import { subsonic } from '@/service/subsonic'
 import { getTopSongs, getSongsByGenre, getRandomSongs } from '@/service/subsonic-api'
 import { useMLStore } from '@/store/ml.store'
 import { playlistCache } from '@/service/playlist-cache'
+import { isArtistBanned } from '@/service/ban-filter'
 import type { ISong } from '@/types/responses/song'
 
 export interface MLWavePlaylist {
@@ -361,7 +362,7 @@ export async function generateDiscoverWeeklyV2(
 
     const nicheTracks = songsByGenre.filter(s => {
       if (usedSongIds.has(s.id)) return false
-      if (bannedArtists.includes(s.artistId || '')) return false
+      if (isArtistBanned(s.artistId, s.artist, bannedArtists)) return false
 
       const isNotPopular = (s.playCount || 0) < 1000
       const isOlder = !s.year || s.year < now.getFullYear() - 1

@@ -198,13 +198,87 @@ export function buildTasteSyncPayload(): TasteSyncPayload {
       artistDislikeCounts[artist] = (artistDislikeCounts[artist] ?? 0) + 1
     }
   }
+  // Баны парами {id, name}: сервер матчит имя ИЛИ Navidrome-ID.
+  // В локальном массиве лежат голые ID и "name:<имя>" (с сервера).
+  const idToName: Record<string, string> = {}
+  for (const [, r] of Object.entries(ml.ratings ?? {})) {
+    const v = r as { songInfo?: { artist?: string; artistId?: string } }
+    const aid = (v.songInfo?.artistId ?? '').trim()
+    const anm = (v.songInfo?.artist ?? '').trim()
+    if (aid && anm && !idToName[aid]) idToName[aid] = anm
+  }
+  const bannedPairs = (ml.profile?.bannedArtists ?? []).slice(0, 1000).map((raw) => {
+    const s = (raw ?? '').trim()
+    if (s.startsWith('name:')) return { id: '', name: s.slice(5).trim() }
+    return { id: s, name: idToName[s] ?? '' }
+  })
   const profile = {
     preferredGenres: ml.profile?.preferredGenres ?? {},
     preferredArtists: ml.profile?.preferredArtists ?? {},
     likedSongs: ml.profile?.likedSongs ?? [],
     dislikedSongs: ml.profile?.dislikedSongs ?? [],
-    bannedArtists: ml.profile?.bannedArtists ?? [],
+    bannedArtists: bannedPairs,
     artistDislikeCounts,
   }
   return { ratings, profile }
+}
+
+/** Мгновенный пуш бана/разбана в мозг (best-effort, без ожидания). */
+export async function pushBrainBan(artistId: string, artistName: string): Promise<void> {
+  try {
+    const userId = brainUserId()
+    if (!isBrainActive() || !userId) return
+    await brainPost(`/api/users/${userId}/ban-artist`, {
+      artist_name: (artistName ?? '').trim(),
+      artist_id: (artistId ?? '').trim(),
+    })
+  } catch { /* тихо: автосинк продублирует */ }
+}
+
+export async function pushBrainUnban(artistId: string, artistName: string): Promise<void> {
+  try {
+    const userId = brainUserId()
+    if (!isBrainActive() || !userId) return
+    await brainPost(`/api/users/${userId}/unban-artist`, {
+      artist_name: (artistName ?? '').trim(),
+      artist_id: (artistId ?? '').trim(),
+    })
+  } catch { /* тихо */ }
+}
+
+export interface ServerTastePull {
+  bans: number
+  liked: number
+  disliked: number
+}
+
+/** Подтяжка вкусов с мозга в локальный профиль (union). Вызывать при старте. */
+export async function pullServerTaste(): Promise<ServerTastePull | null> {
+  const userId = brainUserId()
+  if (!isBrainActive() || !userId) return null
+  const snap = await brainGet<{
+    bannedArtistsDetailed?: Array<{ name: string; external_id: string }>
+    bannedArtists?: string[]
+    likedSongs?: string[]
+    dislikedSongs?: string[]
+  }>(`/api/users/${userId}/sync-to-mobile`).catch(() => null)
+  if (!snap) return null
+  try {
+    const detailed = snap.bannedArtistsDetailed
+    const entries = (Array.isArray(detailed) && detailed.length > 0)
+      ? detailed.map((d) => ({ id: (d?.external_id ?? '').trim(), name: (d?.name ?? '').trim() }))
+      : (snap.bannedArtists ?? []).map((n) => ({ id: '', name: (n ?? '').trim() }))
+    const ml = useMLStore.getState()
+    ml.mergeServerBans(entries.filter((e) => e.id || e.name))
+    ml.mergeServerTaste(snap.likedSongs ?? [], snap.dislikedSongs ?? [])
+    const res = {
+      bans: entries.length,
+      liked: (snap.likedSongs ?? []).length,
+      disliked: (snap.dislikedSongs ?? []).length,
+    }
+    console.log(`[BrainSync] pulled taste: bans+${res.bans} liked+${res.liked} disliked+${res.disliked}`)
+    return res
+  } catch {
+    return null
+  }
 }

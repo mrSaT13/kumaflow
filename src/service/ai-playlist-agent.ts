@@ -13,6 +13,7 @@ import { subsonic } from '@/service/subsonic'
 import { getSongsByGenre, getTopSongs, getRandomSongs, search3 } from '@/service/subsonic-api'
 import type { ISong } from '@/types/responses/song'
 import type { MLProfile } from '@/store/ml.store'
+import { banDisplayName } from '@/service/ban-filter'
 
 export interface AIPlaylistTrigger {
   type: 'user_liked_artist' | 'user_liked_song' | 'time_of_day' | 'season' | 'mood_detected' | 'new_music_available'
@@ -131,7 +132,7 @@ ${trigger.data.season ? `Сезон: ${trigger.data.season}` : ''}
 ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:
 Любимые жанры: ${topGenres || 'не указаны'}
 Любимые артисты: ${topArtists || 'не указаны'}
-Забаненные артисты: ${this.profile.bannedArtists.join(', ') || 'нет'}
+Забаненные артисты: ${this.profile.bannedArtists.map(banDisplayName).join(', ') || 'нет'}
 
 ВРЕМЯ И СЕЗОН:
 Сейчас: ${hour}:00, ${season}
