@@ -1,10 +1,11 @@
 /**
- * KumaFlow 1.6.4 — Brain wave
- * wave/continue + seeds + publish (throttle 5с) + resume. Источник внутри SmartAutoDJ.
+ * KumaFlow 1.6.2 — Brain wave
+ * wave/continue + seeds + publish (throttle 5с). Источник внутри SmartAutoDJ.
  */
 
-import { brainFetch, brainGet, brainPost, brainRaw } from './brain-client'
 import { isBrainActive, useBrainStore } from '@/store/brain.store'
+import { ensureBrainReady, requestBrainReady } from './brain-bootstrap'
+import { brainGet, brainPost, brainRaw } from './brain-client'
 import type { BrainEvent, BrainRating } from './brain-sync'
 
 export interface WaveSettings {
@@ -21,33 +22,241 @@ export interface WaveTrack {
   score: number
   reason?: string
   external_id?: string
-  /** Первая метка настроения с мозга (server/app/api/wave.py:615) */
-  mood?: string | null
-  /** Все метки настроения трека (до 3) */
-  moods?: string[]
 }
 
 let lastPublishAt = 0
 let lastPublishKey = ''
 
-/** ID сессии очереди: мозг различает «новая волна» vs «продолжение».
- * Живёт пока живёт очередь; сбрасывается при старте новой волны. */
-let brainSessionId = ''
-export function getBrainSessionId(): string {
-  if (!brainSessionId) {
-    try {
-      brainSessionId =
-        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-          ? crypto.randomUUID()
-          : `sess-${Date.now()}-${Math.floor(Math.random() * 1e9)}`
-    } catch {
-      brainSessionId = `sess-${Date.now()}-${Math.floor(Math.random() * 1e9)}`
-    }
+// ==================== Устройство плеера ====================
+// Мозг различает плееры по слоту device (см. server/app/api/wave.py
+// _norm_device + /api/me/devices). Без него всё, что публикует десктоп,
+// попадает в слот 'default' вместе с телефоном, и «Продолжить с …»
+// на телефоне/вебе не знает, что играет у нас и с какой секунды.
+
+const DEVICE_ID_KEY = 'brain_device_id'
+const DEVICE_LABEL_KEY = 'brain_device_label'
+
+/** Стабильный id слота: один раз сгенерирован — хранится навсегда.
+ * Только [a-z0-9_-], максимум 32 символа (как ждёт мозг). */
+export function brainDeviceId(): string {
+  try {
+    const existing = (localStorage.getItem(DEVICE_ID_KEY) || '')
+      .trim()
+      .toLowerCase()
+    if (/^[a-z0-9_-]{4,32}$/.test(existing)) return existing
+    const rand = (
+      globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
+    )
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .slice(0, 16)
+    const id = `pc-${rand}`
+    localStorage.setItem(DEVICE_ID_KEY, id)
+    return id
+  } catch {
+    return 'pc-default'
   }
-  return brainSessionId
 }
-export function resetBrainSessionId(): void {
-  brainSessionId = ''
+
+/** Человекочитаемая метка плеера — её видно в селекторе волны и в «Продолжить с …». */
+export function brainDeviceLabel(): string {
+  try {
+    const custom = (localStorage.getItem(DEVICE_LABEL_KEY) || '')
+      .trim()
+      .slice(0, 64)
+    if (custom) return custom
+  } catch {
+    /* ignore */
+  }
+  const os =
+    (globalThis as any).navigator?.userAgentData?.platform ||
+    (globalThis as any).navigator?.platform ||
+    ''
+  let osName = 'ПК'
+  const s = String(os).toLowerCase()
+  if (s.includes('win')) osName = 'Windows'
+  else if (s.includes('mac')) osName = 'Mac'
+  else if (s.includes('linux')) osName = 'Linux'
+  return `KumaFlow · ${osName}`
+}
+
+/** Похоже ли значение на технический идентификатор, а не на имя устройства. */
+function looksLikeDeviceId(v: string): boolean {
+  const s = v.trim().toLowerCase()
+  if (!s) return true
+  // UUID целиком: 8-4-4-4-12
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s))
+    return true
+  // наш формат слота: pc-<16 hex>
+  if (/^pc-[a-z0-9_-]{4,32}$/.test(s)) return true
+  // прочий длинный id без пробелов. Именно HEX: иначе под правило попадали бы
+  // настоящие имена вроде «XiaomiRedmiNote13Pro» (20 символов, без пробелов).
+  if (/^[0-9a-f_-]{16,}$/.test(s)) return true
+  return false
+}
+
+/**
+ * Человекочитаемое имя устройства для UI.
+ *
+ * Раньше здесь стояло `(d.display_name || d.device_id).slice(0, 40)`, и когда
+ * мозг не отдавал display_name — в уведомление уезжал сырой id. Телефон
+ * публикует полный UUID, поэтому пользователь видел
+ * «Слушали на ab224530-57ca-4027-a4ce-780844fcc6b8». Технический id наружу
+ * не выпускаем — возвращаем null, вызывающий подставит «Устройство N».
+ */
+export function humanDeviceName(raw: string | null | undefined): string | null {
+  const s = (raw ?? '').trim().slice(0, 40)
+  if (!s || looksLikeDeviceId(s)) return null
+  return s
+}
+
+export interface BrainDeviceRow {
+  deviceId: string
+  displayName: string
+  ageSec: number | null
+  queueLen: number
+  paused: boolean
+  nowPlaying: string | null
+}
+
+/**
+ * Список живых слотов с человеческими именами.
+ * Безымянные слоты нумеруются по порядку, чтобы в выпадающем списке
+ * «Продолжить с …» было из чего выбирать.
+ */
+export function humanDeviceRows(
+  raw: Array<{
+    device_id?: string
+    deviceId?: string
+    display_name?: string | null
+    age_sec?: number | null
+    queue_len?: number | null
+    paused?: boolean | null
+    now_playing?: string | null
+  }>,
+): BrainDeviceRow[] {
+  let auto = 0
+  return raw.map((d) => {
+    const name = humanDeviceName(d.display_name ?? d.device_id)
+    if (name)
+      return {
+        deviceId: d.device_id ?? d.deviceId ?? '',
+        displayName: name,
+        ageSec: d.age_sec ?? null,
+        queueLen: d.queue_len ?? 0,
+        paused: !!d.paused,
+        nowPlaying: d.now_playing ?? null,
+      }
+    auto += 1
+    return {
+      deviceId: d.device_id ?? d.deviceId ?? '',
+      displayName: `Устройство ${auto}`,
+      ageSec: d.age_sec ?? null,
+      queueLen: d.queue_len ?? 0,
+      paused: !!d.paused,
+      nowPlaying: d.now_playing ?? null,
+    }
+  })
+}
+
+/** Своё имя устройства (то, что переименовывается в мозге). */
+export async function brainDeviceRename(label: string): Promise<boolean> {
+  const name = (label || '').trim().slice(0, 64)
+  try {
+    localStorage.setItem(DEVICE_LABEL_KEY, name)
+  } catch {
+    /* ignore */
+  }
+  const res = await brainRaw(
+    `/api/me/devices/${encodeURIComponent(brainDeviceId())}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ display_name: name }),
+    },
+  )
+  return !!res && res.status >= 200 && res.status < 300
+}
+
+export interface BrainDevice {
+  device_id: string
+  display_name: string
+  renamed: boolean
+  age_sec: number | null
+  queue_len: number
+  paused: boolean
+  now_playing?: {
+    title?: string | null
+    artist_name?: string | null
+    position_sec?: number | null
+  } | null
+  /** Природа ленты на этом слоте (мозг 0.3.2+). */
+  is_wave?: boolean
+  playlist_name?: string | null
+}
+
+/** GET /api/me/devices — живые слоты + имена. */
+export async function brainDevices(): Promise<BrainDevice[]> {
+  const st = useBrainStore.getState()
+  // Живой список без user_id пустой — на всякий случай поднимаем его здесь,
+  // чтобы первое открытие настроек/«Продолжить» уже работало.
+  const uid = st.userId ?? (await ensureBrainReady())
+  const q = uid ? `?user_id=${encodeURIComponent(uid)}` : ''
+  const res = await brainGet<{ devices?: BrainDevice[] }>(`/api/me/devices${q}`)
+  return res?.devices ?? []
+}
+
+export interface WaveResumeTrack {
+  track_id: string
+  title: string
+  artist_name: string
+  album_name?: string | null
+  cover_art_id?: string | null
+  external_id: string
+  duration_sec?: number | null
+}
+
+/** Ответ GET /api/wave/resume (server/app/api/wave.py). */
+export interface WaveResume {
+  available: boolean
+  reason?: string | null
+  stale?: boolean
+  age_sec?: number | null
+  device?: string | null
+  device_id?: string | null
+  paused?: boolean
+  track?: WaveResumeTrack | null
+  position_sec?: number | null
+  position_ratio?: number | null
+  queue?: string[]
+  devices?: BrainDevice[]
+  /** Природа ленты — от мозга (0.3.2+). Без них очередь «просто очередь». */
+  is_wave?: boolean
+  playlist_name?: string | null
+  wave_settings?: {
+    activity?: string
+    characteristic?: string
+    mood?: string
+    language?: string
+  } | null
+  /** Сид радио: трек или артист, которым открыта лента. */
+  radio_seed?: string | null
+}
+
+/**
+ * Продолжить с другого устройства: GET /api/wave/resume[?device=слот].
+ * Без ?device мозг отдаёт самый свежий слот. user_id поднимается на лету —
+ * раньше функция молча возвращала null, пока не откроют настройки.
+ */
+export async function waveResume(
+  device?: string | null,
+): Promise<WaveResume | null> {
+  const st = useBrainStore.getState()
+  if (!isBrainActive()) return null
+  const uid = st.userId ?? (await ensureBrainReady())
+  if (!uid) return null
+  const q = new URLSearchParams({ user_id: uid })
+  if (device) q.set('device', device)
+  return brainGet<WaveResume>(`/api/wave/resume?${q.toString()}`)
 }
 
 /** Маппинг локальных настроек волны в формат мозга */
@@ -72,23 +281,30 @@ export async function waveContinue(opts: {
   excludeIds?: string[]
   recentEvents?: BrainEvent[]
   ratingsDelta?: BrainRating[]
-  /** Контекст воспроизведения: shuffle/loop/source/session_id (W1, сервер принимает опционально) */
-  context?: Record<string, unknown>
-}): Promise<{ tracks: WaveTrack[]; seeds?: string[]; profile_version?: number } | null> {
+}): Promise<{
+  tracks: WaveTrack[]
+  seeds?: string[]
+  profile_version?: number
+} | null> {
   const st = useBrainStore.getState()
-  if (!isBrainActive() || !st.userId) return null
+  if (!isBrainActive()) return null
+  const uid = st.userId ?? (await ensureBrainReady())
+  if (!uid) return null
   const res = await brainPost<{
     tracks: WaveTrack[]
     seeds?: string[]
     profile_version?: number
     applied?: unknown
   }>(`/api/wave/continue`, {
-    user_id: st.userId,
+    user_id: uid,
     queue: opts.queue ?? [],
     current_track_id: opts.currentTrackId ?? null,
     count: opts.count ?? 20,
     settings: opts.settings ?? {},
     exclude_ids: opts.excludeIds ?? [],
+    // device обязателен: без него мозг не может пометить слот как «играет
+    // волна», и принимающее устройство не отличит волну от плейлиста.
+    device: brainDeviceId(),
     recent_events: (opts.recentEvents ?? []).map((e) => ({
       track_id: e.track_id,
       action: e.action,
@@ -96,247 +312,213 @@ export async function waveContinue(opts: {
     })),
     ratings_delta: opts.ratingsDelta ?? [],
     profile_version: st.profileVersion ?? undefined,
-    ...(opts.context && Object.keys(opts.context).length > 0
-      ? { context: opts.context }
-      : {}),
   })
   if (!res) return null
-  if (typeof res.profile_version === 'number') st.setProfileVersion(res.profile_version)
-  const tracks = (res.tracks ?? []).map((t) => ({
-    ...t,
-    moods: Array.isArray((t as WaveTrack).moods)
-      ? (t as WaveTrack).moods
-      : (t as WaveTrack).mood
-        ? [(t as WaveTrack).mood as string]
-        : [],
-  }))
-  return { tracks, seeds: res.seeds, profile_version: res.profile_version }
-}
-
-/** Каталог опций волны с мозга (GET /api/wave/options).
- * Мозг — канон списков; без мозга плеер работает по зашитым (офлайн). */
-export interface WaveOptions {
-  activities: { code: string; label: string; hint?: string }[]
-  characteristics: { code: string; label: string; hint?: string }[]
-  languages: { code: string; label: string }[]
-  moods: { name: string; count: number }[]
-}
-
-export async function fetchWaveOptions(): Promise<WaveOptions | null> {
-  const st = useBrainStore.getState()
-  if (!isBrainActive() || !st.userId) return null
-  try {
-    const res = await brainGet<WaveOptions>(`/api/wave/options`)
-    if (!res || !Array.isArray(res.activities)) return null
-    return res
-  } catch {
-    return null
+  if (typeof res.profile_version === 'number')
+    st.setProfileVersion(res.profile_version)
+  return {
+    tracks: res.tracks ?? [],
+    seeds: res.seeds,
+    profile_version: res.profile_version,
   }
 }
 
-/** Настроения с мозга: пинг waveContinue с пустой очередью,
- * забираем distinct mood-метки (как home_screen в мобайле).
- * count=40 (не 5): анализ библиотеки обычно частичный, и пятёрка
- * легко промахивается мимо размеченных треков — было «то есть, то нет».
- * Best-effort: мозг выкл → {reason:'off'}, continue не ответил
- * (401/403/сеть, детали в консоли [Brain]) → {reason:'unavailable'},
- * треки без mood_labels (нет sonic-анализа) → {reason:'empty'}. */
-export async function fetchBrainMoods(): Promise<{
-  moods: string[]
-  reason: 'ok' | 'off' | 'unavailable' | 'empty' | 'error'
-}> {
-  const st = useBrainStore.getState()
-  if (!isBrainActive() || !st.userId) return { moods: [], reason: 'off' }
-  try {
-    const res = await waveContinue({ queue: [], count: 40 })
-    if (!res) return { moods: [], reason: 'unavailable' }
-    const out = new Set<string>()
-    for (const t of res.tracks) {
-      for (const m of t.moods ?? []) {
-        const v = (m || '').trim().toLowerCase()
-        if (v) out.add(v)
-      }
-      const single = (t.mood || '').trim().toLowerCase()
-      if (single) out.add(single)
-    }
-    if (out.size === 0) {
-      console.warn('[Brain] wave/continue 200, но mood/moods пустые — на сервере нет sonic-анализа (mood_labels)')
-      return { moods: [], reason: 'empty' }
-    }
-    return { moods: [...out], reason: 'ok' }
-  } catch {
-    return { moods: [], reason: 'error' }
+/**
+ * Слушатели артиста из мозга — GET /api/library/artists/listeners.
+ *
+ * Мозг видит ВСЕХ пользователей (distinct user_id по истории за 30 дней),
+ * а локальные рейтинги устройства дают 0–1. Возвращает null, если мозг
+ * не подключён или не ответил — вызывающий код откатывается на локальный
+ * подсчёт.
+ */
+export async function brainArtistListeners(
+  artistId?: string,
+  artistName?: string,
+): Promise<{
+  monthly_listeners: number
+  plays_30d: number
+  total_listeners: number
+} | null> {
+  if (!isBrainActive()) return null
+  const q = new URLSearchParams()
+  if (artistId?.trim()) q.set('artist_id', artistId.trim())
+  if (artistName?.trim()) q.set('name', artistName.trim())
+  if ([...q].length === 0) return null
+  const res = await brainGet<{
+    ok?: boolean
+    monthly_listeners?: number
+    plays_30d?: number
+    total_listeners?: number
+  }>(`/api/library/artists/listeners?${q.toString()}`)
+  if (!res || res.ok === false) return null
+  return {
+    monthly_listeners: res.monthly_listeners ?? 0,
+    plays_30d: res.plays_30d ?? 0,
+    total_listeners: res.total_listeners ?? 0,
   }
 }
 
-export interface BrainSeed {
-  kind: string
-  ref: string
-  label: string
-  playlist_id?: string | null
-  created_at?: string | null
+export async function waveSeeds(
+  characteristic?: string,
+  limit = 5,
+): Promise<string[]> {
+  const st = useBrainStore.getState()
+  if (!isBrainActive()) return []
+  const uid = st.userId ?? (await ensureBrainReady())
+  if (!uid) return []
+  const q = new URLSearchParams({ user_id: uid, limit: String(limit) })
+  if (characteristic) q.set('characteristic', characteristic)
+  const res = await brainGet<{ seeds?: string[] }>(
+    `/api/wave/seeds?${q.toString()}`,
+  )
+  return res?.seeds ?? []
 }
 
-/** Радио по сиду (W4): POST /api/wave/seed {kind: artist|track}.
- * Возвращает внутренние track_id мозга — резолвить в локальные
- * через GET /api/tracks/{id} → external_id → subsonic.getSong. */
-export async function waveSeedStart(
-  kind: 'artist' | 'track',
-  ref: string,
-): Promise<{ seed: BrainSeed | null; trackIds: string[]; playlistId?: string } | null> {
+/**
+ * «Волна по артисту» / «Волна по треку» — POST /api/wave/seed.
+ *
+ * Мозг собирает очередь из треков сида + похожих артистов (6×15) +
+ * серверного getSimilarSongs2, гоняет через общий скоринг волны и
+ * раскладывает энергетической дугой. Дизлайки/баны режутся.
+ *
+ * Локальный generateArtistRadio так не умеет: он берёт top-10 треков
+ * артиста, а похожие приходят только из `artists.getInfo`, который на
+ * Navidrome без Last.fm-ключа отдаёт пустой similarArtist. Итог — в
+ * очереди 10 треков одного артиста вместо радио.
+ *
+ * Возвращает null, если мозг не подключён или не ответил — вызывающий
+ * код обязан уметь откатиться на локальный генератор.
+ */
+export async function waveSeedStart(opts: {
+  kind: 'artist' | 'track'
+  artistName?: string
+  trackId?: string
+}): Promise<{
+  tracks: WaveTrack[]
+  similarArtists: string[]
+  serverUsed: boolean
+} | null> {
   const st = useBrainStore.getState()
-  if (!isBrainActive() || !st.userId) return null
-  const body: Record<string, unknown> =
-    kind === 'artist'
-      ? { user_id: st.userId, kind, artist_name: ref }
-      : { user_id: st.userId, kind, track_id: ref }
+  if (!isBrainActive()) return null
+  const uid = st.userId ?? (await ensureBrainReady())
+  if (!uid) return null
+  const body: Record<string, string> = { user_id: uid, kind: opts.kind }
+  if (opts.kind === 'artist') {
+    if (!opts.artistName?.trim()) return null
+    body.artist_name = opts.artistName.trim()
+  } else {
+    if (!opts.trackId) return null
+    body.track_id = opts.trackId
+  }
   const res = await brainPost<{
-    seed?: BrainSeed | null
-    tracks?: string[]
-    playlist_id?: string
-  }>(`/api/wave/seed`, body)
+    items?: WaveTrack[]
+    similar_artists?: string[]
+    server_used?: boolean
+  }>('/api/wave/seed', body)
+  const tracks = res?.items ?? []
+  if (tracks.length === 0) return null
+  return {
+    tracks,
+    similarArtists: res?.similar_artists ?? [],
+    serverUsed: !!res?.server_used,
+  }
+}
+
+// ==================== Нормализация кодов: мозг ↔ плеер ====================
+// Сервер отдаёт/понимает 'ru', локальный ml-wave-service ждёт 'russian'.
+// Занятия/настроения/характеры у нас совпадают 1:1, различается только язык.
+
+/** Ответ мозга → коды локального UI. */
+export function fromBrainSettings(s: WaveSettings): WaveSettings {
+  const lang = (s.language || '').trim().toLowerCase()
+  return {
+    activity: s.activity,
+    characteristic: s.characteristic,
+    mood: s.mood,
+    language:
+      lang === 'ru' || lang === 'russian' ? 'russian' : lang || undefined,
+  }
+}
+
+/** Коды локального UI → ответ мозга. */
+export function toBrainSettings(s: WaveSettings): WaveSettings {
+  const lang = (s.language || '').trim().toLowerCase()
+  return {
+    activity: s.activity,
+    characteristic: s.characteristic,
+    mood: s.mood,
+    language: lang === 'russian' ? 'ru' : lang || undefined,
+  }
+}
+
+/** Общие настройки волны: GET /api/wave/settings?user_id= — читать при старте/открытии настроек. */
+export async function waveSettingsGet(): Promise<{
+  settings: WaveSettings
+  version?: number
+} | null> {
+  const st = useBrainStore.getState()
+  if (!isBrainActive()) return null
+  const uid = st.userId ?? (await ensureBrainReady())
+  if (!uid) return null
+  const q = new URLSearchParams({ user_id: uid })
+  const res = await brainGet<{ settings?: WaveSettings; version?: number }>(
+    `/api/wave/settings?${q.toString()}`,
+  )
   if (!res) return null
   return {
-    seed: res.seed ?? null,
-    trackIds: Array.isArray(res.tracks) ? res.tracks.filter(Boolean) : [],
-    playlistId: res.playlist_id,
+    settings: fromBrainSettings(res.settings ?? {}),
+    version: res.version,
   }
 }
 
-/** Капсула «волна по X» для главной: GET /api/wave/seed → seed | null */
-export async function waveSeedGet(): Promise<BrainSeed | null> {
+/** Общие настройки волны: PUT /api/wave/settings — писать при смене пилюль. */
+export async function waveSettingsPut(patch: WaveSettings): Promise<boolean> {
   const st = useBrainStore.getState()
-  if (!isBrainActive() || !st.userId) return null
-  const q = new URLSearchParams({ user_id: st.userId })
-  const res = await brainGet<{ seed?: BrainSeed | null }>(`/api/wave/seed?${q.toString()}`)
-  return res?.seed ?? null
+  if (!isBrainActive()) return false
+  const uid = st.userId ?? (await ensureBrainReady())
+  if (!uid) return false
+  const res = await brainPost<{ ok?: boolean }>(`/api/wave/settings`, {
+    user_id: uid,
+    settings: toBrainSettings(patch),
+  })
+  return !!res
 }
 
-/** Сброс сида: DELETE /api/wave/seed (плейлист остаётся, волна снова обычная) */
-export async function waveSeedClear(): Promise<boolean> {
-  const st = useBrainStore.getState()
-  if (!isBrainActive() || !st.userId) return false
-  const q = new URLSearchParams({ user_id: st.userId })
-  try {
-    const r = await brainRaw(`/api/wave/seed?${q.toString()}`, { method: 'DELETE' })
-    return !!r && r.status >= 200 && r.status < 300
-  } catch {
-    return false
-  }
+export interface WaveOptions {
+  activities: { code: string; label: string; hint?: string }[]
+  characteristics: { code: string; label: string }[] | string[]
+  languages: { code: string; label: string }[] | string[]
+  moods: { name: string; count?: number }[] | string[]
 }
 
-export interface BrainSimilarItem {
-  track_id: string
-  title: string
-  artist_name: string
-  score: number
-  /** Navidrome song id — маппинг в локальную библиотеку без search() */
-  external_id?: string | null
-}
-
-/** Похожие на трек с мозга (sonic-косинус + кластер + жанр + настроение).
- * Best-effort: мозг выкл/недоступен/не знает трек → null, вызывающий
- * откатывается на локальный vibe-скоринг. Без ретраев — для поповера. */
-export async function recommendSimilarTracks(songId: string): Promise<BrainSimilarItem[] | null> {
-  if (!isBrainActive() || !songId) return null
-  const res = await brainFetch<{ items: BrainSimilarItem[] }>(
-    `/api/analysis/recommend/by-track/${encodeURIComponent(songId)}`,
-    { method: 'GET' },
-    0,
+/** Канон опций волны с сервера: GET /api/wave/options (активности/характеры/языки/живые настроения). */
+export async function waveOptions(): Promise<WaveOptions | null> {
+  if (!isBrainActive()) return null
+  const res = await brainGet<WaveOptions & { ok?: boolean }>(
+    `/api/wave/options`,
   )
-  if (!res || !Array.isArray(res.items)) return null
-  return res.items
-}
-
-export async function waveSeeds(characteristic?: string, limit = 5): Promise<string[]> {
-  const st = useBrainStore.getState()
-  if (!isBrainActive() || !st.userId) return []
-  const q = new URLSearchParams({ user_id: st.userId, limit: String(limit) })
-  if (characteristic) q.set('characteristic', characteristic)
-  const res = await brainGet<{ seeds?: string[] }>(`/api/wave/seeds?${q.toString()}`)
-  return res?.seeds ?? []
+  if (!res) return null
+  return res
 }
 
 /** Живая очередь: fire-and-forget, throttle 5с, одинаковый ключ не шлём.
  * Шлём только вперёд от текущего (без истории) + интра-дедуп по id,
- * иначе веб-зеркало показывает сыгранное как «дальше» и дубли.
- * 1.6.4: позиция/длительность/пауза/имя устройства; force обходит троттлинг
- * (seek/pause/heartbeat). Мозг лишние поля игнорирует — контракт обратно совместим. */
-export interface WavePublishExtra {
-  positionSec?: number
-  durationSec?: number
-  paused?: boolean
-  deviceName?: string
-  /** Обойти троттлинг: seek/pause/heartbeat должны уходить сразу */
-  force?: boolean
-}
-
-let cachedDeviceName = ''
-let cachedDeviceId = ''
-
-/** Стабильный UUID устройства — ключ слота на мозге.
- * Генерируется один раз, хранится в localStorage. Человекочитаемое имя
- * (getWaveDeviceName) для слота НЕ годится: два десктопа назовутся одинаково
- * и упадут в один слот (last-writer-wins). */
-export function getWaveDeviceId(): string {
-  if (cachedDeviceId) return cachedDeviceId
-  try {
-    const saved = localStorage.getItem('wave_device_id')
-    if (saved && saved.trim()) {
-      cachedDeviceId = saved.trim().slice(0, 80)
-      return cachedDeviceId
-    }
-  } catch { /* ignore */ }
-  let id = ''
-  try {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-      id = crypto.randomUUID()
-    }
-  } catch { /* ignore */ }
-  if (!id) {
-    id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = Math.floor(Math.random() * 16)
-      const v = c === 'x' ? r : (r & 0x3) | 0x8
-      return v.toString(16)
-    })
-  }
-  try {
-    localStorage.setItem('wave_device_id', id)
-  } catch { /* ignore */ }
-  cachedDeviceId = id
-  return cachedDeviceId
-}
-
-export function getWaveDeviceName(): string {
-  if (cachedDeviceName) return cachedDeviceName
-  try {
-    const saved = localStorage.getItem('wave_device_name')
-    if (saved && saved.trim()) {
-      cachedDeviceName = saved.trim().slice(0, 80)
-      return cachedDeviceName
-    }
-  } catch { /* ignore */ }
-  let fallback = 'Desktop'
-  try {
-    const ua = typeof navigator !== 'undefined' ? (navigator.platform || '') : ''
-    if (ua) fallback = `Desktop (${ua})`
-  } catch { /* ignore */ }
-  cachedDeviceName = fallback
-  return cachedDeviceName
-}
-
-export function formatResumeTime(totalSec: number): string {
-  const s = Math.max(0, Math.floor(totalSec || 0))
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
-
+ * иначе веб-зеркало показывает сыгранное как «дальше» и дубли. */
 export function wavePublish(
   queue: string[],
   currentTrackId?: string | null,
-  extra?: WavePublishExtra,
+  playback?: { positionSec?: number; durationSec?: number; paused?: boolean },
+  /** Что это за лента: имя плейлиста и признак «это Моя волна». */
+  context?: { playlistName?: string | null; isWave?: boolean },
 ): void {
   const st = useBrainStore.getState()
-  if (!isBrainActive() || !st.userId) return
+  if (!isBrainActive()) return
+  if (!st.userId) {
+    // user_id ещё не поднят — поднимаем и ждём следующего тика. Раньше здесь
+    // был просто return, и «Продолжить с …» не видело ничего без настроек.
+    requestBrainReady()
+    return
+  }
   let q = (queue ?? []).filter(Boolean)
   if (currentTrackId) {
     const at = q.indexOf(currentTrackId)
@@ -346,41 +528,41 @@ export function wavePublish(
   const seen = new Set<string>()
   q = q.filter((id) => (seen.has(id) ? false : (seen.add(id), true)))
   q = q.slice(0, 100)
-  const positionSec = Math.max(0, Math.floor(extra?.positionSec ?? NaN))
-  const durationSec = Math.max(0, Math.floor(extra?.durationSec ?? NaN))
-  const hasPos = Number.isFinite(positionSec)
-  const hasDur = Number.isFinite(durationSec)
-  const paused = extra?.paused ?? false
-  const deviceName = (extra?.deviceName ?? getWaveDeviceName()).slice(0, 80)
   const now = Date.now()
-  // Позиция бакетом по 10с: heartbeat/таймапдейты не спамят, но движение видно.
-  const posBucket = hasPos ? Math.floor(positionSec / 10) : -1
-  const key = `${st.userId}|${currentTrackId ?? ''}|${q.length}|${q.slice(0, 3).join(',')}|${paused ? 1 : 0}|${posBucket}|${hasDur ? durationSec : -1}`
-  if (!extra?.force && now - lastPublishAt < 5000 && key === lastPublishKey) return
+  const key = `${st.userId}|${currentTrackId ?? ''}|${q.length}|${q.slice(0, 3).join(',')}`
+  if (now - lastPublishAt < 5000 && key === lastPublishKey) return
   lastPublishAt = now
   lastPublishKey = key
-  const payload: Record<string, unknown> = {
+  const payload = {
     user_id: st.userId,
     queue: q,
     current_track_id: currentTrackId ?? null,
-    paused,
-    // Дуплет имени флага: мозг может ждать is_paused, шлём оба.
-    is_paused: paused,
-    // Слот устройства: ключ — стабильный UUID (device), отображаемое имя —
-    // отдельно (device_name). Имя для ключа НЕ годится: два десктопа
-    // назовутся одинаково и затрут друг друга.
-    device: getWaveDeviceId(),
-    device_name: deviceName,
+    // Стабильный слот устройства: без него телефон и десктоп затирают
+    // слот 'default' друг друга, а «Продолжить с …» не видит, что играет ПК.
+    device: brainDeviceId(),
+    // position_sec — это и есть handoff: другое устройство продолжит с него
+    position_sec: playback?.positionSec,
+    duration_sec: playback?.durationSec,
+    paused: playback?.paused,
+    // Природа ленты. Без этого принимающее устройство получало только треки
+    // и не понимало, что продолжает Мою волну: isMyWave в плеере становился
+    // false, шапка волны показывала «Воспроизвести», а открытия не писались.
+    // Мозг может эти поля игнорировать — плеер умеет восстанавливать волну
+    // и по пересечению id с локальным my-wave-last.
+    playlist_name: context?.playlistName ?? null,
+    is_wave: context?.isWave ?? false,
   }
-  if (hasPos) payload.position_sec = positionSec
-  if (hasDur) payload.duration_sec = durationSec
   void (async () => {
     const res = await brainRaw(`/api/wave/publish`, {
       method: 'POST',
       body: JSON.stringify(payload),
     })
     if (!res) {
-      st.setLastPublish(new Date().toISOString(), false, 'network error / no response')
+      st.setLastPublish(
+        new Date().toISOString(),
+        false,
+        'network error / no response',
+      )
     } else if (res.status >= 200 && res.status < 300) {
       st.setLastPublish(new Date().toISOString(), true, null)
     } else {
@@ -393,70 +575,11 @@ export function wavePublish(
   })().catch(() => undefined)
 }
 
-/** Резолв внутренних track_id сида в external_id (Navidrome) для плеера.
- * GET /api/tracks/{id} → external_id; concurrency 6, кап 60. */
-export async function resolveSeedExternalIds(trackIds: string[]): Promise<string[]> {
-  const ids = (trackIds ?? []).filter(Boolean).slice(0, 60)
-  if (ids.length === 0) return []
-  const out: (string | null)[] = new Array(ids.length).fill(null)
-  let cursor = 0
-  const worker = async () => {
-    while (cursor < ids.length) {
-      const i = cursor
-      cursor += 1
-      try {
-        const t = await brainGet<{ external_id?: string | null; track_id?: string }>(
-          `/api/tracks/${encodeURIComponent(ids[i])}`,
-        )
-        const ext = (t?.external_id || '').trim()
-        out[i] = ext || ids[i]
-      } catch {
-        out[i] = ids[i]
-      }
-    }
-  }
-  await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()])
-  return (out.filter(Boolean) as string[]).slice(0, 60)
-}
-
-/** Продолжить с телефона: что играло на другом устройстве.
- * Пробуем /api/wave/resume, фолбек — /api/wave/state (старые сборки мозга).
- * Мозг не трогаем: только читаем то, что он и так отдаёт. */
-export interface WaveResume {
-  track_id: string
-  external_id?: string | null
-  position_sec?: number
-  duration_sec?: number
-  queue?: string[]
-  device?: string | null
-  device_name?: string | null
-  updated_at?: string | null
-}
-
-export async function waveResume(): Promise<WaveResume | null> {
-  const st = useBrainStore.getState()
-  if (!isBrainActive() || !st.userId) return null
-  const q = new URLSearchParams({ user_id: st.userId })
-  const res =
-    (await brainGet<WaveResume>(`/api/wave/resume?${q.toString()}`)) ??
-    (await brainGet<WaveResume>(`/api/wave/state?${q.toString()}`))
-  if (!res) return null
-  const trackId = (res.track_id ?? res.external_id ?? '').trim()
-  if (!trackId) return null
-  return {
-    track_id: trackId,
-    external_id: res.external_id ?? null,
-    position_sec: Number.isFinite(Number(res.position_sec)) ? Math.floor(Number(res.position_sec)) : 0,
-    duration_sec: Number.isFinite(Number(res.duration_sec)) ? Math.floor(Number(res.duration_sec)) : 0,
-    queue: Array.isArray(res.queue) ? res.queue.filter(Boolean).slice(0, 100) : [],
-    device: (res as { device?: unknown }).device != null ? String((res as { device?: unknown }).device) : null,
-    device_name: res.device_name ?? null,
-    updated_at: res.updated_at ?? null,
-  }
-}
-
 /** Нужно ли дозапрашивать волну: в очереди осталось ≤5 */
-export function waveNeedsRefill(queueLength: number, remainingAfterCurrent: number): boolean {
+export function waveNeedsRefill(
+  queueLength: number,
+  remainingAfterCurrent: number,
+): boolean {
   if (queueLength === 0) return true
   return remainingAfterCurrent <= 5
 }
