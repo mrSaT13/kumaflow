@@ -24,26 +24,18 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "typeRoots": [
-      "./node_modules/@types",
-      "./src/types",
-      "./electron/preload/types.ts"
-    ],
-    "types": ["cypress", "node"]
+    /* Старый typeRoots перекрывал резолв типов: cypress не находился,
+       из-за чего глобалы cy/describe/it давали hundreds TS2304.
+       node_modules нужен как корень для пакетов вроде cypress. */
+    "typeRoots": ["./node_modules/@types", "./node_modules", "./src/types"],
+    "types": ["node", "cypress"]
   },
   "include": [
     "src",
     "cypress",
-    "electron/preload/**/*",
-    "vite.config.ts",
-    "src/manual-chunks.ts"
+    "electron/preload/types.ts",
+    "vite.config.ts"
   ],
-  "exclude": [
-    "src/service/ml-wave-service(old).ts"
-  ],
-  "references": [
-    {
-      "path": "./tsconfig.node.json"
-    }
-  ]
+  "exclude": ["src/service/ml-wave-service(old).ts"],
+  "references": []
 }

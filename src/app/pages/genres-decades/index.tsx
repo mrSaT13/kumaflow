@@ -4,7 +4,6 @@ import { generateDecadePlaylist, generateGenrePlaylist } from '@/service/ml-wave
 import { toast } from 'react-toastify'
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
-import { Badge } from '@/app/components/ui/badge'
 
 const decades = [
   { id: '80s', name: '80-е', icon: '📼', color: 'from-pink-500 to-purple-500' },

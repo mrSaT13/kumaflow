@@ -1,6 +1,5 @@
 import {
   BarChart3Icon,
-  ChevronDownIcon,
   DatabaseIcon,
   DiscIcon,
   FolderOpenIcon,
@@ -14,7 +13,7 @@ import {
   RadioIcon,
   SparklesIcon,
 } from 'lucide-react'
-import { ElementType, memo, useState } from 'react'
+import { ElementType, memo } from 'react'
 import { ROUTES } from '@/routes/routesList'
 
 const ListMusic = memo(ListMusicIcon)

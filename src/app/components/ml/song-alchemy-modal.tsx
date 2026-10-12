@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Sparkles, Sliders } from 'lucide-react'
+import { X, Sparkles, } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Slider } from '@/app/components/ui/slider'
 import { usePlayerActions } from '@/store/player.store'

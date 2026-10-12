@@ -30,14 +30,11 @@ export default function AISets() {
   const [isLoading, setIsLoading] = useState<string | null>(null)
 
   const aiPlaylists: AIPlaylist[] = [
-    {
-      id: 'bigbeat',
-      title: 'Биг-бит',
-      description: 'Энергичный бит для активности',
-      gradient: 'from-cyan-400 to-blue-500',
-      tags: ['электроника', 'энергия'],
-      type: 'activity',
-    },
+    // Карточку «Биг-бит» (id: 'bigbeat') удалил: такого ключа в
+    // ACTIVITY_CONFIG нет, и она молча отдавала пустой плейлист. Оставлять
+    // её с id 'energetic' тоже нельзя — ниже уже есть карточка «Энергичное»
+    // с тем же id, а setIsLoading(playlist.id) ключуется по id, и обе
+    // крутили бы спиннер одновременно.
     {
       id: 'workout',
       title: 'Тренируюсь',
@@ -90,7 +87,7 @@ export default function AISets() {
       if (playlist.type === 'activity') {
         const result = await generateActivityMix(
           playlist.id,
-          profile.likedSongIds || [],
+          profile.likedSongs || [],
           ratings,
           profile.preferredGenres,
           25
@@ -98,7 +95,7 @@ export default function AISets() {
         songs = result.songs
       } else {
         const result = await generateMoodMix(
-          profile.likedSongIds || [],
+          profile.likedSongs || [],
           ratings,
           profile.preferredGenres,
           playlist.id,

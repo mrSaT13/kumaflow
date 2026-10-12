@@ -27,7 +27,6 @@ import {
   Loader2,
   Heart,
   Ellipsis,
-  ChevronRight,
   Clock,
   Eye,
   SkipForward,
@@ -61,7 +60,6 @@ import { AlbumComment } from '@/app/components/album/comment'
 import { RecordLabelsInfo } from '@/app/components/album/record-labels'
 import { AlbumFallback } from '@/app/components/fallbacks/album-fallbacks'
 import ErrorPage from '@/app/pages/error-page'
-import { sortRecentAlbums } from '@/utils/album'
 import { convertSecondsToHumanRead } from '@/utils/convertSecondsToTime'
 
 // ==================== СВОРАЧИВАЕМАЯ СЕКЦИЯ ====================
@@ -256,19 +254,6 @@ function SongRow({ song, index, playCount, onPlay, onPlayNext, onAddToEnd, onTog
         <ContextMenuItem onClick={() => onPlayTrackRadio?.(song)} disabled={isTrackRadioGenerating}>
           <Radio className="w-4 h-4 mr-2" />
           {isTrackRadioGenerating ? 'Генерация...' : 'Радио трека'}
-        </ContextMenuItem>
-        <ContextMenuItem
-          onClick={() => {
-            void (async () => {
-              const { playBrainSeedRadio } = await import('@/service/brain-seed-play')
-              const ok = await playBrainSeedRadio('track', song.id)
-              if (!ok) onPlayTrackRadio?.(song)
-            })()
-          }}
-          disabled={isTrackRadioGenerating}
-        >
-          <Radio className="w-4 h-4 mr-2" />
-          📻 Радио трека (мозг)
         </ContextMenuItem>
 
         <ContextMenuSeparator />

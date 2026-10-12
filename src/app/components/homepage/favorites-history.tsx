@@ -16,7 +16,7 @@ export default function FavoritesHistory() {
   const [isLoading, setIsLoading] = useState<'favorites' | 'history' | null>(null)
 
   // Получаем лайкнутые треки
-  const likedSongIds = profile.likedSongIds || []
+  const likedSongIds = profile.likedSongs || []
   
   // Получаем историю из ratings
   const historySongs = Object.entries(ratings || {})

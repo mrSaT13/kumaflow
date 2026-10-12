@@ -54,6 +54,8 @@ function ArtistsLinks({ song }: { song: ISong }) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
+
+    return undefined
   }, [showPopover])
 
   function handleArtistClick(id?: string) {

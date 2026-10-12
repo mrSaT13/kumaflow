@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { usePlayerStore } from '@/store/player.store'
+import { usePlayerStore, selectCurrentSong,
+} from '@/store/player.store'
 import { useML } from '@/store/ml.store'
 import { scrobble } from '@/service/scrobble'
 import { usePlaybackSettings } from '@/store/playback.store'
@@ -13,7 +14,7 @@ const TOTAL_PLAYS_KEY = 'kumaflow_total_plays'
  * Отправляет данные о прослушивании когда трек прослушан больше порога
  */
 export function useAutoScrobble() {
-  const currentSong = usePlayerStore((state) => state.songlist.currentSong)
+  const currentSong = usePlayerStore(selectCurrentSong)
   const isPlaying = usePlayerStore((state) => state.playerState.isPlaying)
   const progress = usePlayerStore((state) => state.playerProgress.progress)
   const { settings } = usePlaybackSettings()

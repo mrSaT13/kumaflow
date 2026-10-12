@@ -20,9 +20,10 @@ import {
 
 interface PlayerSongListButtonProps {
   disabled: boolean
+  className?: string
 }
 
-export function PlayerQueueButton({ disabled }: PlayerSongListButtonProps) {
+export function PlayerQueueButton({ disabled, className }: PlayerSongListButtonProps) {
   const { t } = useTranslation()
   const { mainDrawerState } = useMainDrawerState()
   const { queueState, toggleQueueAction } = useQueueState()
@@ -43,6 +44,7 @@ export function PlayerQueueButton({ disabled }: PlayerSongListButtonProps) {
             className={clsx(
               'rounded-full w-10 h-10 p-2 text-secondary-foreground relative',
               isActive && 'player-button-active',
+              className,
             )}
             disabled={disabled}
             onClick={handleClick}

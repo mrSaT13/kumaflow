@@ -23,7 +23,7 @@ import {
 } from '@/store/player.store'
 import { LoopState } from '@/types/playerContext'
 import { useAutoDJSettings, useAutoDJActions } from '@/store/auto-dj.store'
-import { VolumeSlider } from '@/app/components/player/volume'
+import { SimpleTooltip } from '@/app/components/ui/simple-tooltip'
 import { PopoverVolume } from '@/app/components/player/popover-volume'
 import { VolumeIcon } from '@/app/components/icons/volume-icon'
 
@@ -198,7 +198,6 @@ function AutoDJMiniButton() {
 
 export function MiniPlayerVolumeButton() {
   const volume = usePlayerStore((state) => state.playerState.volume)
-  const isMuted = volume === 0
 
   return (
     <PopoverVolume>

@@ -6,7 +6,6 @@
 
 import { WebSocketServer, WebSocket } from 'ws'
 import { app, BrowserWindow, ipcMain } from 'electron'
-import { playerState } from '../../electron/main/core/playerState'
 
 interface RemoteClient {
   id: string

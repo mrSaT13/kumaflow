@@ -5,7 +5,7 @@
 
 import { 
   Database, Music, Mic2, Trash2, Play, Shuffle, RefreshCw, 
-  Search, SortAsc, SortDesc, GripVertical, Download,
+  Search, SortAsc, SortDesc, GripVertical, 
   BarChart3, Heart, Clock, Disc3
 } from 'lucide-react'
 import { useEffect, useState, useCallback, useMemo } from 'react'

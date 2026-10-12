@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getGenres, getSongsByGenre } from '@/service/subsonic-api'
-import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { toast } from 'react-toastify'
 import { usePlayerActions } from '@/store/player.store'
 

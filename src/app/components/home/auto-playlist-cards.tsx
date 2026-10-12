@@ -20,9 +20,9 @@ import { Button } from '@/app/components/ui/button'
 import { useMLPlaylistsStateActions } from '@/store/ml-playlists-state.store'
 import { usePlayerActions } from '@/store/player.store'
 import { toast } from 'react-toastify'
-import { getActiveHolidays } from '@/service/holidays'
 import { getAllHolidaysWithCustoms } from '@/service/ics-parser'  // 🆕
 import { getAllGeneratedPlaylists } from '@/store/generated-playlists.store'
+import { useDopamineSettings } from '@/store/dopamine.store'
 
 interface PlaylistCard {
   id: string
@@ -34,6 +34,15 @@ interface PlaylistCard {
   icon: string
   trackCount: number
   lastUpdated?: string
+  /** Короткая метка над названием: «Микс 1», «Открытия недели». */
+  kicker?: string
+  /** Праздник — для карточек с сезонным оформлением. */
+  holiday?: {
+    icon: string
+    name: string
+    /** Цвета пятен фона. */
+    spots: string[]
+  }
 }
 
 export function AutoPlaylistCards() {
@@ -41,6 +50,7 @@ export function AutoPlaylistCards() {
   const [loading, setLoading] = useState(false)
   const { getPlaylist } = useMLPlaylistsStateActions()
   const { setSongList } = usePlayerActions()
+  const { cardShine, holidayBackdrop } = useDopamineSettings()
 
   useEffect(() => {
     loadPlaylists()
@@ -64,12 +74,15 @@ export function AutoPlaylistCards() {
     try {
       const playlistCards: PlaylistCard[] = []
 
-      // 1. Загружаем основные ML плейлисты
+      // 1. Загружаем основные ML плейлисты.
+      //    kicker — короткая метка над названием. Идея из Spotify: у миксов
+      //    есть номер и они обновляются по расписанию, поэтому «возвращайся
+      //    завтра» читается прямо на карточке, без слов.
       const mlPlaylists = [
-        { id: 'daily-mix', icon: '☀️', gradient: 'from-orange-500 to-pink-500' },
-        { id: 'discover-weekly', icon: '🔍', gradient: 'from-blue-500 to-purple-500' },
-        { id: 'my-wave', icon: '🌊', gradient: 'from-cyan-500 to-blue-500' },
-        { id: 'ml-recommendations', icon: '🤖', gradient: 'from-purple-500 to-indigo-500' },
+        { id: 'daily-mix', icon: '☀️', gradient: 'from-orange-500 to-pink-500', kicker: 'Микс 1' },
+        { id: 'discover-weekly', icon: '🔍', gradient: 'from-blue-500 to-purple-500', kicker: 'Микс 2 · неделя' },
+        { id: 'my-wave', icon: '🌊', gradient: 'from-cyan-500 to-blue-500', kicker: 'Моя волна' },
+        { id: 'ml-recommendations', icon: '🤖', gradient: 'from-purple-500 to-indigo-500', kicker: 'Для вас' },
       ]
 
       for (const ml of mlPlaylists) {
@@ -85,6 +98,7 @@ export function AutoPlaylistCards() {
             icon: ml.icon,
             trackCount: playlist.songs.length,
             lastUpdated: playlist.lastUpdated,
+            kicker: ml.kicker,
           })
         }
       }
@@ -123,7 +137,7 @@ export function AutoPlaylistCards() {
         if (holidayPlaylist) {
           playlistCards.push({
             id: `holiday-${holiday.id}`,
-            name: `${holiday.icon} ${holidayPlaylist.name}`,
+            name: holidayPlaylist.name,
             description: holidayPlaylist.description,
             songs: holidayPlaylist.songs,
             type: 'holiday',
@@ -131,6 +145,12 @@ export function AutoPlaylistCards() {
             icon: holiday.icon,
             trackCount: holidayPlaylist.songs.length,
             lastUpdated: new Date(holidayPlaylist.createdAt).toISOString(),
+            kicker: `Праздник · ${holiday.name}`,
+            holiday: {
+              icon: holiday.icon,
+              name: holiday.name,
+              spots: ['bg-red-500/40', 'bg-amber-400/35', 'bg-rose-500/35'],
+            },
           })
         }
       }
@@ -160,6 +180,21 @@ export function AutoPlaylistCards() {
     return `${days}д назад`
   }
 
+  /**
+   * «Обновлён в 06:12» вместо «12ч назад».
+   *
+   * Относительное время («3ч назад») не создаёт ощущения обновления: оно
+   * только устаревает. Абсолютное время в стиле Spotify читается как
+   * «свежий микс», и рядом с ним «Обновляется каждый день» превращается
+   * из пустой надписи в обещание.
+   */
+  const formatUpdatedAt = (dateStr?: string) => {
+    if (!dateStr) return ''
+    const date = new Date(dateStr)
+    if (Number.isNaN(date.getTime())) return ''
+    return `Обновлён в ${`${date.getHours()}`.padStart(2, '0')}:${`${date.getMinutes()}`.padStart(2, '0')}`
+  }
+
   if (loading) {
     return (
       <div className="px-8 py-6">
@@ -181,7 +216,7 @@ export function AutoPlaylistCards() {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold flex items-center gap-2">
           <Sparkles className="w-6 h-6 text-purple-500" />
-          ML Рекомендации
+          Обновляется каждый день
         </h2>
         <Button
           variant="ghost"
@@ -199,18 +234,44 @@ export function AutoPlaylistCards() {
         {playlists.map((playlist) => (
           <Card
             key={playlist.id}
-            className="overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer group hover:scale-105"
+            className={`overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer group hover:scale-[1.03] hover:-translate-y-1 ${
+              cardShine ? 'shine-card' : ''
+            }`}
             onClick={() => playPlaylist(playlist)}
           >
             <CardContent className="p-0">
+              {/* Сезонные пятна за карточкой — только для праздничных.
+                  Медленный дрейф, чтобы фон не выглядел статичным гифом. */}
+              {playlist.holiday && holidayBackdrop && (
+                <div className="holiday-caustics">
+                  {playlist.holiday.spots.map((spot, i) => (
+                    <span
+                      key={i}
+                      className={`${spot} w-48 h-48`}
+                      style={{
+                        top: `${-20 + i * 30}%`,
+                        left: `${5 + i * 32}%`,
+                        animationDelay: `${i * 4}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+
               {/* Header с emoji и градиентом */}
-              <div className={`p-6 bg-gradient-to-br ${playlist.gradient} text-white text-center`}>
-                <div className="text-5xl mb-2">{playlist.icon}</div>
-                <h3 className="font-bold text-lg">{playlist.name}</h3>
+              <div className={`relative p-6 bg-gradient-to-br ${playlist.gradient} text-white text-center overflow-hidden`}>
+                {/* Метка: «Микс 1», «Праздник · Новый год» */}
+                {playlist.kicker && (
+                  <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/85 mb-1.5">
+                    {playlist.kicker}
+                  </div>
+                )}
+                <div className="text-5xl mb-2 animate-float-y">{playlist.icon}</div>
+                <h3 className="font-bold text-lg drop-shadow">{playlist.name}</h3>
               </div>
 
               {/* Контент */}
-              <div className="p-4 space-y-3">
+              <div className="p-4 space-y-3 relative">
                 {playlist.description && (
                   <p className="text-sm text-muted-foreground line-clamp-2">
                     {playlist.description}
@@ -224,9 +285,12 @@ export function AutoPlaylistCards() {
                     <span>{playlist.trackCount} треков</span>
                   </div>
                   {playlist.lastUpdated && (
-                    <div className="flex items-center gap-1">
+                    <div
+                      className="flex items-center gap-1"
+                      title={`${formatUpdatedAt(playlist.lastUpdated)} · ${formatTimeAgo(playlist.lastUpdated)}`}
+                    >
                       <Clock className="w-3 h-3" />
-                      <span>{formatTimeAgo(playlist.lastUpdated)}</span>
+                      <span>{formatUpdatedAt(playlist.lastUpdated)}</span>
                     </div>
                   )}
                 </div>

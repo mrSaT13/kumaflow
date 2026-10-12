@@ -10,7 +10,7 @@
  */
 
 import { subsonic } from '@/service/subsonic'
-import { getRandomSongs, getSongsByGenre, search3 } from '@/service/subsonic-api'
+import { getRandomSongs } from '@/service/subsonic-api'
 import type { ISong } from '@/types/responses/song'
 
 export interface TrackMetadata {
@@ -73,15 +73,15 @@ export async function generateDJPlaylist(
   // 3. Отправляем топ-100 кандидатов в LLM
   const selected = await llmSelectTracks(config.mood, candidates.slice(0, 100), config)
   
-  if (!selected || selected.length === 0) {
+  if (!selected || selected.ids.length === 0) {
     console.error('[DJ AI] LLM returned no tracks')
     return null
   }
 
-  console.log('[DJ AI] LLM selected:', selected.length, 'tracks')
+  console.log('[DJ AI] LLM selected:', selected.ids.length, 'tracks')
 
   // 4. Загружаем полные данные треков по ID
-  const songs = await loadTracksByIds(selected)
+  const songs = await loadTracksByIds(selected.ids)
 
   return {
     name: `AI: ${config.mood}`,

@@ -4,8 +4,7 @@
  * УПРОЩЁННАЯ ВЕРСИЯ: Просто берём топ треков с ТЕКУЩЕГО сервера
  */
 
-import { subsonic } from '@/service/subsonic'
-import { fetchWithCorsProxy } from '@/utils/cors-proxy'
+import { getSimpleCoverArtUrl, getUrl } from '@/api/httpClient'
 import type { ISong } from '@/types/responses/song'
 
 export interface GlobalTrack {
@@ -27,12 +26,12 @@ export async function getGlobalTopTracks(limit = 50): Promise<GlobalTopTracksRes
   console.log('[GlobalTop] 🌍 Fetching global top tracks...')
   
   try {
-    // Используем search3 для поиска популярных треков
-    const url = `${subsonic.baseUrl}/rest/search3?v=${subsonic.version}&c=${subsonic.client}&f=json&songCount=${limit}`
-    
-    const response = await fetchWithCorsProxy(url, {
-      headers: subsonic.headers,
-    })
+    // URL строим через getUrl: у обёртки subsonic нет baseUrl/version/client/
+    // headers, поэтому запрос уходил как "undefined/rest/search3?v=undefined"
+    // без авторизации и всегда падал.
+    const url = getUrl('search3', { songCount: limit, query: '' })
+
+    const response = await fetch(url)
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
@@ -56,9 +55,7 @@ export async function getGlobalTopTracks(limit = 50): Promise<GlobalTopTracksRes
             albumId: songData.albumId,
             duration: songData.duration || 0,
             genre: songData.genre,
-            coverArtUrl: songData.coverArt 
-              ? `${subsonic.baseUrl}/rest/getCoverArt?id=${songData.coverArt}&v=${subsonic.version}&c=${subsonic.client}&f=json`
-              : undefined,
+            coverArtUrl: getSimpleCoverArtUrl(songData.coverArt),
             playCount: songData.playCount || 0,
             isLocal: true,
             year: songData.year,

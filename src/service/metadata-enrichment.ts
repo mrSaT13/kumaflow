@@ -10,7 +10,7 @@
 
 import { appleMusicService } from '@/service/apple-music-api'
 import { discogsService } from '@/service/discogs-api'
-import { useExternalApi } from '@/store/external-api.store'
+import { useExternalApiStore } from '@/store/external-api.store'
 
 export interface EnrichedMetadata {
   coverArtUrl?: string
@@ -29,7 +29,7 @@ export async function enrichTrackMetadata(
   title: string,
   album?: string
 ): Promise<EnrichedMetadata | null> {
-  const { settings } = useExternalApi.getState()
+  const { settings } = useExternalApiStore.getState()
   
   // 1. Пробуем Apple Music (быстрее, больше покрытие)
   if (settings.appleMusicEnabled) {
@@ -67,7 +67,7 @@ export async function enrichAlbumMetadata(
   albumTitle: string,
   year?: number
 ): Promise<EnrichedMetadata | null> {
-  const { settings } = useExternalApi.getState()
+  const { settings } = useExternalApiStore.getState()
   const result: EnrichedMetadata = {}
   
   // 1. Discogs — точнее для редких релизов
@@ -132,7 +132,7 @@ export async function enrichAlbumMetadata(
 export async function enrichArtistMetadata(
   artistName: string
 ): Promise<{ biography?: string; genres?: string[]; discogsId?: number } | null> {
-  const { settings } = useExternalApi.getState()
+  const { settings } = useExternalApiStore.getState()
   const result: { biography?: string; genres?: string[]; discogsId?: number } = {}
   
   // Discogs — биография и жанры
@@ -167,7 +167,7 @@ export async function getTrackVersions(
   previewUrl?: string
   artworkUrl?: string
 }>> {
-  const { settings } = useExternalApi.getState()
+  const { settings } = useExternalApiStore.getState()
   const versions: Array<any> = []
   
   if (settings.appleMusicEnabled) {

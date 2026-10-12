@@ -7,7 +7,8 @@ import { timeAwareHistory } from '@/service/time-aware-history'
 import { moodDriftDetector } from '@/service/mood-drift-detector'
 import { myWaveDiscoveryTracker } from '@/service/mywave-discoveries'
 import { trackScorer } from '@/service/track-scorer'
-import { usePlayerStore } from '@/store/player.store'
+import { usePlayerStore, selectCurrentSong } from '@/store/player.store'
+import { queueBrainEvent } from '@/service/brain-events'
 
 export interface TrackRating {
   songId: string
@@ -53,6 +54,10 @@ export interface MLProfile {
   dislikedSongs: string[]
   bannedArtists: string[]  // Полностью заблокированные артисты
   listeningHistory: TrackRating[]
+  /** Вес жанра → id артистов, набирающих этот жанр. Пишет addArtistGenres. */
+  artistGenres?: Record<string, { count: number; artists: string[] }>
+  /** Настроения конкретного трека с весами. Пишет addTrackMoods. */
+  trackMoods?: Record<string, Array<{ name: string; weight: number }>>
 }
 
 interface MLStore {
@@ -83,9 +88,6 @@ interface MLStore {
   // Подтяжка вкусов с мозга (union, только добавляет — безопасно для локали)
   mergeServerBans: (entries: Array<{ id: string; name: string }>) => void
   mergeServerTaste: (liked: string[], disliked: string[]) => void
-  // Применение удалений с сервера (разбаны/анлайки новее курсора).
-  // Только вычитает совпавшее — идемпотентно, локальные новинки не трогает.
-  applyServerRemovals: (removed: Array<{ kind: string; key: string; aux: string }>) => void
   addArtistGenres: (artistId: string, artistName: string, genres: Array<{ name: string; weight: number }>) => void  // Добавить жанры артиста
   addTrackMoods: (trackId: string, moods: Array<{ name: string; weight: number }>) => void  // Добавить настроения трека
   applyDecayFactor: () => void  // Применить затухание весов
@@ -171,9 +173,14 @@ export const useMLStore = createWithEqualityFn<MLStore>()(
                   myWaveDiscoveryTracker.logLike(currentSongInfo.artist)
                 }
 
+                // Раньше здесь был авто-повтор по лайку: трек вставлялся
+                // в очередь ещё раз. Убрано — лайк не должен менять очередь
+                // (пять лайков давали пять дублей), и никакого плавного
+                // перехода это всё равно не давало.
+
                 timeAwareHistory.logLike(songId)
 
-                const currentSong = usePlayerStore.getState().songlist.currentSong
+                const currentSong = selectCurrentSong(usePlayerStore.getState())
                 if (currentSong?.id) {
                   const currentList = usePlayerStore.getState().songlist.currentList
                   const seedTracks = currentList.slice(0, 5)
@@ -194,8 +201,17 @@ export const useMLStore = createWithEqualityFn<MLStore>()(
                 }
                 state.profile.likedSongs = state.profile.likedSongs.filter((id) => id !== songId)
 
+                // 👎 в мозг. Лайк шлёт starCurrentSong, дизлайк приходит
+                // только сюда — ветви не пересекаются, дублей не будет.
+                // Сервер (taste.py) закроет им «показ» в метриках рекомендаций.
+                queueBrainEvent({
+                  track_id: songId,
+                  action: 'dislike',
+                  position_sec: Math.floor(usePlayerStore.getState().playerProgress.progress || 0),
+                })
+
                 trackScorer.applyTrackAdjustment(songId, -0.2)
-                const currentSong = usePlayerStore.getState().songlist.currentSong
+                const currentSong = selectCurrentSong(usePlayerStore.getState())
                 if (currentSong?.id) {
                   const currentList = usePlayerStore.getState().songlist.currentList
                   const seedTracks = currentList.slice(0, 5)
@@ -781,42 +797,6 @@ export const useMLStore = createWithEqualityFn<MLStore>()(
               addUnion(state.profile.likedSongs, liked)
               addUnion(state.profile.dislikedSongs, disliked)
             })
-          },
-
-          applyServerRemovals: (removed) => {
-            let n = 0
-            set((state) => {
-              for (const r of removed || []) {
-                const kind = r?.kind
-                const key = (r?.key ?? '').trim()
-                const aux = (r?.aux ?? '').trim()
-                if (!kind || !key) continue
-                if (kind === 'ban') {
-                  const drop = new Set(
-                    [key, aux, `name:${key}`].filter((s) => !!s),
-                  )
-                  const before = state.profile.bannedArtists.length
-                  state.profile.bannedArtists =
-                    state.profile.bannedArtists.filter((b) => !drop.has(b))
-                  n += before - state.profile.bannedArtists.length
-                } else if (kind === 'like' || kind === 'dislike') {
-                  const arr = kind === 'like'
-                    ? state.profile.likedSongs
-                    : state.profile.dislikedSongs
-                  const idx = arr.indexOf(key)
-                  if (idx > -1) {
-                    arr.splice(idx, 1)
-                    n += 1
-                  }
-                  const rt = state.ratings[key]
-                  if (rt && ((kind === 'like' && rt.like === true) ||
-                             (kind === 'dislike' && rt.like === false))) {
-                    rt.like = null
-                  }
-                }
-              }
-            })
-            if (n > 0) console.log(`[ML Store] 🧹 Server removals applied: ${n}`)
           },
 
           addArtistGenres: (artistId, artistName, genres) => {

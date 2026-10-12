@@ -9,7 +9,6 @@
 
 import { UserPatternDetector, type UserSignal, type ListeningPattern } from './user-pattern-detector'
 import { PlaylistCurator, type CuratedPattern } from './playlist-curator'
-import { subsonic } from '@/service/subsonic'
 import { getRandomSongs, getSongsByGenre } from '@/service/subsonic-api'
 import { useMLStore } from '@/store/ml.store'
 import type { ISong } from '@/types/responses/song'
@@ -29,10 +28,8 @@ export class AutoPlaylistManager {
   private patternDetector: UserPatternDetector
   private curator: PlaylistCurator
   private llmEnabled: boolean
-  private llmConfig: { enabled: boolean; url: string; model: string; apiKey?: string }
 
   constructor(llmConfig: { enabled: boolean; url: string; model: string; apiKey?: string }) {
-    this.llmConfig = llmConfig
     this.llmEnabled = llmConfig.enabled
     this.patternDetector = new UserPatternDetector()
     this.curator = new PlaylistCurator(llmConfig)

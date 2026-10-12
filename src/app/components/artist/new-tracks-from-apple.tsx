@@ -7,6 +7,7 @@
 
 import { useState } from 'react'
 import { appleMusicService } from '@/service/apple-music-api'
+import type { ISong } from '@/types/responses/song'
 import { useExternalApi } from '@/store/external-api.store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
@@ -33,7 +34,7 @@ export function NewReleasesFromApple({ artistName }: NewReleasesFromAppleProps) 
 
     try {
       // Получаем новые альбомы артиста за последний год
-      const newAlbums = await appleMusicService.getNewReleases(artistName, 5)
+      const newAlbums = await appleMusicService.getNewReleases(artistName)
       
       if (newAlbums.length === 0) {
         toast('Нет новых релизов у этого артиста', { type: 'info' })
@@ -50,8 +51,9 @@ export function NewReleasesFromApple({ artistName }: NewReleasesFromAppleProps) 
         
         // Ищем эти треки в библиотеке Navidrome
         for (const track of appleTracks.slice(0, 5)) {
+          if (!track.trackName) continue
           const libraryTrack = await findInLibrary(artistName, track.trackName)
-          if (libraryTrack && !allTracks.find(t => t.id === libraryTrack!.id)) {
+          if (libraryTrack && !allTracks.find(t => t.id === libraryTrack.id)) {
             allTracks.push(libraryTrack)
           }
         }

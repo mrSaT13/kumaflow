@@ -724,7 +724,7 @@
   },
   "ml": {
     "forYou": "추천 음악",
-    "mlStats": "📊 ML 통계",
-    "genresDecades": "🎵 장르 및 연대"
+    "mlStats": "ML 통계",
+    "genresDecades": "장르 및 연대"
   }
 }

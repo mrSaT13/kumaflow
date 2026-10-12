@@ -2,7 +2,6 @@ import { devtools, subscribeWithSelector } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { createWithEqualityFn } from 'zustand/traditional'
 import { persist } from 'zustand/middleware'
-import { usePlayerActions, usePlayerStore } from './player.store'
 import { trackSleepTimerSet } from '@/service/ml-event-tracker'
 
 export type SleepTimerMode = 'timed' | 'endOfSong'
@@ -173,11 +172,12 @@ async function handleTimerComplete() {
   // Уведомление (опционально)
   console.log('[SleepTimer] Playback stopped with fade-out')
 
-  // Toast уведомление
+  // Toast уведомление. У react-toastify нет toast.default — вызов падал
+  // TypeError, и игрок о таймере сна не узнавал.
   import('react-toastify').then(({ toast }) => {
-    toast.default('⏰ Таймер сна остановил воспроизведение', {
+    toast('⏰ Таймер сна остановил воспроизведение', {
       type: 'info',
-      autoClose: 5000
+      autoClose: 5000,
     })
   })
 }

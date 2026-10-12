@@ -7,10 +7,8 @@
  * ВАЖНО: Анализ происходит ПОСЛЕ запуска трека, не мешает воспроизведению
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { audioAnalysisService } from '@/service/audio-analysis'
-import { useQuery } from '@tanstack/react-query'
-import { subsonic } from '@/service/subsonic'
 import { usePlayerStore } from '@/store/player.store'
 
 interface AnalyzedTrack {
@@ -30,6 +28,26 @@ export function useBackgroundAudioAnalysis() {
 
   // Получаем треки из ТЕКУЩЕГО плейлиста (не все!)
   const currentPlaylistIds = useRef<string[]>([])
+
+  // Прогресс отдаём через state, а не через ref.current.
+  // Раньше хук возвращал isAnalyzing.current / analysisQueue.current.length прямо
+  // из ref — эти значения читались в момент рендера и не меняли его, поэтому
+  // потребитель видел «анализ не идёт» даже когда он шёл.
+  const [progress, setProgress] = useState({
+    analyzing: false,
+    queueLength: 0,
+    analyzedCount: 0,
+    totalInPlaylist: 0,
+  })
+
+  const syncProgress = useCallback(() => {
+    setProgress({
+      analyzing: isAnalyzing.current,
+      queueLength: analysisQueue.current.length,
+      analyzedCount: analyzedTracks.current.size,
+      totalInPlaylist: currentPlaylistIds.current.length,
+    })
+  }, [])
   
   useEffect(() => {
     // Обновляем список треков текущего плейлиста - ПРОВЕРЯЕМ ЧТО ЭТО МАССИВ
@@ -51,7 +69,9 @@ export function useBackgroundAudioAnalysis() {
         processAnalysisQueue()
       }
     }
-  }, [currentList])
+
+    syncProgress()
+  }, [currentList, syncProgress])
 
   /**
    * Обработка очереди анализа
@@ -63,6 +83,7 @@ export function useBackgroundAudioAnalysis() {
     isAnalyzing.current = true
 
     console.log('[AudioAnalysis] Starting background analysis...')
+    syncProgress()
 
     // Анализируем по 3 трека за раз (меньше нагрузка)
     const batchSize = 3
@@ -109,6 +130,8 @@ export function useBackgroundAudioAnalysis() {
     } else {
       console.log('[AudioAnalysis] Background analysis complete!')
     }
+
+    syncProgress()
   }
 
   /**
@@ -128,9 +151,9 @@ export function useBackgroundAudioAnalysis() {
   }
 
   return {
-    isAnalyzing: isAnalyzing.current,
-    queueLength: analysisQueue.current.length,
-    analyzedCount: analyzedTracks.current.size,
-    totalInPlaylist: currentPlaylistIds.current.length,
+    isAnalyzing: progress.analyzing,
+    queueLength: progress.queueLength,
+    analyzedCount: progress.analyzedCount,
+    totalInPlaylist: progress.totalInPlaylist,
   }
 }

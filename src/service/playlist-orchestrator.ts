@@ -244,16 +244,23 @@ export function createEnergyWave(tracks: ISong[]): ISong[] {
   const veryEnergetic = sortedByEnergy.slice(quarter * 3)
 
   // Создаём волну: спокойно → средне → энергично → очень энергично → средне → спокойно
+  //
+  // calm и medium делятся пополам: первая половина идёт на подъём, вторая — на спад.
+  // Раньше бралась целиком calm, целиком medium, а потом ещё по половине — из-за чего
+  // каждый трек из этих двух секций попадал в выдачу дважды, а длина результата
+  // доходила до 1.5× от входной (30 треков на входе → 36 на выходе).
+  const calmHalf = Math.floor(calm.length / 2)
+  const mediumHalf = Math.floor(medium.length / 2)
+
   const wave = [
-    ...calm,
-    ...medium,
+    ...calm.slice(0, calmHalf),
+    ...medium.slice(0, mediumHalf),
     ...energetic,
     ...veryEnergetic,
-    ...medium.slice(0, Math.floor(medium.length / 2)),
-    ...calm.slice(0, Math.floor(calm.length / 2)),
+    ...medium.slice(mediumHalf),
+    ...calm.slice(calmHalf),
   ]
 
-  // Перемешиваем внутри каждой секции для разнообразия
   return wave.map(t => t.track)
 }
 

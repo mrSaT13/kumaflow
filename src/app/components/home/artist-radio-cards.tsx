@@ -10,7 +10,7 @@ import { useML } from '@/store/ml.store'
 import { generateArtistRadio } from '@/service/ml-wave-service'
 import { subsonic } from '@/service/subsonic'
 import { toast } from 'react-toastify'
-import { Radio, Play } from 'lucide-react'
+import { Radio, } from 'lucide-react'
 import {
   Carousel,
   type CarouselApi,
@@ -117,7 +117,7 @@ export default function ArtistRadioCards() {
       const result = await generateArtistRadio(artistId, 25)
       
       if (result.songs.length > 0) {
-        setSongList(result.songs, 0, false)
+        setSongList(result.songs, 0, false, undefined, `Радио · ${artistName}`)
         toast.success(`▶️ Радио: ${artistName}`, { autoClose: 2000 })
       }
     } catch (error) {

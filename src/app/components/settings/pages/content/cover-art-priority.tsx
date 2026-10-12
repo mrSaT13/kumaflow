@@ -4,7 +4,7 @@ import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
 import { useExternalApi } from '@/store/external-api.store'
 import { toast } from 'react-toastify'
-import { Image, Music, Radio, Star, Globe, Disc, Award } from 'lucide-react'
+import { Image, Music, Radio, Globe, Disc, Award } from 'lucide-react'
 
 interface CoverPriority {
   id: string

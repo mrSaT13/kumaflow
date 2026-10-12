@@ -5,7 +5,7 @@ import { IArtist } from '@/types/responses/artist'
 import { ArtistButtons } from './buttons'
 import { wikipediaService } from '@/service/wikipedia-api'
 import { Button } from '@/app/components/ui/button'
-import { Instagram, Youtube, Twitter, Facebook, Globe, Music, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Instagram, Youtube, Twitter, Facebook, Globe, Music, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface ArtistInfoProps {
   artist: IArtist

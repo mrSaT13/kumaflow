@@ -38,6 +38,11 @@ const defaultSettings: PlaybackSettings = {
   scrobbleEnabled: true,
   scrobbleThresholdSeconds: 30,
   gaplessPlayback: true,
+  // Кроссфейд включён по умолчанию: пауза между треками — это момент, в
+  // Наложение треков (движок src/features/player/crossfade.ts) написано, но
+  // на проверке не заработало, поэтому выключено: лишний <audio> в сборке —
+  // риск без пользы. Пока выключено, переход делает fadeIn в audio.tsx.
+  // Включать обратно: crossfadeEnabled: true.
   crossfadeEnabled: false,
   crossfadeSeconds: 5,
   replayGainEnabled: false,

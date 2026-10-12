@@ -124,19 +124,20 @@ export interface IKumaFlowAPI {
   getLocalCoverArt: (filePath: string) => Promise<string | null>
   // Remote Control
   remoteControl: {
-    start: () => Promise<any>
+    start: (portOrOpts?: number | { port?: number; host?: string }) => Promise<any>
     stop: () => Promise<any>
     getStatus: () => Promise<any>
     getUrl: () => Promise<string>
-    getAllIps: () => Promise<{ ip: string; iface: string }[]>
+    getAllIps: () => Promise<{ ip: string; iface: string; internal?: boolean }[]>
+    getAllUrls: () => Promise<{ ip: string; iface: string; url: string }[]>
     setIp: (ip: string) => Promise<boolean>
     setPort: (port: number) => Promise<boolean>
     getPort: () => Promise<number>
+    setPin: (pin: string) => Promise<boolean>
+    hasPin: () => Promise<boolean>
     setSubsonicUrl: (url: string, username: string, password: string, authType: 'token' | 'password') => Promise<boolean>
     hasSavedCredentials: () => Promise<boolean>
-    loadSettings: () => Promise<{ enabled?: boolean; port?: number; ip?: string }>
-    setPin: (pin: string) => Promise<{ ok: boolean; error?: string }>
-    hasPin: () => Promise<boolean>
+    loadSettings: () => Promise<{ enabled?: boolean; port?: number; ip?: string; hasPin?: boolean }>
   }
   // DLNA
   dlna: {
@@ -146,4 +147,8 @@ export interface IKumaFlowAPI {
     cast: (device: any, songId: string) => Promise<boolean>
     getCurrentDevice: () => any
   }
+  // Команды remote-control из главного процесса. preload их выставляет
+  // (см. preload/index.ts), а player.tsx их вызывает — в типе их не было.
+  onRemoteCommand: (callback: (cmd: string, ...args: unknown[]) => void) => void
+  removeRemoteCommandListener: () => void
 }

@@ -7,12 +7,11 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Play, Shuffle, Share2, Star, Heart, Music, Users, RefreshCw } from 'lucide-react'
+import { Play, Share2, Music, Users, RefreshCw } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { usePlayerActions } from '@/store/player.store'
-import { useMLPlaylistsStateActions, useMLPlaylistsState } from '@/store/ml-playlists-state.store'
+import { useMLPlaylistsStateActions, } from '@/store/ml-playlists-state.store'
 import { toast } from 'react-toastify'
-import { subsonic } from '@/service/subsonic'
 import type { ISong } from '@/types/responses/song'
 
 export default function SharedListensPage() {

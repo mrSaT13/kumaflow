@@ -5,7 +5,6 @@
  * и оценивать плейлисты других пользователей
  */
 
-import { httpClient } from '@/api/httpClient'
 import { subsonic } from '@/service/subsonic'
 import type { ISong } from '@/types/responses/song'
 

@@ -1,5 +1,4 @@
 import axios from 'axios'
-import { toast } from 'react-toastify'
 
 const LISTENBRAINZ_API = 'https://api.listenbrainz.org/1'
 const LISTENBRAINZ_OAUTH_URL = 'https://listenbrainz.org/profile/login/'

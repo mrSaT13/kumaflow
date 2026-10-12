@@ -10,6 +10,7 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   Activity,
+  ArrowRightLeft,
   BarChart3,
   Calendar,
   ChevronLeft,
@@ -28,18 +29,23 @@ import {
   Zap,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { getSimpleCoverArtUrl } from '@/api/httpClient'
 import MyWaveSettings, {
   getWaveSource,
+  isWavePlaylistName,
   readWaveContext,
   saveWaveContext,
   waveLabel,
 } from '@/app/components/homepage/my-wave-settings'
+import { StreakWidget } from '@/app/components/streak/streak-widget'
+import {
+  type BrainHandoff,
+  useBrainHandoff,
+} from '@/app/hooks/use-brain-handoff'
 import { getRecentBrainEvents } from '@/service/brain-events'
-import { mapWaveSettings, resetBrainSessionId, waveContinue } from '@/service/brain-wave'
+import { mapWaveSettings, waveContinue } from '@/service/brain-wave'
 import { generateMyWavePlaylist } from '@/service/ml-wave-service'
 import { myWaveDiscoveryTracker } from '@/service/mywave-discoveries'
 import { subsonic } from '@/service/subsonic'
@@ -49,12 +55,23 @@ import {
   getSongsByGenre,
   getStarredArtists,
 } from '@/service/subsonic-api'
+import {
+  clearWaveSeed,
+  readWaveSeed,
+  seedLabel,
+  type WaveSeed,
+} from '@/service/wave-identity'
 import { useAppStore } from '@/store/app.store'
 import { isBrainActive } from '@/store/brain.store'
+import { useDopamineSettings } from '@/store/dopamine.store'
 import { useML, useMLStore } from '@/store/ml.store'
 import { useMLPlaylists } from '@/store/ml-playlists.store'
 import { useMLPlaylistsStateActions } from '@/store/ml-playlists-state.store'
-import { usePlayerActions, usePlayerStore } from '@/store/player.store'
+import {
+  selectCurrentSong,
+  usePlayerActions,
+  usePlayerStore,
+} from '@/store/player.store'
 import { useThemeStore } from '@/store/theme.store'
 import type { ISong } from '@/types/responses/song'
 import { generateCSSGradient } from '@/utils/genreColors'
@@ -622,17 +639,113 @@ function ScrollContainer({ children }: { children: React.ReactNode }) {
   )
 }
 
+// ==================== HANDOFF «ПРОДОЛЖИТЬ С …» ====================
+
+/** «N мин назад» для подписи устройства. */
+function handoffAge(sec: number | null): string {
+  if (sec == null) return 'молчит'
+  if (sec < 60) return 'только что'
+  if (sec < 3600) return `${Math.floor(sec / 60)} мин назад`
+  return `${Math.floor(sec / 3600)} ч назад`
+}
+
+/**
+ * Ховер карточки «Моя волна»: продолжить с другого устройства.
+ * Данные — живой слот мозга (/api/me/devices + /api/wave/resume): трек,
+ * позиция и хвост очереди, который сейчас играет телефон/веб. Раньше такой
+ * кнопки не было вообще, хотя waveResume() уже был готов.
+ */
+function BrainHandoffPanel({ handoff }: { handoff: BrainHandoff }) {
+  const { devices, target, selectedId, select, resume, resuming } = handoff
+  if (devices.length === 0) return null
+
+  // Трек, позиция и хвост очереди — одной строкой в тултип и в подпись.
+  const slotText = target
+    ? target.available
+      ? [
+          target.artistName ? `${target.artistName} — ` : '',
+          target.trackTitle,
+          target.positionSec
+            ? ` · ${Math.floor(target.positionSec / 60)}:${String(target.positionSec % 60).padStart(2, '0')}`
+            : '',
+          target.queueLen ? ` · ещё ${target.queueLen}` : '',
+          target.stale ? ' · устройство давно не обновлялось' : '',
+        ].join('')
+      : 'Устройство отдало слот без трека — подожди следующего обновления'
+    : ''
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 w-full rounded-xl border border-white/20 bg-white/15 backdrop-blur-md px-2.5 py-1.5 text-white">
+      <ArrowRightLeft className="w-3.5 h-3.5 opacity-70 shrink-0" />
+      {devices.map((d) => (
+        <button
+          key={d.deviceId}
+          onClick={() => select(d.deviceId)}
+          title={
+            d.nowPlaying
+              ? `Сейчас: ${d.nowPlaying}`
+              : 'Устройство без now_playing'
+          }
+          className={`px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-sm transition-colors ${
+            d.deviceId === selectedId
+              ? 'bg-white text-gray-900'
+              : 'bg-white/20 hover:bg-white/30 text-white'
+          }`}
+        >
+          {d.displayName}
+          <span className="opacity-70"> · {handoffAge(d.ageSec)}</span>
+        </button>
+      ))}
+
+      {/* Что играет на телефоне — одной строкой, обрезается по ширине.
+            Отдельной строкой под чипами секция съедала высоту карточки. */}
+      {target?.available && (
+        <span
+          className="text-xs opacity-75 truncate min-w-0 flex-1"
+          title={slotText}
+        >
+          {slotText}
+        </span>
+      )}
+
+      <button
+        onClick={() => {
+          resume(selectedId).catch(() => undefined)
+        }}
+        disabled={resuming || !selectedId}
+        className="ml-auto shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-gray-900 hover:bg-gray-50 active:scale-95 shadow-md transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
+        title="Перенести очередь и позицию с этого устройства"
+      >
+        {resuming ? (
+          <div className="w-3.5 h-3.5 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin" />
+        ) : (
+          <Play className="w-3.5 h-3.5 fill-gray-900" />
+        )}
+        Продолжить
+      </button>
+    </div>
+  )
+}
+
 // ==================== ГЛАВНЫЙ КОМПОНЕНТ ====================
 
 export default function NewHomepage() {
-  const { t } = useTranslation()
   const navigate = useNavigate()
   const [isGenerating, setIsGenerating] = useState<string | null>(null)
   const [myWaveArtists, setMyWaveArtists] = useState<any[]>([])
   const [isWaveSettingsOpen, setIsWaveSettingsOpen] = useState(false)
   // Пилюля активного контекста волны как у Яндекса («Работаю ×»)
   const [waveHint, setWaveHint] = useState<string>('')
+  // Сид («В стиле: …») перекрывает пилюли настроений — ровно как у Яндекса.
+  // «Работаю» и «В стиле: Reamonn» одновременно не читаются.
+  const [waveSeedHint, setWaveSeedHint] = useState<WaveSeed | null>(null)
   const refreshWaveHint = useCallback(() => {
+    const seed = readWaveSeed()
+    setWaveSeedHint(seed)
+    if (seed) {
+      setWaveHint(seedLabel(seed))
+      return
+    }
     try {
       const s = JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
       const hint = [s.activity, s.characteristic, s.mood, s.language]
@@ -647,7 +760,15 @@ export default function NewHomepage() {
   useEffect(() => {
     refreshWaveHint()
   }, [refreshWaveHint])
+  // × у сида сбрасывает СИД, а не настройки: сбросить «Работаю» вместо
+  // «В стиле: Reamonn» — не то же самое.
   const clearWaveHint = useCallback(() => {
+    if (readWaveSeed()) {
+      clearWaveSeed()
+      setWaveSeedHint(null)
+      setWaveHint('')
+      return
+    }
     try {
       localStorage.setItem('my-wave-settings', JSON.stringify({}))
     } catch {
@@ -656,7 +777,9 @@ export default function NewHomepage() {
     setWaveHint('')
   }, [])
   const { getProfile, ratings } = useML()
-  const { setSongList, togglePlayPause } = usePlayerActions()
+  const { setSongList, setQueueTail, togglePlayPause } = usePlayerActions()
+  // Handoff с другого устройства («Продолжить с …») — живой слот мозга.
+  const brainHandoff = useBrainHandoff()
   // Треки последней сгенерированной Волны — чтобы кнопка знала, играет ли сейчас Волна
   const waveSongIds = useRef<Set<string>>(new Set())
   // После рестарта ref пуст, а очередь персистится — восстанавливаем контекст
@@ -671,9 +794,18 @@ export default function NewHomepage() {
       /* ignore */
     }
   }, [])
-  const currentSong = usePlayerStore((s) => s.songlist.currentSong)
+  const currentSong = usePlayerStore(selectCurrentSong)
   const isPlaying = usePlayerStore((s) => s.playerState.isPlaying)
-  const isWaveActive = !!currentSong && waveSongIds.current.has(currentSong.id)
+  const currentPlaylistName = usePlayerStore(
+    (s) => s.songlist.currentPlaylistName,
+  )
+  // Волна активна, если текущий трек из волны, СГЕНЕРИРОВАННОЙ В ЭТОЙ СЕССИИ
+  // (waveSongIds — ref), ЛИБО очередь названа волной (пришла с другого устройства).
+  // Раньше было только первое: после handoff ref пуст, флаг false, кнопка
+  // предлагала «Запустить Мою волну» вместо «Продолжить».
+  const isWaveActive =
+    (!!currentSong && waveSongIds.current.has(currentSong.id)) ||
+    isWavePlaylistName(currentPlaylistName)
   // Берём названия из сохранённых плейлистов (если есть)
   const { getPlaylist } = useMLPlaylistsStateActions()
   const dailyMixPL = getPlaylist('daily-mix')
@@ -708,6 +840,7 @@ export default function NewHomepage() {
 
   const { settings: playlistSettings } = useMLPlaylists()
   const themeClasses = useThemeClasses()
+  const { streakOnHome } = useDopamineSettings()
 
   const profile = getProfile()
   const topGenres = Object.entries(profile.preferredGenres || {})
@@ -875,22 +1008,23 @@ export default function NewHomepage() {
     })()
 
     try {
-      // Источник как в мобайле: Brain (если выбран и подключен) → иначе локальный ML.
-      // Brain-режим: играет РОВНО то, что отдал мозг (сколько отдал — столько играет),
-      // trackCount — только размер запроса (фолбек-значение). Без допаддинга локалкой.
+      // Обычный запуск волны — сид сбрасывается. Иначе после «В стиле: …»
+      // капсула продолжит врать, что лента посажена на артиста, хотя
+      // запущена обычная волна с пилюлями.
+      clearWaveSeed()
+      setWaveSeedHint(null)
+      // Источник как в мобайле: Brain (если выбран и подключен) → иначе локальный ML
       if (getWaveSource() === 'brain' && isBrainActive()) {
         try {
           const settingsRaw = JSON.parse(
             localStorage.getItem('my-wave-settings') || '{}',
           )
-          resetBrainSessionId() // новая волна = новая сессия для мозга
           const res = await waveContinue({
             queue: [],
             count: trackCount,
             settings: mapWaveSettings(settingsRaw),
-            excludeIds: [...(profile.dislikedSongs ?? [])],
+            excludeIds: [],
             recentEvents: getRecentBrainEvents(),
-            context: { source: 'my-wave' },
           })
           if (res && res.tracks.length > 0) {
             const loaded = await Promise.all(
@@ -908,8 +1042,11 @@ export default function NewHomepage() {
                 waveHint,
                 'brain',
               )
-              setSongList(songs, 0)
-              toast.success(t('brain.waveReady', { count: songs.length }), {
+              // Имя обязательно: без него isWaveActive остаётся false, а в мозг
+              // уходит playlist_name=null и другое устройство не понимает,
+              // что продолжает волну.
+              setSongList(songs, 0, false, undefined, 'Моя волна')
+              toast.success(`Мозг: волна (${songs.length} треков)`, {
                 type: 'success',
               })
               return
@@ -935,12 +1072,76 @@ export default function NewHomepage() {
           waveHint,
           'local',
         )
-        setSongList(playlist.songs, 0)
+        // Имя нужно и здесь — см. комментарий в ветке Brain выше.
+        setSongList(playlist.songs, 0, false, undefined, 'Моя волна')
         toast.success('Моя волна запущена!', { type: 'success' })
       }
     } catch (error) {
       console.error('Ошибка генерации "Моя волна":', error)
       toast.error('Ошибка генерации плейлиста')
+    } finally {
+      setIsGenerating(null)
+    }
+  }
+
+  /**
+   * Морф волны: пилюли сменились, а в очереди ещё лежит запас старого вайба.
+   *
+   * Раньше `onApplied` звал handleMyWavePlay(), который делает setSongList(…, 0):
+   * волна пересобиралась целиком и прыгала на первый трек. Звучало это не как
+   * смена настроения, а как чужой плейлист посреди фона.
+   *
+   * Теперь: играющий трек доигрывает с той же секунды, запас старого вайба
+   * отбрасывается, и мозг докладывает маленькую порцию уже под новый контекст
+   * (`current_track_id` + короткий count). Новый вайб слышно через 1-2 трека,
+   * и он ощущается именно как переход, а не как обрыв.
+   */
+  const handleMyWaveMorph = async () => {
+    const state = usePlayerStore.getState()
+    const list = state.songlist.currentList ?? []
+    const idx = state.songlist.currentSongIndex ?? -1
+    const current = idx >= 0 ? list[idx] : null
+    // Нечего морфить: очередь пуста или играет не волна — обычный старт.
+    if (!current || list.length <= 1 || !isWaveActive) {
+      await handleMyWavePlay()
+      return
+    }
+    setIsGenerating('mywave')
+
+    try {
+      const settingsRaw = JSON.parse(
+        localStorage.getItem('my-wave-settings') || '{}',
+      )
+      const res = await waveContinue({
+        // Уже играющее + один мост: морфимся от того, что звучит сейчас.
+        queue: [current.id],
+        currentTrackId: current.id,
+        count: 5,
+        settings: mapWaveSettings(settingsRaw),
+        recentEvents: getRecentBrainEvents(),
+      })
+      if (!res || res.tracks.length === 0) {
+        // Мозг не дал — не ломаем играющее. Хвост подчистит авто-докладка.
+        return
+      }
+      const loaded = await Promise.all(
+        res.tracks.map((t) =>
+          subsonic.songs.getSong(t.external_id || t.track_id).catch(() => null),
+        ),
+      )
+      const fresh = loaded.filter((s): s is ISong => !!s)
+      if (fresh.length === 0) return
+
+      waveSongIds.current = new Set([
+        ...waveSongIds.current,
+        ...fresh.map((s) => s.id),
+      ])
+      setQueueTail(fresh)
+      toast.success(`Контекст применён — ${fresh.length} в новом вайбе`, {
+        autoClose: 1600,
+      })
+    } catch (error) {
+      console.error('Морф волны не удался:', error)
     } finally {
       setIsGenerating(null)
     }
@@ -990,7 +1191,13 @@ export default function NewHomepage() {
       const result = await generateArtistRadio(artistId, 30)
 
       if (result.songs.length > 0) {
-        setSongList(result.songs as any, 0)
+        setSongList(
+          result.songs as any,
+          0,
+          false,
+          undefined,
+          `Радио · ${artistName}`,
+        )
         toast.success(
           `▶️ В стиле ${artistName}: ${result.songs.length} треков`,
           { type: 'success', autoClose: 3000 },
@@ -1095,11 +1302,24 @@ export default function NewHomepage() {
             </div>
 
             <div className="relative z-10 p-8 sm:p-10 flex flex-col sm:flex-row items-center sm:items-start gap-8">
-              <div
-                className="w-28 h-28 sm:w-36 sm:h-36 rounded-3xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-2xl"
-                style={{ animation: 'pulse-glow 3s ease-in-out infinite' }}
-              >
-                <Activity className="w-14 h-14 sm:w-16 sm:h-16 text-white" />
+              {/* Левая колонка: иконка волны + стрик под ней.
+                  Раньше стрик стоял в ряду кнопок и при нехватке ширины
+                  переносился на вторую строку — карточка вырастала. Здесь
+                  для него есть постоянное место, и ряд кнопок не страдает. */}
+              <div className="flex flex-col items-center gap-3 shrink-0">
+                <div
+                  className="w-28 h-28 sm:w-36 sm:h-36 rounded-3xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-2xl"
+                  style={{ animation: 'pulse-glow 3s ease-in-out infinite' }}
+                >
+                  <Activity className="w-14 h-14 sm:w-16 sm:h-16 text-white" />
+                </div>
+
+                {streakOnHome && (
+                  <StreakWidget
+                    variant="hero"
+                    className="!bg-white/20 !shadow-none border border-white/25 backdrop-blur-sm"
+                  />
+                )}
               </div>
 
               <div className="flex-1 text-center sm:text-left">
@@ -1153,14 +1373,34 @@ export default function NewHomepage() {
                   {waveHint && (
                     <button
                       onClick={clearWaveHint}
-                      title="Сбросить настройку волны"
+                      title={
+                        waveSeedHint
+                          ? 'Сбросить сид волны'
+                          : 'Сбросить настройку волны'
+                      }
                       className="px-4 py-2.5 rounded-full bg-white/25 hover:bg-white/35 text-white text-sm font-medium backdrop-blur-sm transition-colors flex items-center gap-2"
                     >
                       {waveHint}
                       <span className="opacity-70">×</span>
                     </button>
                   )}
+
+                  {/* Стрик убран отсюда в левую колонку, под иконку волны. */}
                 </div>
+
+                {/* Ховер-секция: продолжить очередь с телефона/другого ПК.
+                    Показывается только когда мозг видит живой чужой слот.
+                    grid-rows 0fr→1fr вместо opacity: в свёрнутом виде панель
+                    не занимает место — карточка не растёт «запасной» дырой. */}
+                {brainHandoff.devices.length > 0 && (
+                  <div className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 group-hover:grid-rows-[1fr] focus-within:grid-rows-[1fr]">
+                    <div className="overflow-hidden">
+                      <div className="pt-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100 focus-within:opacity-100">
+                        <BrainHandoffPanel handoff={brainHandoff} />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1347,7 +1587,9 @@ export default function NewHomepage() {
         }}
         onApplied={() => {
           refreshWaveHint()
-          handleMyWavePlay()
+          // Волна уже играет — морфим хвост под новые пилюли, а не пересобираем
+          // плейлист с прыжком на первый трек (см. handleMyWaveMorph).
+          handleMyWaveMorph()
         }}
       />
     </div>

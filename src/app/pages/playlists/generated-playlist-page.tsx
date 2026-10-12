@@ -23,9 +23,19 @@ import { Button } from '@/app/components/ui/button'
 import { ScrollArea } from '@/app/components/ui/scroll-area'
 import { Badge } from '@/app/components/ui/badge'
 import { mlService } from '@/service/ml-service'
+import {
+  generateMyWavePlaylist,
+  generateActivityMix,
+  generateMoodMix,
+  generateTimeOfDayMix,
+  generateGenrePlaylist,
+  generateArtistRadio,
+} from '@/service/ml-wave-service'
+import { useMLStore } from '@/store/ml.store'
 import { usePlayerActions } from '@/store/player.store'
 import { toast } from 'react-toastify'
 import { analyzeTrack } from '@/service/vibe-similarity'
+import type { ISong } from '@/types/responses/song'
 
 interface PlaylistParams {
   playlistType: string
@@ -39,11 +49,19 @@ export default function GeneratedPlaylistPage() {
   const { setSongList, play } = usePlayerActions()
   const queryClient = useQueryClient()  // 🆕 Для перегенерации
 
+  // Профиль для локальных генераторов. Раньше сюда не передавалось ничего,
+  // а без лайков/оценок генератор работает вслепую (и падал на undefined).
+  const mlProfile = useMLStore((state) => state.profile)
+  const mlRatings = useMLStore((state) => state.ratings)
+  const likedSongIds = mlProfile?.likedSongs ?? []
+  const ratings = mlRatings ?? {}
+  const preferredGenres = mlProfile?.preferredGenres ?? {}
+
   // 🆕 Функция перегенерации
   const handleRegenerate = async () => {
-    toast.info('🔄 Перегенерация плейлиста...', { autoClose: 2000 })
+    toast.info('Перегенерация плейлиста...', { autoClose: 2000 })
     await queryClient.invalidateQueries({ queryKey: ['generated-playlist', playlistType, playlistId] })
-    toast.success('✅ Плейлист перегенерирован!', { autoClose: 2000 })
+    toast.success('Плейлист перегенерирован!', { autoClose: 2000 })
   }
 
   // Загружаем данные плейлиста
@@ -52,27 +70,48 @@ export default function GeneratedPlaylistPage() {
     queryFn: async () => {
       if (!playlistType) throw new Error('No playlist type')
       
-      // Генерируем плейлист заново или берём из кэша
+      // Генерируем плейлист заново или берём из кэша.
+      // Эти генераторы живут в ml-wave-service, а НЕ в mlService: класса
+      // MLService таких методов не содержит, и вызов падал TypeError.
+      // Профиль берём из стора — иначе генераторы работают вслепую.
+      let songs: unknown[]
       switch (playlistType) {
         case 'daily-mix':
-          return await mlService.generateDailyMix()
+          songs = (await mlService.generateDailyMix()).songs
+          break
         case 'discover-weekly':
-          return await mlService.generateDiscoverWeekly()
+          songs = (await mlService.generateDiscoverWeekly()).songs
+          break
         case 'my-wave':
-          return await mlService.generateMyWavePlaylist()
+          songs = (await generateMyWavePlaylist(likedSongIds, ratings)).songs
+          break
         case 'activity':
-          return await mlService.generateActivityMix('workout')
+          songs = (await generateActivityMix(
+            playlistId || 'workout', likedSongIds, ratings, preferredGenres,
+          )).songs
+          break
         case 'mood':
-          return await mlService.generateMoodMix('energetic')
+          songs = (await generateMoodMix(
+            likedSongIds, ratings, preferredGenres, playlistId || 'energetic',
+          )).songs
+          break
         case 'time-of-day':
-          return await mlService.generateTimeOfDayMix()
+          songs = (await generateTimeOfDayMix(
+            likedSongIds, ratings, preferredGenres,
+          )).songs
+          break
         case 'genre':
-          return await mlService.generateGenrePlaylist(playlistId || 'rock')
+          songs = (await generateGenrePlaylist(playlistId || 'rock')).songs
+          break
         case 'artist-radio':
-          return await mlService.generateArtistRadio(playlistId || '')
+          songs = (await generateArtistRadio(playlistId || '')).songs
+          break
         default:
           throw new Error(`Unknown playlist type: ${playlistType}`)
       }
+      // daily-mix/discover-weekly отдают NavidromeSong, остальные — ISong.
+      // Странице нужен один список треков, поэтому приводим к общему виду.
+      return { songs: (songs ?? []) as ISong[] }
     },
     enabled: !!playlistType,
   })
@@ -127,7 +166,7 @@ export default function GeneratedPlaylistPage() {
     
     setSongList(data.songs, 0)
     play()
-    toast.success(`▶️ Запущено: ${getPlaylistTitle(playlistType || '')}`)
+    toast.success(`Запущено: ${getPlaylistTitle(playlistType || '')}`)
   }
 
   const handleShuffle = () => {
@@ -136,7 +175,7 @@ export default function GeneratedPlaylistPage() {
     const shuffled = [...data.songs].sort(() => Math.random() - 0.5)
     setSongList(shuffled, 0)
     play()
-    toast.success(`🔀 Запущено в случайном порядке: ${getPlaylistTitle(playlistType || '')}`)
+    toast.success(`Запущено в случайном порядке: ${getPlaylistTitle(playlistType || '')}`)
   }
 
   const handlePlayTrack = (index: number) => {
@@ -282,10 +321,10 @@ export default function GeneratedPlaylistPage() {
                 </h3>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground space-y-2">
-                <p>🤖 Сгенерировано ML алгоритмом</p>
-                <p>📊 На основе ваших предпочтений</p>
-                <p>🎵 Оркестрировано по вайбу</p>
-                <p>🔀 Уникальный порядок треков</p>
+                <p>Сгенерировано ML алгоритмом</p>
+                <p>На основе ваших предпочтений</p>
+                <p>Оркестрировано по вайбу</p>
+                <p>Уникальный порядок треков</p>
               </CardContent>
             </Card>
           </div>
@@ -413,16 +452,16 @@ function formatSongDuration(seconds: number): string {
  */
 function getPlaylistTitle(type: string): string {
   const titles: Record<string, string> = {
-    'daily-mix': '🎵 Дейли Микс',
-    'discover-weekly': '🔍 Открытия недели',
-    'my-wave': '🌊 Моя Волна',
-    'activity': '⚡ Активность Микс',
-    'mood': '😊 Муд Микс',
-    'time-of-day': '🕐 Время Микс',
-    'genre': '🎼 Жанр Плейлист',
-    'artist-radio': '📻 Радио Артиста',
+    'daily-mix': 'Дейли Микс',
+    'discover-weekly': 'Открытия недели',
+    'my-wave': 'Моя Волна',
+    'activity': 'Активность Микс',
+    'mood': 'Муд Микс',
+    'time-of-day': 'Время Микс',
+    'genre': 'Жанр Плейлист',
+    'artist-radio': 'Радио Артиста',
   }
-  return titles[type] || '🎶 Сгенерированный Плейлист'
+  return titles[type] || 'Сгенерированный Плейлист'
 }
 
 /**

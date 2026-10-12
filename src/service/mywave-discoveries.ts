@@ -7,8 +7,6 @@
  * - Показывает артистов с весом >= 5
  */
 
-import { useMLStore } from '@/store/ml.store'
-import type { IArtist } from '@/types/responses/artist'
 
 export interface MyWaveDiscovery {
   artistId: string

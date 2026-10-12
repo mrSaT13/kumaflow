@@ -3,245 +3,100 @@
  * В стиле Яндекс.Музыки с размытым анимированным градиентом
  */
 
-import { useEffect, useState } from 'react'
+import { Pause, Play, RefreshCw, Settings } from 'lucide-react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'react-toastify'
+import { generateMyWavePlaylist } from '@/service/ml-wave-service'
+import { clearWaveSeed } from '@/service/wave-identity'
 import { useML } from '@/store/ml.store'
 import { usePlayerActions, usePlayerStore } from '@/store/player.store'
-import { generateMyWavePlaylist } from '@/service/ml-wave-service'
-import { toast } from 'react-toastify'
-import { Play, Settings, Smartphone } from 'lucide-react'
-import MyWaveSettings from './my-wave-settings'
-import { saveWaveContext, waveLabel } from './my-wave-settings'
-import { isBrainActive } from '@/store/brain.store'
-import {
-  formatResumeTime,
-  getWaveDeviceId,
-  getWaveDeviceName,
-  mapWaveSettings,
-  resetBrainSessionId,
-  waveContinue,
-  waveResume,
-  waveSeedClear,
-  waveSeedGet,
-  type BrainSeed,
-} from '@/service/brain-wave'
-import { getWaveSource } from './my-wave-settings'
-import { getRecentBrainEvents } from '@/service/brain-events'
-import { subsonic } from '@/service/subsonic'
-import type { ISong } from '@/types/responses/song'
-
-interface ResumePill {
-  targetId: string
-  trackId: string
-  pos: number
-  queue: string[]
-  deviceLabel: string
-}
+import MyWaveSettings, {
+  isWavePlaylistName,
+  saveWaveContext,
+  waveLabel,
+} from './my-wave-settings'
 
 export default function HeroMyWave() {
   const navigate = useNavigate()
   const [isGenerating, setIsGenerating] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  // W5a: пилюля «Продолжить с …» — персистентная, не только тост при старте.
-  // Мобайл шлёт device='android' (не UUID), поэтому чужим считаем всё,
-  // что не равно нашему UUID (имя — только фолбек для старых слотов).
-  const [resumePill, setResumePill] = useState<ResumePill | null>(null)
-  // W4: капсула активного сида радио («волна по X»)
-  const [seedCapsule, setSeedCapsule] = useState<BrainSeed | null>(null)
 
   const { getProfile, ratings, profile } = useML()
   const { setSongList } = usePlayerActions()
 
+  // Играет ли СЕЙЧАС Моя волна. Раньше кнопка была stateless: всегда рисовала
+  // Play и текст «Воспроизвести», даже когда волна уже играла, а клик
+  // генерировал новую волну вместо продолжения текущей.
+  const isPlaying = usePlayerStore((s) => s.playerState.isPlaying)
+  const playlistName = usePlayerStore((s) => s.songlist.currentPlaylistName)
+  const isWaveActive = isWavePlaylistName(playlistName)
+
   const currentProfile = getProfile()
-
-  const refreshResumePill = async () => {
-    try {
-      if (!isBrainActive()) {
-        setResumePill(null)
-        return
-      }
-      const resume = await waveResume()
-      if (!resume) {
-        setResumePill(null)
-        return
-      }
-      const targetId = (resume.external_id || resume.track_id || '').trim()
-      if (!targetId) {
-        setResumePill(null)
-        return
-      }
-      if (resume.device && resume.device === getWaveDeviceId()) return // сами играли
-      if (!resume.device && resume.device_name && resume.device_name === getWaveDeviceName()) return
-      const pos = Math.floor(resume.position_sec ?? 0)
-      const queue = (resume.queue ?? []).filter(Boolean).slice(0, 30)
-      // Показываем если есть позиция ИЛИ хвост очереди (раньше требовали pos>=5
-      // и только тост — поэтому «при запуске не отображает»)
-      if (pos < 5 && queue.length === 0) {
-        setResumePill(null)
-        return
-      }
-      setResumePill({
-        targetId,
-        trackId: resume.track_id,
-        pos,
-        queue: queue.filter((q) => q !== targetId && q !== resume.track_id),
-        deviceLabel: resume.device_name || resume.device || 'другого устройства',
-      })
-    } catch {
-      /* best-effort */
-    }
-  }
-
-  const refreshSeedCapsule = async () => {
-    try {
-      if (!isBrainActive()) {
-        setSeedCapsule(null)
-        return
-      }
-      setSeedCapsule(await waveSeedGet())
-    } catch {
-      /* best-effort */
-    }
-  }
-
-  useEffect(() => {
-    void refreshResumePill()
-    void refreshSeedCapsule()
-    const t = setInterval(() => {
-      void refreshResumePill()
-      void refreshSeedCapsule()
-    }, 30000)
-    const onSeed = () => void refreshSeedCapsule()
-    try {
-      window.addEventListener('kfbrain-seed-changed', onSeed)
-    } catch { /* ignore */ }
-    return () => {
-      clearInterval(t)
-      try {
-        window.removeEventListener('kfbrain-seed-changed', onSeed)
-      } catch { /* ignore */ }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const handleResumePill = async () => {
-    if (!resumePill) return
-    try {
-      const song = await subsonic.songs.getSong(resumePill.targetId).catch(() => null)
-      if (!song) {
-        toast.error('Трек с телефона не найден в библиотеке')
-        return
-      }
-      const rest = (
-        await Promise.all(
-          resumePill.queue.map((qid) => subsonic.songs.getSong(qid).catch(() => null)),
-        )
-      ).filter((s): s is ISong => !!s)
-      setSongList([song as ISong, ...rest], 0)
-      if (resumePill.pos > 0) {
-        const pos = resumePill.pos
-        setTimeout(() => {
-          try {
-            usePlayerStore.getState().actions.setProgress(pos)
-          } catch { /* best-effort */ }
-        }, 800)
-      }
-      toast.success('Продолжили с телефона', { autoClose: 2000 })
-      setResumePill(null)
-    } catch {
-      toast.error('Не получилось продолжить с телефона')
-    }
-  }
 
   // Генерация плейлиста "Моя Волна"
   const handlePlayMyWave = async () => {
+    // Волна уже идёт — не генерируем новую, а продолжаем текущую.
+    // Обычный запуск волны — сид («В стиле: …») сбрасывается, иначе капсула
+    // на главной продолжит врать, что лента посажена на артиста.
+    clearWaveSeed()
+    if (isWaveActive && !isGenerating) {
+      const st = usePlayerStore.getState()
+      if (!st.playerState.isPlaying) {
+        st.playerState.isPlaying = true
+        usePlayerStore.setState({ playerState: { ...st.playerState } })
+        document
+          .querySelector('audio')
+          ?.play()
+          .catch(() => undefined)
+      }
+      return
+    }
     if (isGenerating) return
 
     setIsGenerating(true)
 
     try {
       // Загружаем настройки из localStorage
-      const settingsRaw = JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
-      
+      const settingsRaw = JSON.parse(
+        localStorage.getItem('my-wave-settings') || '{}',
+      )
+
       // Проверяем есть ли реальные настройки
       const hasSettings = settingsRaw && Object.keys(settingsRaw).length > 0
       const settings = hasSettings ? settingsRaw : undefined
-      
+
       console.log('[HeroMyWave] Using settings:', settings)
 
-      // Brain первый (если выбран и подключен) — играет ровно то, что отдал мозг.
-      // Тихий фолбек на локальный ML ниже.
-      if (getWaveSource() === 'brain' && isBrainActive()) {
-        try {
-          resetBrainSessionId()
-          const res = await waveContinue({
-            queue: [],
-            count: 50,
-            settings: mapWaveSettings(settingsRaw),
-            excludeIds: [...(profile.dislikedSongs ?? [])],
-            recentEvents: getRecentBrainEvents(),
-            context: { source: 'my-wave-hero' },
-          })
-          if (res && res.tracks.length > 0) {
-            const loaded = await Promise.all(
-              res.tracks.map((t) =>
-                subsonic.songs.getSong(t.external_id || t.track_id).catch(() => null),
-              ),
-            )
-            const songs = loaded.filter((s): s is ISong => !!s)
-            if (songs.length > 0) {
-              let hint = ''
-              try {
-                const s = settings ?? settingsRaw
-                hint = [s.activity, s.characteristic, s.mood, s.language]
-                  .filter(Boolean)
-                  .map((v: string) => waveLabel(v))
-                  .join(' • ')
-              } catch { /* ignore */ }
-              saveWaveContext(
-                songs.map((s) => s.id),
-                hint,
-                'brain',
-              )
-              setSongList(songs, 0, false)
-              toast.success('🎵 Моя Волна: плейлист готов!', { autoClose: 2000 })
-              return
-            }
-          }
-        } catch {
-          // тихий фолбек на локальную Волну
-        }
-      }
-
       const playlist = await generateMyWavePlaylist(
-        profile.likedSongIds || [],
+        profile.likedSongs || [],
         ratings,
         50,
         true,
-        settings  // Передаем настройки или undefined!
+        settings, // Передаем настройки или undefined!
       )
 
       if (playlist.songs.length > 0) {
         let hint = ''
         try {
-          const s = settings ?? JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
+          const s =
+            settings ??
+            JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
           hint = [s.activity, s.characteristic, s.mood, s.language]
             .filter(Boolean)
             .map((v: string) => waveLabel(v))
-            .join(' • ')
-        } catch { /* ignore */ }
+            .join('• ')
+        } catch {
+          /* ignore */
+        }
         saveWaveContext(
           playlist.songs.map((s: { id: string }) => s.id),
           hint,
           'local',
         )
-        setSongList(
-          playlist.songs,
-          0,
-          false
-        )
+        setSongList(playlist.songs, 0, false)
 
-        toast.success('🎵 Моя Волна: плейлист готов!', {
+        toast.success('Моя Волна: плейлист готов!', {
           autoClose: 2000,
         })
       } else {
@@ -277,18 +132,27 @@ export default function HeroMyWave() {
         <h1 className="hero-title" onClick={handlePlayMyWave}>
           МОЯ ВОЛНА
         </h1>
-        <p className="hero-subtitle">
-          Персональная музыкальная лента
-        </p>
+        <p className="hero-subtitle">Персональная музыкальная лента</p>
 
         <div className="hero-buttons">
           <button
             className="hero-button primary"
             onClick={handlePlayMyWave}
             disabled={isGenerating}
+            title={isWaveActive ? 'Продолжить волну' : 'Собрать новую волну'}
           >
-            <Play className="w-5 h-5 fill-current" />
-            {isGenerating ? 'Генерация...' : 'Воспроизвести'}
+            {isGenerating ? (
+              <RefreshCw className="w-5 h-5 animate-spin" />
+            ) : isWaveActive && isPlaying ? (
+              <Pause className="w-5 h-5 fill-current" />
+            ) : (
+              <Play className="w-5 h-5 fill-current" />
+            )}
+            {isGenerating
+              ? 'Генерация...'
+              : isWaveActive
+                ? 'Продолжить'
+                : 'Воспроизвести'}
           </button>
 
           <button
@@ -300,46 +164,8 @@ export default function HeroMyWave() {
           </button>
         </div>
 
-        {/* W5a: пилюля «Продолжить с …» — персистентная */}
-        {resumePill ? (
-          <button
-            className="hero-resume-pill"
-            onClick={() => void handleResumePill()}
-            title={`Продолжить с ${resumePill.deviceLabel}`}
-          >
-            <Smartphone className="w-4 h-4" />
-            Продолжить с {resumePill.deviceLabel}
-            {resumePill.pos > 0 ? ` — ${formatResumeTime(resumePill.pos)}` : ''}
-          </button>
-        ) : null}
-
-        {/* W4: капсула активного сида радио */}
-        {seedCapsule ? (
-          <div className="hero-seed-capsule">
-            <span className="hero-seed-label">
-              📻 Волна по {seedCapsule.label || seedCapsule.ref}
-            </span>
-            <button
-              className="hero-seed-clear"
-              title="Сбросить сид (волна снова обычная)"
-              onClick={() => {
-                void (async () => {
-                  if (await waveSeedClear()) {
-                    setSeedCapsule(null)
-                    try {
-                      window.dispatchEvent(new Event('kfbrain-seed-changed'))
-                    } catch { /* ignore */ }
-                  }
-                })()
-              }}
-            >
-              ✕
-            </button>
-          </div>
-        ) : null}
-
         {/* Модальное окно настроек */}
-        <MyWaveSettings 
+        <MyWaveSettings
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
           onApplied={handlePlayMyWave}
@@ -481,59 +307,6 @@ export default function HeroMyWave() {
         .hero-button.secondary:hover {
           background: rgba(255, 255, 255, 0.3);
           transform: translateY(-2px);
-        }
-
-        .hero-resume-pill {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          margin-top: 16px;
-          padding: 10px 20px;
-          border-radius: 999px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          border: 1px solid rgba(255, 255, 255, 0.4);
-          background: rgba(0, 0, 0, 0.35);
-          color: white;
-          backdrop-filter: blur(10px);
-          transition: all 200ms ease;
-          animation: fadeInUp 600ms ease-out 400ms backwards;
-        }
-
-        .hero-resume-pill:hover {
-          background: rgba(0, 0, 0, 0.55);
-          transform: translateY(-2px);
-        }
-
-        .hero-seed-capsule {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          margin-top: 12px;
-          margin-left: 8px;
-          padding: 8px 14px;
-          border-radius: 999px;
-          font-size: 13px;
-          font-weight: 600;
-          background: rgba(0, 0, 0, 0.35);
-          color: white;
-          border: 1px dashed rgba(255, 255, 255, 0.4);
-          backdrop-filter: blur(10px);
-          animation: fadeInUp 600ms ease-out 450ms backwards;
-        }
-
-        .hero-seed-clear {
-          cursor: pointer;
-          border: none;
-          background: transparent;
-          color: rgba(255, 255, 255, 0.7);
-          font-size: 13px;
-          padding: 0 2px;
-        }
-
-        .hero-seed-clear:hover {
-          color: white;
         }
 
         @keyframes fadeInUp {

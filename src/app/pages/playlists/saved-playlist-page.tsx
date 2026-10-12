@@ -13,7 +13,6 @@ import {
   Shuffle,
   Trash2,
   Sparkles,
-  Calendar,
   Users,
   Heart,
   GripVertical,
@@ -34,7 +33,6 @@ import {
 } from '@/app/components/ui/dialog'
 import { Input } from '@/app/components/ui/input'
 import { Badge } from '@/app/components/ui/badge'
-import { ScrollArea } from '@/app/components/ui/scroll-area'
 import {
   Tooltip,
   TooltipContent,
@@ -42,7 +40,7 @@ import {
 } from '@/app/components/ui/tooltip'
 import { getGeneratedPlaylistById, deleteGeneratedPlaylist, saveGeneratedPlaylist } from '@/store/generated-playlists.store'
 import { usePlayerActions } from '@/store/player.store'
-import { useDndContext, DndContext, DragEndEvent } from '@dnd-kit/core'
+import { DndContext, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { ISong } from '@/types/responses/song'
@@ -78,10 +76,10 @@ function formatSongDuration(seconds: number): string {
  */
 function getTimeOfDayMixName(): string {
   const hour = new Date().getHours()
-  if (hour >= 5 && hour < 12) return '☀️ Утренний микс'
-  if (hour >= 12 && hour < 18) return '🌞 Дневной микс'
-  if (hour >= 18 && hour < 23) return '🌆 Вечерний микс'
-  return '🌙 Ночной микс'
+  if (hour >= 5 && hour < 12) return 'Утренний микс'
+  if (hour >= 12 && hour < 18) return 'Дневной микс'
+  if (hour >= 18 && hour < 23) return 'Вечерний микс'
+  return 'Ночной микс'
 }
 
 /**
@@ -364,11 +362,11 @@ export default function SavedPlaylistPage() {
       if (currentlyLiked) {
         // Убираем лайк
         await subsonic.star.unstarItem(song.id)
-        toast.info(`💔 Убрано из лайкнутых: ${song.title}`)
+        toast.info(`Убрано из лайкнутых: ${song.title}`)
       } else {
         // Добавляем лайк
         await subsonic.star.starItem(song.id)
-        toast.success(`❤️ Добавлено в лайкнутые: ${song.title}`)
+        toast.success(`Добавлено в лайкнутые: ${song.title}`)
       }
       
       // Перезагружаем данные о лайкнутых треках
@@ -387,7 +385,7 @@ export default function SavedPlaylistPage() {
 
     clearPlayerState()
     setSongList(playlist.songs, 0)
-    toast.success(`▶️ Воспроизведение ${playlist.songs.length} треков`)
+    toast.success(`Воспроизведение ${playlist.songs.length} треков`)
   }
 
   // Перемешать
@@ -397,7 +395,7 @@ export default function SavedPlaylistPage() {
     const shuffled = [...playlist.songs].sort(() => Math.random() - 0.5)
     clearPlayerState()
     setSongList(shuffled, 0)
-    toast.success('🔀 Плейлист перемешан')
+    toast.success('Плейлист перемешан')
   }
 
   // Поделиться плейлистом
@@ -504,7 +502,7 @@ export default function SavedPlaylistPage() {
       // Subsonic API: createPlaylist
       await subsonic.playlists.create(playlistName, playlist.songs.map(s => s.id))
 
-      toast.success(`✅ Плейлист "${playlistName}" создан на сервере!`)
+      toast.success(`Плейлист "${playlistName}" создан на сервере!`)
       setExportDialogOpen(false)
     } catch (error) {
       console.error('Export error:', error)

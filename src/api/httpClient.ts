@@ -1,5 +1,4 @@
 import omit from 'lodash/omit'
-import { getCachedImage } from '@/cache/image'
 import { useAppStore } from '@/store/app.store'
 import { CoverArt } from '@/types/coverArtType'
 import { AuthType } from '@/types/serverConfig'

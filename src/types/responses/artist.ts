@@ -1,9 +1,14 @@
 import { Albums } from './album'
+import { IGenre } from './song'
 import { SubsonicResponse } from './subsonicResponse'
 
 export interface IFeaturedArtist {
   id: string
   name: string
+  /** В contributors из OpenSubsonic приходит, но не всегда — опционально. */
+  coverArt?: string
+  coverArtUrl?: string
+  artistImageUrl?: string
 }
 
 export interface IArtist {
@@ -17,6 +22,10 @@ export interface IArtist {
   sortName?: string
   roles?: string[]
   album?: Albums[]
+  /** Navidrome-расширение: список жанров артиста. */
+  genres?: IGenre[]
+  genre?: string
+  songCount?: number
 }
 
 export interface ISimilarArtist {

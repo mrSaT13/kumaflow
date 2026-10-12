@@ -16,11 +16,39 @@ export interface IServerConfig {
 
 export type PageViewType = 'grid' | 'table'
 
+/**
+ * Флаги страниц и секций сайдбара. Значения живут в app.store (app.store.ts
+ * раздел pages), интерфейс тут просто описывает форму.
+ */
 interface IAppPages {
   showInfoPanel: boolean
   toggleShowInfoPanel: () => void
   hideRadiosSection: boolean
   setHideRadiosSection: (value: boolean) => void
+  hideAudiobooksSection: boolean
+  setHideAudiobooksSection: (value: boolean) => void
+  hideLocalSection: boolean
+  setHideLocalSection: (value: boolean) => void
+  hidePlaylistsSection: boolean
+  setHidePlaylistsSection: (value: boolean) => void
+  hideArtistsSection: boolean
+  setHideArtistsSection: (value: boolean) => void
+  hideTracksSection: boolean
+  setHideTracksSection: (value: boolean) => void
+  hideAlbumsSection: boolean
+  setHideAlbumsSection: (value: boolean) => void
+  hideFavoritesSection: boolean
+  setHideFavoritesSection: (value: boolean) => void
+  hideGenresSection: boolean
+  setHideGenresSection: (value: boolean) => void
+  hidePodcastsSection: boolean
+  setHidePodcastsSection: (value: boolean) => void
+  sidebarSectionOrder: string[]
+  setSidebarSectionOrder: (order: string[]) => void
+  showCachePage: boolean
+  setShowCachePage: (value: boolean) => void
+  autoCacheStarred: boolean
+  setAutoCacheStarred: (value: boolean) => void
   artistsPageViewType: PageViewType
   setArtistsPageViewType: (type: PageViewType) => void
   imagesCacheLayerEnabled: boolean
@@ -100,9 +128,11 @@ interface IAccounts {
 interface IDesktop {
   data: {
     minimizeToTray: boolean
+    launchOnStartup: boolean
   }
   actions: {
     setMinimizeToTray: (value: boolean) => void
+    setLaunchOnStartup: (value: boolean) => void
   }
 }
 

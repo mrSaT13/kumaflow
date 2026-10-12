@@ -3,14 +3,11 @@
  * Перенесено из Content в Appearance
  */
 
-import { useTranslation } from 'react-i18next'
 import { useEffect } from 'react'
 import {
   Content,
-  ContentItem,
   ContentItemForm,
   ContentItemTitle,
-  ContentSeparator,
   Header,
   HeaderDescription,
   HeaderTitle,
@@ -93,7 +90,6 @@ function SortableSectionItem({ id, title, checked, onCheckedChange }: SortableSe
 }
 
 export function SidebarAppearanceSettings() {
-  const { t } = useTranslation()
   const {
     hideRadiosSection,
     setHideRadiosSection,

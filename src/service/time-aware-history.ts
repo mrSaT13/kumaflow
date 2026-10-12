@@ -18,8 +18,6 @@
  * - Трек слушали неделю назад → recencyWeight = 0.3
  */
 
-import { behaviorTracker } from './behavior-tracker'
-import type { PlayEvent } from './behavior-tracker'
 
 export interface TimeAwareScore {
   trackId: string

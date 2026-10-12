@@ -24,7 +24,7 @@ import { logger } from '@/utils/logger'
 import { QualityBadge } from './quality-badge'
 import { DotProgress } from '@/app/components/fullscreen/dot-progress'
 import { SpectrogramProgress } from '@/app/components/fullscreen/spectrogram-progress'
-import { getGenreColor, generateCSSGradient } from '@/utils/genreColors'
+import { generateCSSGradient } from '@/utils/genreColors'
 
 interface PlayerProgressProps {
   audioRef: RefObject<HTMLAudioElement>

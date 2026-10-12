@@ -4,31 +4,31 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useState,
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'react-toastify'
 import { useAudioContext } from '@/app/hooks/use-audio-context'
+import { fadeIn } from '@/features/player/audio-graph'
+import { crossfade } from '@/features/player/crossfade'
+import { getSongStreamUrl } from '@/api/httpClient'
+import { shallow } from 'zustand/shallow'
 import {
   usePlayerActions,
   usePlayerIsPlaying,
   usePlayerMediaType,
   usePlayerVolume,
-  useReplayGainActions,
   useReplayGainState,
   usePlayerStore,
+  selectCurrentSong,
 } from '@/store/player.store'
+import { LoopState } from '@/types/playerContext'
 import { usePlaybackSettings } from '@/store/playback.store'
-import { crossfadeService } from '@/service/crossfade-service'
 import { detectSeekBack, reportSeekBack } from '@/service/brain-events'
-import { getWaveDeviceName, wavePublish } from '@/service/brain-wave'
-import { isBrainActive } from '@/store/brain.store'
 import { offlineService } from '@/service/offline-service'
 import { dualUrlBackgroundService } from '@/service/dual-url-background-service'
 import { cacheService } from '@/service/cache-service'
 import { logger } from '@/utils/logger'
 import { calculateReplayGain, ReplayGainParams } from '@/utils/replayGain'
-import { getSongStreamUrl } from '@/api/httpClient'
 
 type AudioPlayerProps = ComponentPropsWithoutRef<'audio'> & {
   audioRef: RefObject<HTMLAudioElement>
@@ -41,17 +41,14 @@ export function AudioPlayer({
   ...props
 }: AudioPlayerProps) {
   const { t } = useTranslation()
-  const [previousGain, setPreviousGain] = useState(1)
   const { replayGainEnabled, replayGainError } = useReplayGainState()
   const { isSong, isRadio, isPodcast } = usePlayerMediaType()
   const { setPlayingState } = usePlayerActions()
-  const { setReplayGainEnabled, setReplayGainError } = useReplayGainActions()
   const { volume } = usePlayerVolume()
   const isPlaying = usePlayerIsPlaying()
   
   // Crossfade настройки
   const { settings: playbackSettings } = usePlaybackSettings()
-  const [crossfadeNextTrack, setCrossfadeNextTrack] = useState<string | null>(null)
 
   const gainValue = useMemo(() => {
     const audioVolume = volume / 100
@@ -64,26 +61,49 @@ export function AudioPlayer({
     return audioVolume * gain
   }, [replayGain, replayGainEnabled, volume])
 
-  const { resumeContext, setupGain } = useAudioContext(audioRef.current)
+  // Именно сам ref, а не audioRef.current: на рендере .current ещё не задан,
+// и колбэки resumeContext/setupGain иначе остались бы no-op (тишина).
+const { resumeContext, setupGain } = useAudioContext(audioRef)
 
-  const ignoreGain = !isSong || replayGainError
-
-  // Инициализация crossfade
+  // Настоящий кроссфейд: следующий трек играет внахлёст с текущим.
+  // Движок держит собственный второй элемент; этот эффект только передаёт
+  // ему настройки и подписывается на основной элемент.
   useEffect(() => {
-    if (audioRef.current) {
-      crossfadeService.init(audioRef.current)
-      
-      // Настройка параметров из store
-      crossfadeService.configure({
-        duration: playbackSettings.crossfadeSeconds,
-        easing: 'ease-in-out',
-      })
+    if (!playbackSettings.crossfadeEnabled) {
+      crossfade.detach()
+      return
     }
-    
-    return () => {
-      crossfadeService.destroy()
-    }
-  }, [audioRef, playbackSettings.crossfadeSeconds])
+
+    crossfade.configure(playbackSettings.crossfadeSeconds)
+
+    const { playNextSong } = usePlayerStore.getState().actions
+
+    crossfade.attach({
+      main: () => audioRef.current,
+      baseVolume: () => gainValue,
+      nextSrc: () => {
+        const st = usePlayerStore.getState()
+        const { currentList, currentSongIndex } = st.songlist
+        const next = currentList[currentSongIndex + 1]
+        // repeat one: трек не доигрывает, накладываться не на что
+        if (!next || st.playerState.loopState === LoopState.One) return null
+        if (next.isAudiobook || next.isLocal) return null
+        return getSongStreamUrl(next.id)
+      },
+      advance: () => playNextSong(),
+      enabled: () => {
+        const st = usePlayerStore.getState()
+        return (
+          st.playerState.isPlaying &&
+          st.playerState.mediaType === 'song' &&
+          st.playerState.loopState !== LoopState.One &&
+          Boolean(st.actions.hasNextSong())
+        )
+      },
+    })
+
+    return () => crossfade.detach()
+  }, [audioRef, playbackSettings.crossfadeEnabled, playbackSettings.crossfadeSeconds, gainValue])
 
   // Проверка офлайн-режима и переключение на закешированный URL
   useEffect(() => {
@@ -113,14 +133,14 @@ export function AudioPlayer({
     }
   }, [props.src, isSong])
 
-  useEffect(() => {
-    if (ignoreGain || !audioRef.current) return
+  // Громкость идёт только через setupGain → applyGain. Раньше она
+// применялась ещё и напрямую в элемент (player.tsx + volume.tsx),
+// вместе с gain-узлом это давало v²: ползунок на 50% звучал как 25%.
+useEffect(() => {
+  if (!audioRef.current) return
 
-    if (gainValue === previousGain) return
-
-    setupGain(gainValue, replayGain)
-    setPreviousGain(gainValue)
-  }, [audioRef, ignoreGain, gainValue, previousGain, replayGain, setupGain])
+  setupGain(gainValue, replayGain)
+}, [audioRef, gainValue, replayGain, setupGain])
 
   const handleSongError = useCallback(() => {
     const audio = audioRef.current
@@ -146,22 +166,24 @@ export function AudioPlayer({
       return
     }
 
-    // Другие ошибки - старое поведение
+    // Ошибка загрузки трека не имеет отношения к ReplayGain и тем более не
+    // повод перезагружать приложение. Раньше здесь стояло:
+    //   setReplayGainEnabled(false); setReplayGainError(true); window.location.reload()
+    // Условие `replayGainEnabled || !replayGainError` истинно всегда, когда
+    // error ещё не выставлен, то есть ЛЮБОЙ битый трек перезагружал плеер.
+    // А replayGainError персистится в player_store, поэтому ReplayGain
+    // после этого выключался навсегда, вместе с ним падал resetRefs(), и
+    // ассоциация element<->source в браузере ломалась до конца сессии.
     toast.error(t('warnings.songError'))
 
-    if (replayGainEnabled || !replayGainError) {
-      setReplayGainEnabled(false)
-      setReplayGainError(true)
-      window.location.reload()
+    // Просто уходим на следующий трек. Действия лежат в actions,
+    // а не в корне стора — здесь раньше вызывался undefined.
+    try {
+      usePlayerStore.getState().actions.playNextSong()
+    } catch {
+      /* очередь пуста — нечего переключать */
     }
-  }, [
-    audioRef,
-    replayGainEnabled,
-    replayGainError,
-    setReplayGainEnabled,
-    setReplayGainError,
-    t,
-  ])
+  }, [audioRef, t])
 
   // Обработчик ошибок сети - бесшовное переключение URL
   const handleNetworkError = useCallback(async () => {
@@ -209,7 +231,7 @@ export function AudioPlayer({
           await audio.play()
 
           // Кэшируем текущий трек пока он играет (для бесшовного переключения)
-          const { currentSong } = usePlayerStore.getState().songlist
+          const currentSong = selectCurrentSong(usePlayerStore.getState())
           if (currentSong?.id && !currentSong.isLocal) {
             // Кэшируем в фоне без ожидания
             cacheService.cacheAudioFile(currentSong.id).catch((err) => {
@@ -244,105 +266,32 @@ export function AudioPlayer({
     if (isSong || isPodcast) handleSong()
   }, [audioRef, handleSongError, isPlaying, isSong, isPodcast, resumeContext])
 
-  // ✅ Crossfade - плавные переходы между треками
-  // Обработчик для crossfade - срабатывает когда трек заканчивается
+  // Громкость на старте трека. Нужен только когда кроссфейд выключен: при
+  // включённом кроссфейде переход делает движок, и поднимать громкость
+  // основного элемента ещё раз означало бы двойной подъём на стыке.
   useEffect(() => {
-    const audio = audioRef.current
-    if (!audio || !playbackSettings.crossfadeEnabled) return
+    if (playbackSettings.crossfadeEnabled) return
 
-    const handleEnded = async () => {
-      // Если есть следующий трек для crossfade - выполняем переход
-      if (crossfadeNextTrack) {
-        console.log('[Audio] Track ended, starting crossfade...')
+    const unsubscribe = usePlayerStore.subscribe(
+      (state) =>
+        [selectCurrentSong(state)?.id, state.playerState.isPlaying] as const,
+      (prev, next) => {
+        const trackChanged = prev[0] !== next[0]
+        if (!trackChanged || !next[1]) return
 
-        try {
-          // Подготавливаем следующий трек если еще не готов
-          if (!crossfadeService.isReady()) {
-            await crossfadeService.prepareNextTrack(crossfadeNextTrack)
-          }
+        fadeIn(audioRef.current)
+      },
+      { equalityFn: shallow },
+    )
 
-          // Начинаем воспроизведение следующего трека (тихо)
-          const nextAudio = crossfadeService['nextAudio']
-          if (nextAudio) {
-            nextAudio.muted = false // Включаем звук
-            nextAudio.volume = 0
-            await nextAudio.play()
+    return unsubscribe
+  }, [audioRef, playbackSettings.crossfadeEnabled])
 
-            // Выполняем crossfade
-            await crossfadeService.crossfade(() => {
-              console.log('[Audio] Crossfade transition completed, switching track...')
-              // Переключаем трек в плеере
-              const { playNextSong } = usePlayerStore.getState()
-              playNextSong()
-              setCrossfadeNextTrack(null)
-            })
-          }
-        } catch (error) {
-          console.error('[Audio] Crossfade failed:', error)
-          // Fallback - обычное переключение
-          setCrossfadeNextTrack(null)
-          const { playNextSong } = usePlayerStore.getState()
-          playNextSong()
-        }
-      }
-      // Если crossfadeNextTrack не установлен - обычное переключение (плеер сам переключит)
-    }
-
-    audio.addEventListener('ended', handleEnded)
-    return () => audio.removeEventListener('ended', handleEnded)
-  }, [audioRef, playbackSettings.crossfadeEnabled, crossfadeNextTrack])
-
-  // Обработчик времени для подготовки crossfade
+  // Пауза или смена трека голосом — кроссфейд надо отменить, иначе компаньон
+  // продолжит играть сам по себе.
   useEffect(() => {
-    const audio = audioRef.current
-    if (!audio || !playbackSettings.crossfadeEnabled) return
-
-    const handleTimeUpdate = async () => {
-      const { currentSong, currentSongIndex, songlist } = usePlayerStore.getState()
-
-      // Если до конца трека осталось меньше crossfade секунд
-      const timeToEnd = audio.duration - audio.currentTime
-      const crossfadeThreshold = playbackSettings.crossfadeSeconds
-
-      if (timeToEnd <= crossfadeThreshold && timeToEnd > 0) {
-        // Получаем следующий трек
-        const nextIndex = currentSongIndex + 1
-        if (nextIndex < songlist.currentList.length) {
-          const nextSong = songlist.currentList[nextIndex]
-          if (nextSong?.id) {
-            // Для локальных треков используем url из трека или создаём file:// URL
-            // Для серверных треков используем /rest/stream
-            let nextSrc: string
-            
-            if ((nextSong as any).isLocal) {
-              // Если есть готовый url (из IPC), используем его
-              if ((nextSong as any).url) {
-                nextSrc = (nextSong as any).url
-              } else if ((nextSong as any).localPath) {
-                console.warn('[Audio] Local track without url, this should not happen!')
-                return
-              } else {
-                console.warn('[Audio] Local track without url or localPath:', nextSong.title)
-                return
-              }
-            } else {
-              // Серверный трек - используем актуальный URL из appStore
-              nextSrc = getSongStreamUrl(nextSong.id)
-            }
-
-            // Если это не тот же трек что уже готовится
-            if (crossfadeNextTrack !== nextSrc) {
-              console.log(`[Audio] Preparing crossfade: ${timeToEnd.toFixed(1)}s to end, isLocal: ${(nextSong as any).isLocal}`)
-              setCrossfadeNextTrack(nextSrc)
-            }
-          }
-        }
-      }
-    }
-
-    audio.addEventListener('timeupdate', handleTimeUpdate)
-    return () => audio.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [audioRef, playbackSettings.crossfadeEnabled, playbackSettings.crossfadeSeconds])
+    if (!isPlaying) crossfade.cancel()
+  }, [isPlaying])
 
   useEffect(() => {
     async function handleRadio() {
@@ -386,7 +335,7 @@ export function AudioPlayer({
       const nearEnd =
         Number.isFinite(dur) && dur > 0 && lastPos > dur - 2
       if (!nearEnd && detectSeekBack(lastPos, cur)) {
-        const id = usePlayerStore.getState().songlist.currentSong?.id
+        const id = selectCurrentSong(usePlayerStore.getState())?.id
         if (id) {
           reportSeekBack(id, cur)
           // Потрековый счётчик для мозга (sync-from-mobile)
@@ -398,24 +347,6 @@ export function AudioPlayer({
         }
       }
       lastPos = cur
-      // 1.6.4: любая перемотка — сразу в живую очередь волны (force, мимо троттлинга)
-      if (!nearEnd && isBrainActive()) {
-        try {
-          const pst = usePlayerStore.getState()
-          const durSec = Number.isFinite(dur) && dur > 0 ? Math.floor(dur) : Math.floor(pst.playerState.currentDuration || 0)
-          wavePublish(
-            pst.songlist.currentList.map((t) => t.id).filter(Boolean),
-            pst.songlist.currentSong?.id ?? null,
-            {
-              positionSec: Math.floor(cur),
-              durationSec: durSec,
-              paused: !pst.playerState.isPlaying,
-              deviceName: getWaveDeviceName(),
-              force: true,
-            },
-          )
-        } catch { /* best-effort */ }
-      }
     }
 
     audio.addEventListener('timeupdate', onTimeUpdate)

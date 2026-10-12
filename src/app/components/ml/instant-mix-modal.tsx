@@ -23,6 +23,8 @@ export function InstantMixModal({ open, onClose }: InstantMixModalProps) {
   }>({})
   const [selectedType, setSelectedType] = useState<'track' | 'artist' | 'genre' | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Имя выбранного — без него очередь пришлось бы называть просто «Радио».
+  const [selectedTitle, setSelectedTitle] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
 
   const { setSongList } = usePlayerActions()
@@ -58,9 +60,10 @@ export function InstantMixModal({ open, onClose }: InstantMixModalProps) {
   }
 
   // Выбор трека/артиста/жанра
-  const handleSelect = (type: 'track' | 'artist' | 'genre', id: string) => {
+  const handleSelect = (type: 'track' | 'artist' | 'genre', id: string, title?: string) => {
     setSelectedType(type)
     setSelectedId(id)
+    setSelectedTitle(title ?? null)
   }
 
   // Генерация микса
@@ -73,29 +76,33 @@ export function InstantMixModal({ open, onClose }: InstantMixModalProps) {
     setIsGenerating(true)
     try {
       let songs
+      let queueName = 'Instant Mix'
 
       switch (selectedType) {
         case 'track':
           const trackRadio = await generateTrackRadio(selectedId, 25)
           songs = trackRadio.songs
+          queueName = `Радио трека · ${selectedTitle ?? 'трек'}`
           trackEvent('radio_started', { type: 'instant-mix-track', songId: selectedId })
           break
 
         case 'artist':
           const artistRadio = await generateArtistRadio(selectedId, 50)
           songs = artistRadio.songs
+          queueName = `Радио · ${selectedTitle ?? 'артист'}`
           trackEvent('radio_started', { type: 'instant-mix-artist', artistId: selectedId })
           break
 
         case 'genre':
           const genrePlaylist = await generateGenrePlaylist(selectedId, 30)
           songs = genrePlaylist.songs
+          queueName = `Микс · ${selectedTitle ?? selectedId}`
           trackEvent('playlist_generated', { type: 'instant-mix-genre', genre: selectedId })
           break
       }
 
       if (songs && songs.length > 0) {
-        setSongList(songs, 0)
+        setSongList(songs, 0, false, undefined, queueName)
         toast('🎵 Instant Mix запущен!', { type: 'success' })
         onClose()
       } else {
@@ -115,6 +122,7 @@ export function InstantMixModal({ open, onClose }: InstantMixModalProps) {
     setSearchResults({})
     setSelectedType(null)
     setSelectedId(null)
+    setSelectedTitle(null)
     onClose()
   }
 
@@ -166,7 +174,7 @@ export function InstantMixModal({ open, onClose }: InstantMixModalProps) {
                 {searchResults.tracks.slice(0, 5).map((track: any) => (
                   <button
                     key={track.id}
-                    onClick={() => handleSelect('track', track.id)}
+                    onClick={() => handleSelect('track', track.id, track.title)}
                     className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
                       selectedType === 'track' && selectedId === track.id
                         ? 'bg-primary/10 border-primary'
@@ -199,7 +207,7 @@ export function InstantMixModal({ open, onClose }: InstantMixModalProps) {
                 {searchResults.artists.slice(0, 5).map((artist: any) => (
                   <button
                     key={artist.id}
-                    onClick={() => handleSelect('artist', artist.id)}
+                    onClick={() => handleSelect('artist', artist.id, artist.name)}
                     className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
                       selectedType === 'artist' && selectedId === artist.id
                         ? 'bg-primary/10 border-primary'

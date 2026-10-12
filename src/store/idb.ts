@@ -20,14 +20,4 @@ export const idbStorage = {
       .then(() => callback?.())
       .catch(() => callback?.())
   },
-  // Promise-вариант для awaited чтений (rehydrate очереди, before-quit flush).
-  // Возвращает null при отсутствии ключа или ошибке — как колбэк-версия.
-  getItemAsync: async <T>(name: string): Promise<T | null> => {
-    try {
-      const value = await get<T>(name)
-      return value ?? null
-    } catch {
-      return null
-    }
-  },
 }

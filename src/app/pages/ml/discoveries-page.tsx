@@ -8,14 +8,13 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Play, Calendar, Sparkles, Music } from 'lucide-react'
+import { Play, Calendar, Sparkles, PartyPopper } from 'lucide-react'
 import { Card, CardContent } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
 import { usePlayerActions } from '@/store/player.store'
 import { toast } from 'react-toastify'
 import { getAllHolidaysWithCustoms } from '@/service/ics-parser'
 import { getAllGeneratedPlaylists } from '@/store/generated-playlists.store'
-import { getActiveHolidays } from '@/service/holidays'
 import type { Holiday } from '@/service/holidays'
 
 export default function DiscoveriesPage() {
@@ -97,7 +96,7 @@ export default function DiscoveriesPage() {
   const playPlaylist = (playlist: any) => {
     if (playlist.songs && playlist.songs.length > 0) {
       setSongList(playlist.songs, 0)
-      toast.success(`▶️ Запущено: ${playlist.name}`, { autoClose: 2000 })
+      toast.success(`Запущено: ${playlist.name}`, { autoClose: 2000 })
     }
   }
 
@@ -151,7 +150,7 @@ export default function DiscoveriesPage() {
                 <CardContent className="p-0">
                   {/* Header */}
                   <div className="p-6 bg-gradient-to-br from-red-500 to-yellow-500 text-white text-center">
-                    <div className="text-5xl mb-2">{holiday.icon}</div>
+                    <div className="mb-2 flex justify-center"><PartyPopper className="w-12 h-12" /></div>
                     <h3 className="font-bold text-lg">{playlist.name}</h3>
                   </div>
 

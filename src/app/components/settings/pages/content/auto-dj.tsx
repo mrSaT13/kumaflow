@@ -1,6 +1,12 @@
 import { useTranslation } from 'react-i18next'
 import { useAutoDJSettings, useAutoDJActions } from '@/store/auto-dj.store'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '@/app/components/ui/card'
 import { Switch } from '@/app/components/ui/switch'
 import { Label } from '@/app/components/ui/label'
 import { Slider } from '@/app/components/ui/slider'
@@ -9,7 +15,8 @@ import { Badge } from '@/app/components/ui/badge'
 export function AutoDJContent() {
   const { t } = useTranslation()
   const settings = useAutoDJSettings()
-  const { setItemCount, setTiming, toggleEnabled } = useAutoDJActions()
+  const { setItemCount, setTiming, setQueueCap, toggleEnabled } =
+    useAutoDJActions()
 
   return (
     <Card>
@@ -28,10 +35,7 @@ export function AutoDJContent() {
               Автоматически добавлять похожие треки когда очередь заканчивается
             </p>
           </div>
-          <Switch
-            checked={settings.enabled}
-            onCheckedChange={toggleEnabled}
-          />
+          <Switch checked={settings.enabled} onCheckedChange={toggleEnabled} />
         </div>
 
         {/* Количество треков */}
@@ -72,13 +76,52 @@ export function AutoDJContent() {
           </p>
         </div>
 
+        {/* Потолок очереди */}
+        <div className="space-y-2">
+          <div className="flex justify-between">
+            <Label>
+              Потолок очереди:{' '}
+              {settings.queueCap > 0
+                ? `${settings.queueCap} трек(ов)`
+                : 'выключен'}
+            </Label>
+            <Badge variant={settings.queueCap > 0 ? 'secondary' : 'outline'}>
+              {settings.queueCap > 0 ? settings.queueCap : '∞'}
+            </Badge>
+          </div>
+          <Slider
+            value={[settings.queueCap]}
+            min={3}
+            max={50}
+            step={1}
+            onValueChange={(val) => setQueueCap(val[0])}
+            disabled={!settings.enabled}
+          />
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              Сколько треков авто-микс может держать в очереди. Длинный хвост —
+              это задержка обратной связи: решение мозга играется часами, и
+              смена настроения или скип доходят слишком поздно.
+            </p>
+            {settings.queueCap > 0 && (
+              <button
+                type="button"
+                onClick={() => setQueueCap(0)}
+                className="shrink-0 ml-3 text-xs underline text-muted-foreground hover:text-foreground"
+              >
+                без потолка
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Информация */}
         <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-          <h4 className="font-medium text-blue-600 mb-2">
-            ℹ️ Как это работает
-          </h4>
+          <h4 className="font-medium text-blue-600 mb-2">ℹ️ Как это работает</h4>
           <ul className="text-sm text-muted-foreground space-y-1">
-            <li>• Когда очередь заканчивается, Auto DJ анализирует текущий трек</li>
+            <li>
+              • Когда очередь заканчивается, Auto DJ анализирует текущий трек
+            </li>
             <li>• Находит похожие треки на основе жанра и артиста</li>
             <li>• Автоматически добавляет их в очередь</li>
             <li>• Непрерывное воспроизведение без пауз!</li>

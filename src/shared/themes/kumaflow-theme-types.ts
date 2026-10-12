@@ -51,8 +51,13 @@ export interface KumaFlowTheme {
   id: string;
   name: string;
   mode: ThemeMode;
-  colors: ThemeColors;
-  app: ThemeApp;
+  /**
+   * Палитра объявлена частично-обязательной не из лени: в KUMAFLOW_THEMES все
+   * темы заведены с пустыми цветами — набор палитр ещё не наполнен.
+   * applyTheme просто не выставит отсутствующие CSS-переменные.
+   */
+  colors: Partial<ThemeColors>;
+  app: Partial<ThemeApp>;
   description?: string;
 }
 

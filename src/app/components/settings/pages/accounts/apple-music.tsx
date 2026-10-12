@@ -4,7 +4,7 @@ import { Switch } from '@/app/components/ui/switch'
 import { Label } from '@/app/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { appleMusicService } from '@/service/apple-music-api'
-import { COUNTRY_CODES, type CountryCode } from '@/service/apple-music-api'
+import { type CountryCode } from '@/service/apple-music-api'
 import { toast } from 'react-toastify'
 
 // Список стран для отображения

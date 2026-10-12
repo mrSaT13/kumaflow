@@ -1,8 +1,7 @@
-import { X } from 'lucide-react'
 import { memo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { Button } from '@/app/components/ui/button'
+import { X } from 'lucide-react'
 import { Drawer, DrawerContent, DrawerTitle } from '@/app/components/ui/drawer'
+import { Button } from '@/app/components/ui/button'
 import { useAppWindow } from '@/app/hooks/use-app-window'
 import { usePlayerFullscreen } from '@/store/player.store'
 import { FullscreenBackdrop } from './backdrop'
@@ -15,7 +14,6 @@ const MemoFullscreenBackdrop = memo(FullscreenBackdrop)
 export function FullscreenMode() {
   const { handleDrawerAnimationEnd } = useAppWindow()
   const { isFullscreen, setIsFullscreen } = usePlayerFullscreen()
-  const { t } = useTranslation()
   // Очередь и текст — панели по кнопкам (оверлей на обложке / шапка панели),
   // а не верхние табы. На узких экранах — выезжающая панель справа.
   const [panel, setPanel] = useState<FullscreenPanel>('context')
@@ -46,7 +44,7 @@ export function FullscreenMode() {
               variant="ghost"
               size="icon"
               onClick={() => setIsFullscreen(false)}
-              title={t('fullscreen.collapse')}
+              title="Свернуть"
               className="w-9 h-9 rounded-full text-foreground/60 hover:text-foreground hover:bg-foreground/10 transition-all"
             >
               <X className="w-[18px] h-[18px]" strokeWidth={2} />
@@ -54,23 +52,18 @@ export function FullscreenMode() {
           </div>
 
           {/* Центр: обложка (центрируется в свободной зоне) + панель у правого края как у ЯМузыки */}
-          <div className="flex flex-1 min-h-0 max-h-full items-stretch overflow-hidden">
-            <div className="flex-1 min-w-0 min-h-0 max-h-full flex justify-center overflow-hidden">
+          <div className="flex flex-1 min-h-0 items-stretch">
+            <div className="flex-1 min-w-0 flex justify-center">
               <CoverColumn panel={panel} setPanel={setPanel} />
             </div>
             {/* Широкий экран: панель схлопывается с анимацией, обложка плавно центрируется */}
             <div
               className={`hidden lg:flex shrink-0 flex-col min-h-0 py-2 overflow-hidden transition-all duration-300 ease-out mr-3 2xl:mr-6 ${
-                panel !== 'hidden'
-                  ? 'w-[360px] 2xl:w-[400px] opacity-100'
-                  : 'w-0 opacity-0'
+                panel !== 'hidden' ? 'w-[360px] 2xl:w-[400px] opacity-100' : 'w-0 opacity-0'
               }`}
             >
               <div className="w-[360px] 2xl:w-[400px] h-full min-h-0 flex flex-col">
-                <ContextPanel
-                  panel={panel === 'hidden' ? 'context' : panel}
-                  setPanel={setPanel}
-                />
+                <ContextPanel panel={panel === 'hidden' ? 'context' : panel} setPanel={setPanel} />
               </div>
             </div>
           </div>
@@ -86,11 +79,7 @@ export function FullscreenMode() {
             колонка не сплющивается */}
         {panel !== 'hidden' && (
           <div className="lg:hidden absolute inset-0 z-20 bg-background/55 backdrop-blur-2xl p-4 pt-10 flex flex-col min-h-0">
-            <ContextPanel
-              panel={panel}
-              setPanel={setPanel}
-              onClose={() => setPanel('hidden')}
-            />
+            <ContextPanel panel={panel} setPanel={setPanel} onClose={() => setPanel('hidden')} />
           </div>
         )}
       </DrawerContent>

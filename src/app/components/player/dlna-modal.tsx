@@ -9,7 +9,8 @@ import {
   DialogDescription,
 } from '@/app/components/ui/dialog'
 import { toast } from 'react-toastify'
-import { usePlayerStore } from '@/store/player.store'
+import { usePlayerStore, selectCurrentSong,
+} from '@/store/player.store'
 
 interface DLNADevice {
   id: string
@@ -31,7 +32,7 @@ export function DLNAModal({ open, onOpenChange }: DLNAModalProps) {
   const [currentDevice, setCurrentDevice] = useState<DLNADevice | null>(null)
   const [scanProgress, setScanProgress] = useState(0)
 
-  const currentSong = usePlayerStore((state) => state.songlist.currentSong)
+  const currentSong = usePlayerStore(selectCurrentSong)
 
   // Сбрасываем устройства при открытии
   useEffect(() => {

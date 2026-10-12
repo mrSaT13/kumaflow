@@ -51,6 +51,7 @@
     --ring: 160 84% 39%;
   }
 
+  /* Polar Dark / Polar Light — возвращены из 1.6.6 */
   .polar-dark {
     --background: 210 47% 13%;
     --background-foreground: 210 47% 16%;

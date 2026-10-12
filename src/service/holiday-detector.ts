@@ -21,7 +21,8 @@ export interface HolidayEvent {
 }
 
 // Праздники и события (можно расширить)
-const HOLIDAYS: Record<string, Omit<HolidayEvent, 'id' | 'date'>> = {
+// id подставляется при чтении, date — опционально (см. 'new-year' без даты)
+const HOLIDAYS: Record<string, Omit<HolidayEvent, 'id'> & { date?: Date }> = {
   // Государственные праздники
   'new-year': {
     name: '🎄 Новый Год',

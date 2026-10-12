@@ -98,6 +98,17 @@ export interface ISong {
   key?: number
   keyScale?: string
   analysisStatus?: 'pending' | 'processing' | 'completed' | 'failed'
+  /**
+   * Поля, которые добавляет сам плеер (локальная библиотека, локальный ML,
+   * Navidrome-расширения). В ответе Subsonic их нет, поэтому опциональны.
+   */
+  isLocal?: boolean
+  localPath?: string
+  coverArtUrl?: string
+  userFavorite?: boolean
+  artistGenres?: string[]
+  trackMoods?: string[]
+  musicBrainzGenres?: string[]
 }
 
 export interface SongList {

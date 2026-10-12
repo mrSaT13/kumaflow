@@ -8,7 +8,7 @@ import { usePlayerActions } from '@/store/player.store'
 import { getRandomSongs } from '@/service/subsonic-api'
 import { getSimpleCoverArtUrl } from '@/api/httpClient'
 import { toast } from 'react-toastify'
-import { Play, Loader2, Heart } from 'lucide-react'
+import { Play, Loader2, Heart, Music} from 'lucide-react'
 import { useML } from '@/store/ml.store'
 import type { ISong } from '@/types/responses/song'
 
@@ -30,7 +30,7 @@ export default function Premieres() {
       try {
         const songs = await getRandomSongs(20)
         // Берем треки которые еще не лайкнуты (новые для пользователя)
-        const newSongs = songs.filter(s => !profile.likedSongIds?.includes(s.id))
+        const newSongs = songs.filter(s => !profile.likedSongs?.includes(s.id))
         
         // Добавляем URL для обложек используя правильную функцию
         const premieresWithImages = newSongs.map(song => ({
@@ -45,7 +45,7 @@ export default function Premieres() {
       }
     }
     loadPremieres()
-  }, [profile.likedSongIds])
+  }, [profile.likedSongs])
 
   const handlePlayPremiere = async (trackId: string) => {
     const track = premieres.find(t => t.id === trackId)
@@ -60,7 +60,7 @@ export default function Premieres() {
         false
       )
 
-      toast.success(`▶️ ${track.title}: запущено`, {
+      toast.success(`${track.title}: запущено`, {
         autoClose: 2000,
       })
     } catch (error) {
@@ -80,7 +80,7 @@ export default function Premieres() {
       newLiked.add(trackId)
     }
     setLikedTracks(newLiked)
-    toast.success('❤️ Добавлено в избранное', {
+    toast.success('Добавлено в избранное', {
       autoClose: 1500,
     })
   }
@@ -97,7 +97,7 @@ export default function Premieres() {
         false
       )
 
-      toast.success(`▶️ Премьеры: ${premieres.length} треков`, {
+      toast.success(`Премьеры: ${premieres.length} треков`, {
         autoClose: 2000,
       })
     } catch (error) {
@@ -186,7 +186,7 @@ export default function Premieres() {
                 />
               ) : null}
               <div className={`cover-placeholder ${track.coverUrl ? '' : ''}`}>
-                <span className="cover-icon">🎵</span>
+                <span className="cover-icon"><Music className="w-8 h-8" /></span>
               </div>
             </div>
             

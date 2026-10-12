@@ -6,27 +6,38 @@ import { devtools, persist, subscribeWithSelector } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { shallow } from 'zustand/shallow'
 import { createWithEqualityFn } from 'zustand/traditional'
+import { behaviorTracker } from '@/service/behavior-tracker'
+import { queueBrainEvent } from '@/service/brain-events'
+import { wavePublish } from '@/service/brain-wave'
+import { cacheService } from '@/service/cache-service'
+import {
+  trackEvent,
+  trackRepeatModeEnabled,
+  trackSkipAfterHalf,
+} from '@/service/ml-event-tracker'
+import { moodDriftDetector } from '@/service/mood-drift-detector'
+import { myWaveDiscoveryTracker } from '@/service/mywave-discoveries'
 import { subsonic } from '@/service/subsonic'
+import { timeAwareHistory } from '@/service/time-aware-history'
 import { IPlayerContext, ISongList, LoopState } from '@/types/playerContext'
 import { ISong } from '@/types/responses/song'
 import { areSongListsEqual } from '@/utils/compareSongLists'
 import { isDesktop } from '@/utils/desktop'
 import { discordRpc } from '@/utils/discordRpc'
 import { addNextSongList, shuffleSongList } from '@/utils/songListFunctions'
-import { idbStorage } from './idb'
-import { trackRepeatModeEnabled, trackSkipAfterHalf, trackEvent } from '@/service/ml-event-tracker'
-import { cacheService } from '@/service/cache-service'
 import { useAppStore } from './app.store'
-import { behaviorTracker } from '@/service/behavior-tracker'
-import { queueBrainEvent } from '@/service/brain-events'
-import { getWaveDeviceName, wavePublish } from '@/service/brain-wave'
-import { moodDriftDetector } from '@/service/mood-drift-detector'
-import { timeAwareHistory } from '@/service/time-aware-history'
-import { myWaveDiscoveryTracker } from '@/service/mywave-discoveries'
+import { idbStorage } from './idb'
 
 const miniStores = {
   songlist: 'player_songlist',
 }
+
+/**
+ * Стабильный «пустой трек» для selectCurrentSong. Один объект на модуль:
+ * селекторы подписаны через shallow, и новый литерал на каждый вызов
+ * ломал бы равенство. Контракт селектора — «всегда ISong», см. ниже.
+ */
+const EMPTY_SONG = {} as ISong
 
 const blurSettings = {
   min: 20,
@@ -43,7 +54,6 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
             shuffledList: [],
             originalList: [],
             originalSongIndex: 0,
-            currentSong: {} as ISong,
             currentList: [],
             currentSongIndex: 0,
             radioList: [],
@@ -179,7 +189,16 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
             },
           },
           actions: {
-            setSongList: (songlist, index, shuffle = false, sharedTracksInfo?: Record<string, { accounts: string[]; totalPlays: number; songKey?: string }>, playlistName?: string) => {
+            setSongList: (
+              songlist,
+              index,
+              shuffle = false,
+              sharedTracksInfo?: Record<
+                string,
+                { accounts: string[]; totalPlays: number; songKey?: string }
+              >,
+              playlistName?: string,
+            ) => {
               const { currentList, currentSongIndex } = get().songlist
 
               const listsAreEqual = areSongListsEqual(currentList, songlist)
@@ -193,6 +212,16 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 set((state) => {
                   state.playerState.isPlaying = true
                   state.songlist.currentSongIndex = index
+                  // Раньше playlistName здесь молча терялся: список тот же,
+                  // меняем только индекс — и шапка с фуллскрином продолжали
+                  // показывать имя прошлого плейлиста. Именно этот путь и
+                  // срабатывал на втором нажатии «Радио по артисту»: список
+                  // совпадает байт-в-байт (скоринг в мозге детерминирован
+                  // через jitter_seed), из-за чего капсула на главной
+                  // оставалась «Моя коллекция».
+                  if (playlistName) {
+                    state.songlist.currentPlaylistName = playlistName
+                  }
                 })
                 return
               }
@@ -226,21 +255,12 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 })
               }
             },
-            setCurrentSong: () => {
-              const { currentList, currentSongIndex } = get().songlist
-
-              if (currentList.length > 0) {
-                set((state) => {
-                  state.songlist.currentSong = currentList[currentSongIndex]
-                })
-              }
-            },
             playSong: (song) => {
               const { isPlaying } = get().playerState
               const songIsAlreadyPlaying = get().actions.checkActiveSong(
                 song.id,
               )
-              
+
               // Логируем начало воспроизведения
               behaviorTracker.logEvent({
                 trackId: song.id,
@@ -255,17 +275,24 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               timeAwareHistory.logPlay(song.id)
 
               // === MY WAVE DISCOVERIES: Если играет из Моей волны — логируем артиста ===
-              const { currentListName } = get().songlist
-              const isMyWave = currentListName?.toLowerCase().includes('моя волна') || 
-                               currentListName?.toLowerCase().includes('mywave') || 
-                               currentListName?.toLowerCase().includes('my wave')
-              
+              // Поле называется currentPlaylistName; currentListName в ISongList нет,
+              // поэтому проверка «играет из Моей волны» всегда давала false.
+              const { currentPlaylistName } = get().songlist
+              const isMyWave =
+                currentPlaylistName?.toLowerCase().includes('моя волна') ||
+                currentPlaylistName?.toLowerCase().includes('mywave') ||
+                currentPlaylistName?.toLowerCase().includes('my wave')
+
               if (isMyWave && (song.artistId || song.artist)) {
                 const artistId = song.artistId || song.artist
                 const artistName = song.artist || 'Unknown'
-                myWaveDiscoveryTracker.logArtistHeard(artistId, artistName, undefined)
+                myWaveDiscoveryTracker.logArtistHeard(
+                  artistId,
+                  artistName,
+                  undefined,
+                )
               }
-              
+
               if (songIsAlreadyPlaying && !isPlaying) {
                 set((state) => {
                   state.playerState.isPlaying = true
@@ -284,12 +311,9 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               }
             },
             setNextOnQueue: (list) => {
-              const {
-                currentList,
-                currentSongIndex,
-                currentSong,
-                originalList,
-              } = get().songlist
+              const { currentList, currentSongIndex, originalList } =
+                get().songlist
+              const currentSong = selectCurrentSong(get())
 
               const currentListIds = new Set(currentList.map((song) => song.id))
               const uniqueList = list.filter(
@@ -318,6 +342,47 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
 
               const { isPlaying } = get().playerState
 
+              if (!isPlaying) {
+                get().actions.setPlayingState(true)
+              }
+            },
+            setQueueTail: (list) => {
+              const { currentList, currentSongIndex, originalList } =
+                get().songlist
+
+              // Ничего играть нечего — оставляем как есть, чтобы не обнулять
+              // очередь у плейлиста из одного трека.
+              if (currentSongIndex < 0 || currentList.length <= 1) return
+
+              const head = currentList.slice(0, currentSongIndex + 1)
+              const seen = new Set(head.map((s) => s.id))
+              const tail = (list || []).filter((s) => !seen.has(s.id))
+              const newCurrentList = [...head, ...tail]
+
+              // originalList индексируется своей точкой; синхронизируем по id,
+              // иначе после морфа originalSongIndex уедет и восстановление
+              // позиции при перезапуске встанет не туда.
+              const headIds = new Set(head.map((s) => s.id))
+              const newOriginalList = [
+                ...originalList.filter((s) => headIds.has(s.id)),
+                ...originalList.filter((s) => !headIds.has(s.id)),
+                ...tail,
+              ]
+              const newOriginalIndex = Math.max(
+                0,
+                newOriginalList.findIndex(
+                  (s) => s.id === currentList[currentSongIndex].id,
+                ),
+              )
+
+              set((state) => {
+                state.songlist.currentList = newCurrentList
+                state.songlist.originalList = newOriginalList
+                state.songlist.currentSongIndex = currentSongIndex
+                state.songlist.originalSongIndex = newOriginalIndex
+              })
+
+              const { isPlaying } = get().playerState
               if (!isPlaying) {
                 get().actions.setPlayingState(true)
               }
@@ -486,20 +551,23 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               set((state) => {
                 state.playerState.loopState = newState
               })
-              
+
               // Трекаем событие repeat mode
               const modeMap = { 0: 'none', 1: 'track', 2: 'playlist' } as const
-              trackRepeatModeEnabled(modeMap[newState as keyof typeof modeMap] || 'none')
+              trackRepeatModeEnabled(
+                modeMap[newState as keyof typeof modeMap] || 'none',
+              )
             },
             toggleShuffle: () => {
               const { isShuffleActive } = get().playerState
-              const { currentList, currentSongIndex } = get().songlist
+              // currentSongIndex ниже перечитывается в ветке shuffle
+              const { currentList } = get().songlist
 
               const listLength = currentList.length
               if (listLength <= 1) return
 
               if (isShuffleActive) {
-                const currentSongId = get().songlist.currentSong.id
+                const currentSongId = selectCurrentSong(get()).id
                 const index = get().songlist.originalList.findIndex(
                   (song) => song.id === currentSongId,
                 )
@@ -524,7 +592,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
             },
             playNextSong: () => {
               const { loopState } = get().playerState
-              const { currentSong, currentList, currentSongIndex } = get().songlist
+              const currentSong = selectCurrentSong(get())
               const { hasNextSong, resetProgress, playFirstSongInQueue } =
                 get().actions
 
@@ -535,7 +603,11 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 if (progress > 50 && progress < 95) {
                   // Скип после 50% но не в конце трека
                   trackSkipAfterHalf(currentSong.id, progress)
-                  console.log('[ML] Skip after half detected:', currentSong.title, `${progress.toFixed(1)}%`)
+                  console.log(
+                    '[ML] Skip after half detected:',
+                    currentSong.title,
+                    `${progress.toFixed(1)}%`,
+                  )
 
                   // Логируем пропуск трека
                   behaviorTracker.logEvent({
@@ -567,7 +639,9 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                   void import('./ml.store').then((m) => {
                     try {
                       m.useMLStore.getState().incrementAbandonCount(abandonedId)
-                    } catch { /* best-effort */ }
+                    } catch {
+                      /* best-effort */
+                    }
                   })
                 }
               }
@@ -595,7 +669,6 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 state.songlist.originalList = []
                 state.songlist.shuffledList = []
                 state.songlist.currentList = []
-                state.songlist.currentSong = {} as ISong
                 state.songlist.radioList = []
                 state.songlist.podcastList = []
                 state.songlist.podcastListProgresses = []
@@ -676,7 +749,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               return currentList.length === 1
             },
             checkActiveSong: (id: string) => {
-              const currentSong = get().songlist.currentSong
+              const currentSong = selectCurrentSong(get())
               if (currentSong) {
                 return id === currentSong.id
               } else {
@@ -723,12 +796,15 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               })
             },
             starCurrentSong: async () => {
-              const { currentList, currentSongIndex, originalList, shuffledList } = get().songlist
+              // currentSongIndex/originalList/shuffledList намеренно НЕ берём
+              // здесь: после await они уже неактуальны, список перечитывается
+              // внизу заново.
+              const { currentList } = get().songlist
               const { mediaType } = get().playerState
 
               if (currentList.length === 0 && mediaType !== 'song') return
 
-              const { id, starred } = get().songlist.currentSong
+              const { id, starred } = selectCurrentSong(get())
               const isSongStarred = typeof starred === 'string'
 
               // Если лайкаем - отслеживаем для ML и кэшируем
@@ -742,13 +818,22 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
 
                 if (autoCacheEnabled) {
                   // Кэшируем в фоне без ожидания
-                  cacheService.cacheAudioFile(id).then((success) => {
-                    if (success) {
-                      console.log('[PlayerStore] Song cached successfully:', id)
-                    }
-                  }).catch((err) => {
-                    console.error('[PlayerStore] Failed to cache liked song:', err)
-                  })
+                  cacheService
+                    .cacheAudioFile(id)
+                    .then((success) => {
+                      if (success) {
+                        console.log(
+                          '[PlayerStore] Song cached successfully:',
+                          id,
+                        )
+                      }
+                    })
+                    .catch((err) => {
+                      console.error(
+                        '[PlayerStore] Failed to cache liked song:',
+                        err,
+                      )
+                    })
                 }
               }
 
@@ -757,24 +842,52 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 starred: isSongStarred,
               })
 
-              const newStarred = isSongStarred ? undefined : new Date().toISOString()
-
-              // Обновляем все три списка
-              const songList = [...currentList]
-              songList[currentSongIndex] = {
-                ...songList[currentSongIndex],
-                starred: newStarred,
+              // Явная оценка — в мозг. Сервер (taste.py) создаёт Favorite и
+              // закрывает «показ» в метриках рекомендаций, поэтому статистика
+              // «лайк с волны» перестаёт быть вечным нулём. Отправляем после
+              // сетевого вызова: к этому моменту id уже проверен сервером.
+              if (!isSongStarred) {
+                queueBrainEvent({
+                  track_id: id,
+                  action: 'like',
+                  position_sec: Math.floor(get().playerProgress.progress || 0),
+                })
               }
 
-              const newOriginalList = originalList.map((song) =>
-                song.id === id ? { ...song, starred: newStarred } : song
+              const newStarred = isSongStarred
+                ? undefined
+                : new Date().toISOString()
+
+              // Перечитываем стор ПОСЛЕ await. Снимок, взятый до сетевого
+              // запроса, успевает устареть: пока шёл /star, очередь могли
+              // изменить (авто-DJ продлил её, сменился трек, пришло handoff).
+              // Запись старого currentList затирала эти изменения.
+              const fresh = get().songlist
+              const freshList = [...fresh.currentList]
+              const freshIndex = fresh.currentSongIndex
+
+              // currentSongIndex мог уехать вперёд, пока шёл запрос.
+              const indexToPatch =
+                freshList[freshIndex]?.id === id
+                  ? freshIndex
+                  : freshList.findIndex((song) => song.id === id)
+
+              if (indexToPatch !== -1) {
+                freshList[indexToPatch] = {
+                  ...freshList[indexToPatch],
+                  starred: newStarred,
+                }
+              }
+
+              const newOriginalList = fresh.originalList.map((song) =>
+                song.id === id ? { ...song, starred: newStarred } : song,
               )
-              const newShuffledList = shuffledList.map((song) =>
-                song.id === id ? { ...song, starred: newStarred } : song
+              const newShuffledList = fresh.shuffledList.map((song) =>
+                song.id === id ? { ...song, starred: newStarred } : song,
               )
 
               set((state) => {
-                state.songlist.currentList = songList
+                state.songlist.currentList = freshList
                 state.songlist.originalList = newOriginalList
                 state.songlist.shuffledList = newShuffledList
               })
@@ -792,7 +905,10 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               )
             },
             removeSongFromQueue: (id) => {
-              console.log('[PlayerStore] removeSongFromQueue called with id:', id)
+              console.log(
+                '[PlayerStore] removeSongFromQueue called with id:',
+                id,
+              )
               const {
                 currentList,
                 originalList,
@@ -806,11 +922,16 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 (song) => song.id === id,
               )
               console.log('[PlayerStore] removedSongIndex:', removedSongIndex)
-              
+
               const newCurrentList = currentList.filter(
                 (song) => song.id !== id,
               )
-              console.log('[PlayerStore] newCurrentList length:', newCurrentList.length, 'was:', currentList.length)
+              console.log(
+                '[PlayerStore] newCurrentList length:',
+                newCurrentList.length,
+                'was:',
+                currentList.length,
+              )
 
               // Clear player state if list is empty
               if (newCurrentList.length === 0) {
@@ -856,7 +977,9 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               })
             },
             moveSongInQueue: (fromIndex: number, toIndex: number) => {
-              const { currentList, originalList, shuffledList, currentSongIndex } = get().songlist
+              // Перемещение трогает только currentList — оригинальный и
+              // перемешанный списки остаются как есть (см. комментарий ниже).
+              const { currentList, currentSongIndex } = get().songlist
 
               // Находим перемещаемый трек
               const movedSong = currentList[fromIndex]
@@ -871,9 +994,15 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               let newCurrentIndex = currentSongIndex
               if (fromIndex === currentSongIndex) {
                 newCurrentIndex = toIndex
-              } else if (fromIndex < currentSongIndex && toIndex >= currentSongIndex) {
+              } else if (
+                fromIndex < currentSongIndex &&
+                toIndex >= currentSongIndex
+              ) {
                 newCurrentIndex--
-              } else if (fromIndex > currentSongIndex && toIndex <= currentSongIndex) {
+              } else if (
+                fromIndex > currentSongIndex &&
+                toIndex <= currentSongIndex
+              ) {
                 newCurrentIndex++
               }
 
@@ -951,7 +1080,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
             },
             handleSongEnded: () => {
               const { loopState } = get().playerState
-              const { currentSong } = get().songlist
+              const currentSong = selectCurrentSong(get())
               const {
                 hasNextSong,
                 playNextSong,
@@ -967,7 +1096,7 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                   position: currentSong.duration || 0,
                 })
 
-                // === BRAIN 1.6.4: complete + живая очередь (с позицией/паузой/устройством) ===
+                // === BRAIN 1.6.2: complete + живая очередь ===
                 queueBrainEvent({
                   track_id: currentSong.id,
                   action: 'complete',
@@ -979,15 +1108,11 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                   wavePublish(
                     q.map((s) => s.id).filter(Boolean),
                     currentSong.id,
-                    {
-                      positionSec: Math.floor(currentSong.duration || 0),
-                      durationSec: Math.floor(currentSong.duration || 0),
-                      paused: false,
-                      deviceName: getWaveDeviceName(),
-                    },
                   )
                   void idx
-                } catch { /* best-effort */ }
+                } catch {
+                  /* best-effort */
+                }
 
                 // === MOOD DRIFT: Завершение трека - положительное взаимодействие ===
                 moodDriftDetector.logPositiveInteraction(currentSong.id)
@@ -1002,7 +1127,11 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 setPlayingState(true)
                 // === BRAIN 1.6.2: replay ===
                 if (currentSong?.id) {
-                  queueBrainEvent({ track_id: currentSong.id, action: 'replay', position_sec: 0 })
+                  queueBrainEvent({
+                    track_id: currentSong.id,
+                    action: 'replay',
+                    position_sec: 0,
+                  })
                 }
               } else if (hasNextSong() || loopState === LoopState.All) {
                 playNextSong()
@@ -1074,16 +1203,40 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
         name: 'player_store',
         version: 1,
         merge: (persistedState, currentState) => {
-          // Синхронный merge localStorage-части. Очередь (songlist) живет
-          // только в IndexedDB и грузится АСИНХРОННО ниже отдельным шагом:
-          // колбэк внутри merge приходил после return и результат терялся
-          // (очередь после рестарта пустая при живом IDB).
-          return merge(currentState, persistedState)
+          let merged = merge(currentState, persistedState)
+
+          idbStorage.getItem<ISongList>(miniStores.songlist, (value) => {
+            if (!value) return
+
+            // Старые снимки лежат с полем songlist.currentSong. Поле удалено —
+            // источник правды один (selectCurrentSong). Выкидываем его, иначе
+            // из IndexedDB оно вернётся в стор мёртвым грузом.
+            const songlist = { ...value } as ISongList & { currentSong?: ISong }
+            delete songlist.currentSong
+
+            const newState = {
+              songlist,
+            }
+
+            merged = merge(merged, newState)
+          })
+
+          return merged
         },
         partialize: (state) => {
-          const { isPlaying, audioPlayerRef, mainDrawerState, queueState, lyricsState, ...restPlayerState } = state.playerState
-          const { blur, ...restColors } = state.settings.colors
-          const { blur: bigPlayerBlur, ...restBigPlayer } = state.settings.colors.bigPlayer
+          const {
+            isPlaying,
+            audioPlayerRef,
+            mainDrawerState,
+            queueState,
+            lyricsState,
+            ...restPlayerState
+          } = state.playerState
+          // blur лежит в colors.bigPlayer, а не в colors — раньше здесь
+          // деструктурировали colors.blur, которого в IColorsSettings нет.
+          const restColors = state.settings.colors
+          const { blur: bigPlayerBlur, ...restBigPlayer } =
+            state.settings.colors.bigPlayer
           const { actions, songlist, ...rest } = state
           return {
             ...rest,
@@ -1113,45 +1266,6 @@ usePlayerStore.subscribe(
   },
 )
 
-// before-quit flush: один awaited IDB-write очереди вместо эвристики.
-// Main дергает window.__kumaflowFlushQueue через executeJavaScript и ЖДЕТ
-// результат: последний set() в IndexedDB точно завершен до app.quit().
-// Без этого очередь терялась при рестарте (in-flight write не успевал).
-export async function flushSonglistToIdb(): Promise<{ ok: boolean; n: number }> {
-  try {
-    const { set } = await import('idb-keyval')
-    const songlist = usePlayerStore.getState().songlist
-    await set(miniStores.songlist, songlist)
-    const n = Array.isArray(songlist?.currentList) ? songlist.currentList.length : 0
-    return { ok: true, n }
-  } catch {
-    return { ok: false, n: -1 }
-  }
-}
-
-if (typeof window !== 'undefined') {
-  ;(window as unknown as { __kumaflowFlushQueue?: typeof flushSonglistToIdb }).__kumaflowFlushQueue =
-    flushSonglistToIdb
-}
-
-// Дозагрузка очереди из IndexedDB после rehydrate.
-// merge() синхронен и ждать IDB не умеет, поэтому songlist читаем
-// отдельным awaited шагом и кладем через setState.
-// Гард: не затираем очередь, если туда уже что-то попало
-// (пользователь успел включить трек раньше, чем прилетел IDB).
-;(async () => {
-  try {
-    const saved = await idbStorage.getItemAsync<ISongList>(miniStores.songlist)
-    if (!saved || !Array.isArray(saved.currentList) || saved.currentList.length === 0) return
-    const cur = usePlayerStore.getState().songlist
-    const curEmpty = !cur || !Array.isArray(cur.currentList) || cur.currentList.length === 0
-    if (!curEmpty) return
-    usePlayerStore.setState({ songlist: saved })
-  } catch {
-    // Старт без очереди — штатно, молчим
-  }
-})()
-
 usePlayerStore.subscribe(
   (state) => [state.songlist.currentList, state.songlist.currentSongIndex],
   () => {
@@ -1160,7 +1274,6 @@ usePlayerStore.subscribe(
     if (mediaType === 'radio' || mediaType === 'podcast') return
 
     playerStore.actions.checkIsSongStarred()
-    playerStore.actions.setCurrentSong()
 
     const { currentList } = playerStore.songlist
     const { progress } = playerStore.playerProgress
@@ -1197,7 +1310,7 @@ usePlayerStore.subscribe(
 
 usePlayerStore.subscribe(
   (state) => [
-    state.songlist.currentSong,
+    selectCurrentSong(state),
     state.playerState.isPlaying,
     state.playerState.currentDuration,
   ],
@@ -1274,12 +1387,14 @@ useAppStore.subscribe(
   async (newUrl) => {
     if (previousUrl && newUrl !== previousUrl) {
       console.log('[PlayerStore] URL changed from', previousUrl, 'to', newUrl)
-      console.log('[PlayerStore] Current track will continue playing, next track will use new URL')
-      
-      // Обновляем currentSong с актуальными данными (coverUrl, quality и т.д.)
+      console.log(
+        '[PlayerStore] Current track will continue playing, next track will use new URL',
+      )
+
+      // Обновляем данные трека (coverUrl, quality и т.д.)
       const playerState = usePlayerStore.getState()
-      const { currentSong } = playerState.songlist
-      
+      const currentSong = selectCurrentSong(playerState)
+
       if (currentSong?.id && !currentSong.isLocal) {
         try {
           // Получаем актуальные данные о треке с нового сервера
@@ -1302,25 +1417,51 @@ export const usePlayerActions = () => usePlayerStore((state) => state.actions)
 
 export const usePlayerSonglist = () =>
   usePlayerStore((state) => {
-    const {
-      currentList,
-      currentSong,
-      currentSongIndex,
-      podcastList,
-      radioList,
-    } = state.songlist
+    const { currentList, currentSongIndex, podcastList, radioList } =
+      state.songlist
 
     return {
       currentList,
-      currentSong,
+      // Производное значение, а не поле songlist.currentSong: иначе
+      // PlayerProgress (он читает currentSong отсюда) мог получить устаревшую
+      // копию и упасть на currentSong.id.
+      currentSong: selectCurrentSong(state),
       currentSongIndex,
       podcastList,
       radioList,
     }
   })
 
-export const usePlayerCurrentSong = () =>
-  usePlayerStore((state) => state.songlist.currentSong)
+/**
+ * Текущий трек — ВСЕГДА позиция в списке.
+ *
+ * Раньше songlist.currentSong хранил отдельную копию трека, которую обновляла
+ * подписка на [currentList, currentSongIndex]. Снимок успевал устареть: стоило
+ * изменить индекс в обход подписки — и копия оставалась прежней (или пустой),
+ * а PlayerProgress падал на currentSong.id. Сегодня это воспроизвелось при
+ * установке currentSongIndex напрямую.
+ *
+ * Источник правды один: currentList[currentSongIndex]. Копии в сторе нет —
+ * поле songlist.currentSong удалено из ISongList, все читатели идут через
+ * селектор. Если позиция вне списка, отдаётся EMPTY_SONG (общий пустой объект).
+ */
+export function selectCurrentSong(state: IPlayerContext): ISong {
+  // Возвращаем ISong, а не ISong | undefined: прежнее поле тоже было всегда
+  // «объектом» — на пустой очереди там лежал {} as ISong, и потребители были
+  // рассчитаны ровно на это. Смена контракта на undefined заставила бы
+  // трогать полсотни мест и раздула бы правку — а чинится здесь только
+  // рассинхрон, а не форма.
+  //
+  // Пустой трек — ОДИН объект на модуль, а не `{}` в каждом вызове: селектор
+  // подписан через shallow, и свежий литерал каждый раз ломал бы равенство —
+  // подписка срабатывала бы на любое изменение стора и заново публиковала
+  // Discord RPC.
+  return (
+    state.songlist.currentList[state.songlist.currentSongIndex] ?? EMPTY_SONG
+  )
+}
+
+export const usePlayerCurrentSong = () => usePlayerStore(selectCurrentSong)
 
 export const usePlayerCurrentSongIndex = () =>
   usePlayerStore((state) => state.songlist.currentSongIndex)

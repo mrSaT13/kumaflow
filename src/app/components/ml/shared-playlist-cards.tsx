@@ -14,8 +14,6 @@ import { usePlayerActions } from '@/store/player.store'
 import {
   createSharedPlaylist,
   setPlaylistRating,
-  getAverageRating,
-  getUserRating,
   type SharedPlaylist
 } from '@/service/shared-playlists'
 import { useML } from '@/store/ml.store'

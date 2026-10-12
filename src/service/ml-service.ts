@@ -3,13 +3,12 @@ import {
   getArtistInfo,
   getRandomSongs,
   getSongsByGenre,
-  getSimilarSongs,
   getTopSongs,
   type NavidromeSong,
-  type NavidromeArtist,
 } from '@/service/navidrome-api'
 import { lastFmService } from '@/service/lastfm-api'
 import { useExternalApiStore } from '@/store/external-api.store'
+import { useAppStore } from '@/store/app.store'
 
 export interface MLPlaylist {
   id: string
@@ -37,6 +36,20 @@ class MLService {
   }
 
   /**
+   * Креденшелы активного Navidrome-сервера.
+   * Функции navidrome-api работают по REST API и требуют serverUrl + token;
+   * раньше они вызывались без них, из-за чего все запросы падали с
+   * «Server URL is required» и молча возвращали пустой массив.
+   */
+  private getNavidromeAuth(): { serverUrl: string; token: string } {
+    const { data } = useAppStore.getState()
+    return {
+      serverUrl: data.url,
+      token: data.password ?? '',
+    }
+  }
+
+  /**
    * Инициализация ML сервиса
    * Загружает лайкнутые треки и анализирует предпочтения
    */
@@ -47,7 +60,8 @@ class MLService {
     this.initializeExternalApis()
 
     // Загружаем лайкнутые треки
-    const starredSongs = await getStarredSongs()
+    const { serverUrl, token } = this.getNavidromeAuth()
+    const starredSongs = await getStarredSongs(serverUrl, token)
 
     // Анализируем предпочтения
     starredSongs.forEach(song => {
@@ -86,10 +100,11 @@ class MLService {
     artistName: string
   ): Promise<Array<{ name: string; id?: string }>> {
     const similarArtists: Array<{ name: string; id?: string }> = []
+    const { serverUrl, token } = this.getNavidromeAuth()
 
     // 1. Пробуем получить из Navidrome
     try {
-      const artistInfo = await getArtistInfo(artistId)
+      const artistInfo = await getArtistInfo(serverUrl, token, artistId)
       if (artistInfo?.similarArtist && artistInfo.similarArtist.length > 0) {
         similarArtists.push(...artistInfo.similarArtist.map(a => ({ name: a.name, id: a.id })))
         console.log(`[ML Service] Got ${similarArtists.length} similar artists from Navidrome`)
@@ -122,11 +137,12 @@ class MLService {
    * Сгенерировать персональный микс на основе лайкнутых артистов
    */
   async generateDailyMix(mixNumber: number = 1): Promise<MLPlaylist> {
-    const starredSongs = await getStarredSongs()
+    const { serverUrl, token } = this.getNavidromeAuth()
+    const starredSongs = await getStarredSongs(serverUrl, token)
     
     if (starredSongs.length === 0) {
       // Если нет лайкнутых треков, возвращаем случайные
-      const randomSongs = await getRandomSongs(25)
+      const randomSongs = await getRandomSongs(serverUrl, token, 25)
       return {
         id: `daily-mix-${mixNumber}`,
         title: `Микс дня ${mixNumber}`,
@@ -143,8 +159,8 @@ class MLService {
     const playlistSongs: NavidromeSong[] = []
     
     // Для каждого топ жанра берём треки
-    for (const [genre, weight] of topGenres) {
-      const songsByGenre = await getSongsByGenre(genre, 5)
+    for (const [genre] of topGenres) {
+      const songsByGenre = await getSongsByGenre(serverUrl, token, genre, 5)
       playlistSongs.push(...songsByGenre.slice(0, 5))
     }
     
@@ -169,19 +185,21 @@ class MLService {
     try {
       // Получаем похожих артистов с fallback на Last.fm
       const similarArtists = await this.getSimilarArtistsWithFallback(artistId, artistName)
+      const { serverUrl, token } = this.getNavidromeAuth()
 
       const playlistSongs: NavidromeSong[] = []
 
       // Для каждого похожего артиста берём топ треки
       if (similarArtists.length > 0) {
         for (const similarArtist of similarArtists.slice(0, 5)) {
-          const topSongs = await getTopSongs(similarArtist.name, 5)
+          if (!similarArtist.id) continue
+          const topSongs = await getTopSongs(serverUrl, token, similarArtist.id, 5)
           playlistSongs.push(...topSongs)
         }
       }
 
       // Добавляем топ треки текущего артиста
-      const artistTopSongs = await getTopSongs(artistName, 5)
+      const artistTopSongs = await getTopSongs(serverUrl, token, artistId, 5)
       playlistSongs.push(...artistTopSongs)
 
       const shuffled = playlistSongs.sort(() => Math.random() - 0.5).slice(0, 25)
@@ -195,7 +213,8 @@ class MLService {
     } catch (error) {
       console.error('Failed to generate similar artist playlist:', error)
       // Возвращаем случайные треки при ошибке
-      const randomSongs = await getRandomSongs(25)
+      const { serverUrl, token } = this.getNavidromeAuth()
+      const randomSongs = await getRandomSongs(serverUrl, token, 25)
       return {
         id: `similar-to-${artistId}`,
         title: `Похоже на ${artistName}`,
@@ -214,10 +233,11 @@ class MLService {
       .slice(0, 3)
     
     const playlistSongs: NavidromeSong[] = []
-    
+    const { serverUrl, token } = this.getNavidromeAuth()
+
     // Берём треки из любимых жанров, но которые ещё не лайкнуты
     for (const [genre] of topGenres) {
-      const songsByGenre = await getSongsByGenre(genre, 10)
+      const songsByGenre = await getSongsByGenre(serverUrl, token, genre, 10)
       const newSongs = songsByGenre.filter(song => !this.userPreferences.likedSongs.has(song.id))
       playlistSongs.push(...newSongs.slice(0, 7))
     }
@@ -237,7 +257,8 @@ class MLService {
    */
   async generateTrendsPlaylist(): Promise<MLPlaylist> {
     // Получаем треки с наибольшим количеством прослушиваний
-    const starredSongs = await getStarredSongs()
+    const { serverUrl, token } = this.getNavidromeAuth()
+    const starredSongs = await getStarredSongs(serverUrl, token)
     
     // Сортируем по playCount
     const sorted = starredSongs.sort((a, b) => (b.playCount || 0) - (a.playCount || 0))
@@ -257,7 +278,8 @@ class MLService {
     const recommendations: MLRecommendation[] = []
     
     // Получаем случайные треки
-    const randomSongs = await getRandomSongs(limit * 2)
+    const { serverUrl, token } = this.getNavidromeAuth()
+    const randomSongs = await getRandomSongs(serverUrl, token, limit * 2)
     
     // Оцениваем каждый трек
     for (const song of randomSongs) {

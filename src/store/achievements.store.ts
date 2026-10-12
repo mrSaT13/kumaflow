@@ -17,7 +17,15 @@ export interface Achievement {
 
 interface AchievementsStore {
   achievements: Achievement[]
-  
+
+  /**
+   * Достижение, открывшееся прямо сейчас. Раньше разблокировка уходила
+   * только в console.log, и пользователь её никогда не видел.
+   * UI подписывается на это поле и показывает тост.
+   */
+  justUnlocked: Achievement | null
+  clearJustUnlocked: () => void
+
   // Actions
   updateProgress: (achievementId: string, progress: number) => void
   unlock: (achievementId: string) => void
@@ -43,7 +51,7 @@ const defaultAchievements: Achievement[] = [
     id: 'listener_1',
     title: 'Начинающий слушатель',
     description: 'Прослушать 100 треков',
-    icon: '🎵',
+    icon: 'music',
     unlocked: false,
     progress: 0,
     maxProgress: 100,
@@ -53,7 +61,7 @@ const defaultAchievements: Achievement[] = [
     id: 'listener_2',
     title: 'Любитель музыки',
     description: 'Прослушать 500 треков',
-    icon: '🎧',
+    icon: 'headphones',
     unlocked: false,
     progress: 0,
     maxProgress: 500,
@@ -63,7 +71,7 @@ const defaultAchievements: Achievement[] = [
     id: 'listener_3',
     title: 'Меломан',
     description: 'Прослушать 1000 треков',
-    icon: '🎼',
+    icon: 'waveform',
     unlocked: false,
     progress: 0,
     maxProgress: 1000,
@@ -73,7 +81,7 @@ const defaultAchievements: Achievement[] = [
     id: 'listener_4',
     title: 'Легенда',
     description: 'Прослушать 5000 треков',
-    icon: '👑',
+    icon: 'crown',
     unlocked: false,
     progress: 0,
     maxProgress: 5000,
@@ -85,7 +93,7 @@ const defaultAchievements: Achievement[] = [
     id: 'likes_1',
     title: 'Первый лайк',
     description: 'Лайкнуть 10 треков',
-    icon: '👍',
+    icon: 'thumbs-up',
     unlocked: false,
     progress: 0,
     maxProgress: 10,
@@ -95,7 +103,7 @@ const defaultAchievements: Achievement[] = [
     id: 'likes_2',
     title: 'Ценитель',
     description: 'Лайкнуть 50 треков',
-    icon: '❤️',
+    icon: 'heart',
     unlocked: false,
     progress: 0,
     maxProgress: 50,
@@ -105,7 +113,7 @@ const defaultAchievements: Achievement[] = [
     id: 'likes_3',
     title: 'Коллекционер',
     description: 'Лайкнуть 100 треков',
-    icon: '💖',
+    icon: 'hearts',
     unlocked: false,
     progress: 0,
     maxProgress: 100,
@@ -117,7 +125,7 @@ const defaultAchievements: Achievement[] = [
     id: 'discovery_1',
     title: 'Исследователь',
     description: 'Найти 10 новых артистов',
-    icon: '🧭',
+    icon: 'compass',
     unlocked: false,
     progress: 0,
     maxProgress: 10,
@@ -127,7 +135,7 @@ const defaultAchievements: Achievement[] = [
     id: 'discovery_2',
     title: 'Первооткрыватель',
     description: 'Найти 50 новых артистов',
-    icon: '🗺️',
+    icon: 'map',
     unlocked: false,
     progress: 0,
     maxProgress: 50,
@@ -139,7 +147,7 @@ const defaultAchievements: Achievement[] = [
     id: 'playlist_1',
     title: 'Куратор',
     description: 'Создать 5 плейлистов',
-    icon: '📋',
+    icon: 'clipboard',
     unlocked: false,
     progress: 0,
     maxProgress: 5,
@@ -149,7 +157,7 @@ const defaultAchievements: Achievement[] = [
     id: 'playlist_2',
     title: 'Ди-джей',
     description: 'Сгенерировать 10 ML плейлистов',
-    icon: '🎚️',
+    icon: 'sliders',
     unlocked: false,
     progress: 0,
     maxProgress: 10,
@@ -163,18 +171,25 @@ export const useAchievementsStore = createWithEqualityFn<AchievementsStore>()(
       devtools(
         immer((set, get) => ({
           achievements: defaultAchievements,
+          justUnlocked: null,
+
+          clearJustUnlocked: () => {
+            set((state) => {
+              state.justUnlocked = null
+            })
+          },
 
           updateProgress: (achievementId: string, progress: number) => {
             set((state) => {
               const achievement = state.achievements.find(a => a.id === achievementId)
               if (achievement && !achievement.unlocked) {
                 achievement.progress = Math.min(progress, achievement.maxProgress)
-                
+
                 // Автоматическая разблокировка
                 if (achievement.progress >= achievement.maxProgress) {
                   achievement.unlocked = true
                   achievement.unlockedAt = new Date().toISOString()
-                  console.log(`🏆 Achievement unlocked: ${achievement.title}`)
+                  state.justUnlocked = { ...achievement }
                 }
               }
             })
@@ -187,7 +202,7 @@ export const useAchievementsStore = createWithEqualityFn<AchievementsStore>()(
                 achievement.unlocked = true
                 achievement.unlockedAt = new Date().toISOString()
                 achievement.progress = achievement.maxProgress
-                console.log(`🏆 Achievement unlocked: ${achievement.title}`)
+                state.justUnlocked = { ...achievement }
               }
             })
           },

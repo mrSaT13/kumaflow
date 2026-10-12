@@ -16,7 +16,7 @@ import { Switch } from '@/app/components/ui/switch'
 import { useCurrentAccount, useAccountsActions } from '@/store/accounts.store'
 import { useAppStore } from '@/store/app.store'
 import { dualUrlService } from '@/service/dual-url-service'
-import { Activity, CheckCircle2, Wifi, WifiOff, XCircle } from 'lucide-react'
+import { Activity, CheckCircle2, Wifi, XCircle } from 'lucide-react'
 
 export function DualUrlSettings() {
   const { t } = useTranslation()

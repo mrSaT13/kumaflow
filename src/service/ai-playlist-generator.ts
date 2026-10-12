@@ -6,7 +6,7 @@
  */
 
 import { subsonic } from '@/service/subsonic'
-import { getSongsByGenre, getRandomSongs, getTopSongs } from '@/service/subsonic-api'
+import { getSongsByGenre, getRandomSongs } from '@/service/subsonic-api'
 import { orchestratePlaylist } from '@/service/playlist-orchestrator'
 import { playlistCacheStorage } from '@/service/playlist-cache-storage'
 import type { ISong } from '@/types/responses/song'
@@ -21,7 +21,7 @@ export interface GenreCluster {
 
 export interface AIPlaylist {
   id: string
-  type: 'genre-cluster' | 'k-pop-top' | 'discovery'
+  type: 'genre-cluster'| 'k-pop-top'| 'discovery'
   genre?: string
   title: string
   description: string
@@ -39,7 +39,7 @@ export interface AIPlaylist {
  */
 export async function analyzeLikedTracksAndCluster(
   likedSongIds: string[],
-  ratings?: Record<string, { like?: boolean; skipCount?: number }>
+  _ratings?: Record<string, { like?: boolean; skipCount?: number }>
 ): Promise<GenreCluster[]> {
   console.log('[AI Generator] Analyzing liked tracks for clustering...')
 
@@ -74,12 +74,6 @@ export async function analyzeLikedTracksAndCluster(
 
   console.log(`[AI Generator] Analyzed ${likedSongs.length} liked songs`)
 
-  // Получаем топ артистов
-  const topArtists = Array.from(artistMap.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
-    .map(([name]) => name)
-
   // Формируем кластеры жанров
   const clusters: GenreCluster[] = []
   
@@ -90,7 +84,7 @@ export async function analyzeLikedTracksAndCluster(
 
     // Получаем последние треки из кэша для этого жанра
     const cachedPlaylist = await playlistCacheStorage.getPlaylist(`genre-${genre.toLowerCase()}`)
-    const recentTracks = cachedPlaylist?.lastTracks || []
+    const recentTracks = cachedPlaylist?.songIds || []
 
     clusters.push({
       genre,
@@ -294,7 +288,7 @@ export async function generateKPopTopPlaylist(
     id: 'k-pop-top-hits',
     type: 'k-pop-top',
     genre: 'K-Pop',
-    title: '🇰🇷 K-Pop Топ Чарт',
+    title: 'K-Pop Топ Чарт',
     description: 'Самые горячие K-Pop хиты этой недели',
     songs: orchestrated,
     gradient: 'from-pink-500 via-purple-500 to-indigo-500',
@@ -317,68 +311,68 @@ function generatePlaylistMetadata(genre: string, seed: number): {
   // Большие массивы вариантов для разнообразия
   const nameVariants: Record<string, string[]> = {
     'K-Pop': [
-      '🇰🇷 K-Pop Вайб', '🌸 Seoul Nights', '🎤 Korean Wave', 
-      '✨ K-Pop Драйв', '🌙 Gangnam Vibes', '💜 K-Pop Energy',
-      '🎵 Hallyu Mix', '🔥 K-Pop Хиты', '💫 K-Pop Fusion'
+      'K-Pop Вайб', 'Seoul Nights', 'Korean Wave', 
+      'K-Pop Драйв', 'Gangnam Vibes', 'K-Pop Energy',
+      'Hallyu Mix', 'K-Pop Хиты', 'K-Pop Fusion'
     ],
     'Rock': [
-      '🎸 Rock Энергия', '⚡ Rock Мощность', '🔥 Rock Классика',
-      '🤘 Rock Хиты', '💥 Rock Drive', '🌟 Rock Legends',
-      '🎵 Rock Vibes', '⚡ Rock Nation', '🔥 Rock Revolution'
+      'Rock Энергия', 'Rock Мощность', 'Rock Классика',
+      'Rock Хиты', 'Rock Drive', 'Rock Legends',
+      'Rock Vibes', 'Rock Nation', 'Rock Revolution'
     ],
     'Pop': [
-      '🎤 Pop Настроение', '✨ Pop Хиты', '🌟 Pop Вечеринка',
-      '💫 Pop Топы', '🎵 Pop Vibes', '🔥 Pop Energy',
-      '💖 Pop Love', '🌈 Pop Dreams', '⭐ Pop Stars'
+      'Pop Настроение', 'Pop Хиты', 'Pop Вечеринка',
+      'Pop Топы', 'Pop Vibes', 'Pop Energy',
+      'Pop Love', 'Pop Dreams', 'Pop Stars'
     ],
     'Hip-Hop': [
-      '🎧 Hip-Hop Flow', '🔥 Rap Game', '💎 Hip-Hop Бэнгеры',
-      '🌃 Urban Vibes', '🎤 Rap Nation', '⚡ Hip-Hop Energy',
-      '👑 Hip-Hop Kings', '🎵 Flow State', '🌟 Rap Stars'
+      'Hip-Hop Flow', 'Rap Game', 'Hip-Hop Бэнгеры',
+      'Urban Vibes', 'Rap Nation', 'Hip-Hop Energy',
+      'Hip-Hop Kings', 'Flow State', 'Rap Stars'
     ],
     'Electronic': [
-      '🎹 Electronic Pulse', '⚡ EDM Драйв', '🌃 Electronic Nights',
-      '🔮 Synth Wave', '💫 Electronic Vibes', '🎵 Digital Dreams',
-      '🌟 Electronic Energy', '⚡ Beat Drop', '🔥 Electronic Fusion'
+      'Electronic Pulse', 'EDM Драйв', 'Electronic Nights',
+      'Synth Wave', 'Electronic Vibes', 'Digital Dreams',
+      'Electronic Energy', 'Beat Drop', 'Electronic Fusion'
     ],
     'Jazz': [
-      '🎺 Jazz Mood', '🌙 Smooth Jazz', '🍷 Jazz Lounge',
-      '🎵 Late Night Jazz', '💫 Jazz Vibes', '🌟 Jazz Classics',
-      '🎷 Jazz Fusion', '⚡ Jazz Energy', '🔥 Jazz Nights'
+      'Jazz Mood', 'Smooth Jazz', 'Jazz Lounge',
+      'Late Night Jazz', 'Jazz Vibes', 'Jazz Classics',
+      'Jazz Fusion', 'Jazz Energy', 'Jazz Nights'
     ],
     'Classical': [
-      '🎻 Classical Harmony', '🌙 Classical Peace', '🎼 Symphony Mix',
-      '🎵 Classical Focus', '💫 Classical Beauty', '🌟 Classical Masters',
-      '⚡ Classical Power', '🔥 Classical Passion', '✨ Classical Dreams'
+      'Classical Harmony', 'Classical Peace', 'Symphony Mix',
+      'Classical Focus', 'Classical Beauty', 'Classical Masters',
+      'Classical Power', 'Classical Passion', 'Classical Dreams'
     ],
     'Rap': [
-      '🎤 Rap Flow', '🔥 Rap Хиты', '💎 Rap Energy',
-      '🌃 Urban Stories', '👑 Rap Kings', '⚡ Rap Nation',
-      '🎵 Flow Master', '🌟 Rap Stars', '🔥 Rap Revolution'
+      'Rap Flow', 'Rap Хиты', 'Rap Energy',
+      'Urban Stories', 'Rap Kings', 'Rap Nation',
+      'Flow Master', 'Rap Stars', 'Rap Revolution'
     ],
     'RusRap': [
-      '🎤 RusRap Вайб', '🔥 RusRap Хиты', '🌃 RusRap Stories',
-      '💎 RusRap Flow', '👑 RusRap Kings', '⚡ RusRap Energy',
-      '🎵 RusRap Nation', '🌟 RusRap Stars', '🔥 RusRap Revolution'
+      'RusRap Вайб', 'RusRap Хиты', 'RusRap Stories',
+      'RusRap Flow', 'RusRap Kings', 'RusRap Energy',
+      'RusRap Nation', 'RusRap Stars', 'RusRap Revolution'
     ],
     'Numetal': [
-      '🤘 Nu-Metal Мощь', '⚡ Nu-Metal Энергия', '🔥 Nu-Metal Хиты',
-      '💥 Nu-Metal Drive', '🎸 Nu-Metal Revolution', '🌟 Nu-Metal Legends',
-      '🔊 Nu-Metal Sound', '⚡ Nu-Metal Attack', '🔥 Nu-Metal Fury'
+      'Nu-Metal Мощь', 'Nu-Metal Энергия', 'Nu-Metal Хиты',
+      'Nu-Metal Drive', 'Nu-Metal Revolution', 'Nu-Metal Legends',
+      'Nu-Metal Sound', 'Nu-Metal Attack', 'Nu-Metal Fury'
     ],
   }
 
   const descriptions = [
-    'Идеальный микс для твоего настроения 🎵',
-    'Свежие треки и проверенные хиты ✨',
-    'Специально подобрано для тебя 💫',
-    'Лучшее из жанра для максимального вайба 🔥',
-    'Открой для себя новые звуки 🌟',
-    'Энергия и драйв в каждом треке ⚡',
-    'Твой персональный саундтрек 🎧',
-    'Микс который зайдёт именно сейчас 💖',
-    'Погружение в мир жанра 🌊',
-    'Только хиты и ничего лишнего 🎯',
+    'Идеальный микс для твоего настроения',
+    'Свежие треки и проверенные хиты',
+    'Специально подобрано для тебя',
+    'Лучшее из жанра для максимального вайба',
+    'Открой для себя новые звуки',
+    'Энергия и драйв в каждом треке',
+    'Твой персональный саундтрек',
+    'Микс который зайдёт именно сейчас',
+    'Погружение в мир жанра',
+    'Только хиты и ничего лишнего',
   ]
 
   const gradients = [
@@ -394,12 +388,15 @@ function generatePlaylistMetadata(genre: string, seed: number): {
     'from-amber-600 via-orange-600 to-red-600',
   ]
 
+  // Выбираем варианты названия ДО расчёта seed'а: раньше genreNames
+  // использовался в выражениях выше своего объявления (TDZ → ReferenceError)
+  const genreNames = nameVariants[genre] || nameVariants['Pop'] || ['Микс']
+
   // Добавляем случайность чтобы каждый раз было разное название
   const timeBasedSeed = Math.floor(Date.now() / (5 * 60 * 1000)) % genreNames.length  // Меняется каждые 5 минут
   const randomSeed = Math.floor(Math.random() * genreNames.length)
   
   // Выбираем на основе seed + случайности для разнообразия
-  const genreNames = nameVariants[genre] || nameVariants['Pop'] || ['🎵 Микс']
   const nameIndex = (seed + timeBasedSeed + randomSeed) % genreNames.length
   const descIndex = (seed + nameIndex) % descriptions.length
   const gradientIndex = (seed + descIndex) % gradients.length
@@ -415,7 +412,6 @@ function generatePlaylistMetadata(genre: string, seed: number): {
  * Генерация уникального seed
  */
 function generateSeed(patternId: string, recentTracks: string[]): number {
-  const hour = Math.floor(Date.now() / (60 * 60 * 1000))
   const dayOfWeek = new Date().getDay()
   const minutes = Math.floor(Date.now() / (60 * 1000))  // Меняется каждую минуту
   

@@ -3,10 +3,10 @@
  * Ищет альбомы-компиляции, сборники, OST где есть треки этого артиста
  */
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { subsonic } from '@/service/subsonic'
-import type { ISong } from '@/types/responses/song'
+import { search } from '@/service/search'
 import { ROUTES } from '@/routes/routesList'
 import { Card, CardContent } from '@/app/components/ui/card'
 import { AspectRatio } from '@/app/components/ui/aspect-ratio'
@@ -54,7 +54,7 @@ export function AppearsInCompilations({ artistId, artistName }: AppearsInCompila
 
       try {
         // Способ 1: Ищем через search3 по имени артиста
-        const searchResult = await subsonic.search2({
+        const searchResult = await search.get({
           query: artistName,
           albumCount: 50,
           songCount: 0,

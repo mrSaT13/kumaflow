@@ -51,6 +51,7 @@ export enum Theme {
   OneDarkPro = 'one-dark-pro',
   GithubLight = 'github-light',
   VSCODELight = 'vscode-light',
+  // Возвращены в 1.7.3: были в 1.6.6, потерялись при рефакторинге тем
   PolarDark = 'polar-dark',
   PolarLight = 'polar-light',
 }

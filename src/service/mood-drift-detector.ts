@@ -16,7 +16,6 @@
  * - История изменений настроения сохраняется для анализа паттернов
  */
 
-import { behaviorTracker } from './behavior-tracker'
 import type { ISong } from '@/types/responses/song'
 
 export interface MoodShiftEvent {

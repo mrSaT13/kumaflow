@@ -4,7 +4,7 @@
  * 20+ автоматических плейлистов которые генерируются по расписанию или событию
  */
 
-import { createAIPlaylist, type AIPlaylistTrigger, type AIPlaylistResult } from './ai-playlist-agent'
+import { createAIPlaylist, type AIPlaylistTrigger } from './ai-playlist-agent'
 import type { MLProfile } from '@/store/ml.store'
 
 export interface AIPlaylistPattern {

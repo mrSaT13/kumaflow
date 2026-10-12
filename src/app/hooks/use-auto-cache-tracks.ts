@@ -4,7 +4,8 @@
 
 import { useEffect } from 'react'
 import { cacheService } from '@/service/cache-service'
-import { usePlayerStore } from '@/store/player.store'
+import { usePlayerStore, selectCurrentSong,
+} from '@/store/player.store'
 
 interface UseAutoCacheTracksProps {
   enabled: boolean  // Включено ли автосохранение
@@ -12,7 +13,8 @@ interface UseAutoCacheTracksProps {
 }
 
 export function useAutoCacheTracks({ enabled, maxTracks = 100 }: UseAutoCacheTracksProps) {
-  const { currentList, currentSong } = usePlayerStore()
+  const currentList = usePlayerStore((state) => state.songlist.currentList)
+  const currentSong = usePlayerStore(selectCurrentSong)
 
   useEffect(() => {
     console.log('[AutoCache] Hook effect triggered:', { 

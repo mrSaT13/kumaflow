@@ -13,7 +13,7 @@
  */
 
 import { behaviorTracker } from './behavior-tracker'
-import { getSongsByGenre, getRandomSongs, getTopSongs } from './subsonic-api'
+import { getSongsByGenre, getRandomSongs } from './subsonic-api'
 import { orchestratePlaylist } from './playlist-orchestrator'
 import type { ISong } from '@/types/responses/song'
 

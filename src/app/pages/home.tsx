@@ -6,10 +6,7 @@ import {
 } from '@/app/components/fallbacks/home-fallbacks'
 import PreviewList from '@/app/components/home/preview-list'
 import ArtistRadioCards from '@/app/components/home/artist-radio-cards'
-import { NewReleasesCard } from '@/app/components/home/new-releases-card'
-import { GlobalChartsCard } from '@/app/components/homepage/global-charts-card'
 import { AutoPlaylistCards } from '@/app/components/home/auto-playlist-cards'
-import { AIPlaylistGenerator } from '@/app/components/player/ai-playlist-generator'
 import {
   useGetMostPlayed,
   useGetRandomAlbums,
@@ -170,7 +167,7 @@ function OldHomepage() {
     try {
       // Генерация плейлиста на основе ML
       const profile = getProfile()
-      const likedSongIds = profile.likedSongIds || []  // ИСПРАВЛЕНО: проверка на undefined
+      const likedSongIds = profile.likedSongs || []  // ИСПРАВЛЕНО: проверка на undefined
 
       console.log('Генерация "Моя волна"...')
       console.log('Лайкнутые треки:', likedSongIds.length)

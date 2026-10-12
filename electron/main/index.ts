@@ -1,11 +1,11 @@
 import { electronApp, optimizer, platform } from '@electron-toolkit/utils'
 import { app, ipcMain, protocol } from 'electron'
 import { createAppMenu } from './core/menu'
-import { initAutoUpdater, isUpdateDownloaded, quitAndInstallOnQuit } from './core/updater'
+import { initAutoUpdater } from './core/updater'
 import { createWindow, mainWindow, sendToRenderer } from './window'
 import { initAudiobookshelfIPC } from './core/audiobookshelf'
 import { setupLocalMusicHandlers } from './core/local-music-handler'
-import { startRemoteServer, stopRemoteServer, updateRemoteState, setRemoteMainWindow, getRemoteStatus, setRemotePort, setRemoteBaseAppUrl, setupRemoteQueueHandler, getConnectedClients, loadRemoteControlSettings, saveRemoteControlSettings } from '../../src/service/remote-server'
+import { startRemoteServer, stopRemoteServer, updateRemoteState, setRemoteMainWindow, getRemoteStatus, setRemotePort, setRemoteHost, getRemotePin, setRemotePin, setRemoteBaseAppUrl, setupRemoteQueueHandler, getConnectedClients } from '../../src/service/remote-server'
 // 🆕 DLNA - dynamic import чтобы не тянуть localStorage в main process
 // 🆕 DLNA - lazy getter чтобы не тянуть localStorage при старте
 let _dlnaService: any = null
@@ -138,20 +138,6 @@ if (!instanceLock) {
     // Настраиваем обработчик очереди для remote
     setupRemoteQueueHandler()
 
-    // Автозапуск Remote Control, если был включён до рестарта.
-    // Настройки (enabled/port/ip) лежат в userData/remote-control-config.json.
-    loadRemoteControlSettings().then(async (saved) => {
-      try {
-        if (saved.ip) selectedRemoteIp = saved.ip
-        if (!saved.enabled) return
-        if (saved.port) setRemotePort(saved.port)
-        await startRemoteServer({ enabled: true, port: saved.port || 4333 })
-        console.log('[Main] Remote Control autostarted (was enabled)')
-      } catch (e) {
-        console.warn('[Main] Remote Control autostart failed:', e)
-      }
-    })
-
     // Инициализация Remote Control
     console.log('[Main] Initializing Remote Control...')
     
@@ -180,18 +166,26 @@ if (!instanceLock) {
     setupLocalMusicHandlers()
     
     // Remote Control IPC handlers
-    ipcMain.handle('remote-control:start', async (event, port?: number) => {
+    ipcMain.handle('remote-control:start', async (event, portOrOpts?: number | { port?: number; host?: string }) => {
+      const port = typeof portOrOpts === 'number' ? portOrOpts : portOrOpts?.port
+      const host = typeof portOrOpts === 'object' ? portOrOpts?.host : undefined
       if (port) {
         setRemotePort(port)
       }
-      await startRemoteServer({ enabled: true, port: port || 4333 })
-      await saveRemoteControlSettings({ enabled: true, port: port || undefined })
+      if (host) {
+        setRemoteHost(host)
+      }
+      // host для listen: выбранный IP или 0.0.0.0 (все интерфейсы, включая VPN).
+      // Слушаем на 0.0.0.0 всегда, чтобы VPN-адрес тоже работал.
+      const { loadRemoteControlSettings } = await import('../../src/service/remote-server')
+      const saved = await loadRemoteControlSettings().catch(() => ({} as any))
+      if (saved?.ip && !selectedRemoteIp) selectedRemoteIp = saved.ip
+      await startRemoteServer({ enabled: true, port: port || saved?.port || 4333, host: '0.0.0.0' })
       return getRemoteStatus()
     })
 
     ipcMain.handle('remote-control:stop', async () => {
       await stopRemoteServer()
-      await saveRemoteControlSettings({ enabled: false })
       return getRemoteStatus()
     })
 
@@ -199,61 +193,92 @@ if (!instanceLock) {
       return getRemoteStatus()
     })
 
-    ipcMain.handle('remote-control:get-url', () => {
+    ipcMain.handle('remote-control:get-url', async () => {
       const status = getRemoteStatus()
       const ip = selectedRemoteIp || getFirstLocalIp() || 'localhost'
-      return `http://${ip}:${status.port}`
+      const pin = await getRemotePin().catch(() => null)
+      const pinPart = pin ? `?pin=${encodeURIComponent(pin)}` : ''
+      return `http://${ip}:${status.port}${pinPart}`
     })
 
     ipcMain.handle('remote-control:get-all-ips', () => {
       const os = require('os')
       const interfaces = os.networkInterfaces()
-      const ips: { ip: string; iface: string }[] = []
-
+      const ips: { ip: string; iface: string; internal: boolean }[] = []
       for (const name of Object.keys(interfaces)) {
         const iface = interfaces[name]
         if (!iface) continue
         for (const ip of iface) {
-          if (ip.family === 'IPv4' && !ip.internal) {
-            ips.push({ ip: ip.address, iface: name })
+          if (ip.family === 'IPv4') {
+            ips.push({ ip: ip.address, iface: name, internal: !!ip.internal })
           }
         }
       }
+      const vpnRe = /tailscale|wg|wireguard|tun|tap|vpn|zerotier/i
+      ips.sort((a, b) => {
+        const rank = (x: { internal: boolean; iface: string }) =>
+          x.internal ? 2 : vpnRe.test(x.iface) ? 1 : 0
+        return rank(a) - rank(b)
+      })
       return ips
     })
 
+    ipcMain.handle('remote-control:get-all-urls', async () => {
+      const status = getRemoteStatus()
+      const pin = await getRemotePin().catch(() => null)
+      const pinPart = pin ? `?pin=${encodeURIComponent(pin)}` : ''
+      const os = require('os')
+      const interfaces = os.networkInterfaces()
+      const urls: { ip: string; iface: string; url: string }[] = []
+      const seen = new Set<string>()
+      for (const name of Object.keys(interfaces || {})) {
+        const iface = (interfaces as any)[name]
+        if (!iface) continue
+        for (const ip of iface) {
+          if (ip.family === 'IPv4' && !seen.has(ip.address)) {
+            seen.add(ip.address)
+            urls.push({ ip: ip.address, iface: name, url: `http://${ip.address}:${status.port}${pinPart}` })
+          }
+        }
+      }
+      return urls
+    })
+
     ipcMain.handle('remote-control:set-ip', async (event, ip: string) => {
-      selectedRemoteIp = ip
-      console.log(`[Remote] IP set to: ${ip}`)
-      await saveRemoteControlSettings({ selectedIp: ip })
+      const clean = (ip || '').trim()
+      if (clean === '0.0.0.0') {
+        selectedRemoteIp = null
+      } else {
+        selectedRemoteIp = clean
+      }
+      console.log(`[Remote] IP set to: ${clean} (listen 0.0.0.0)`)
+      // Сохраняем выбор, чтобы после перезапуска показывался тот же адрес (VPN и т.п.)
+      setRemoteHost(clean || '0.0.0.0')
       return true
+    })
+
+    ipcMain.handle('remote-control:set-pin', async (event, pin: string) => {
+      const ok = await setRemotePin(pin)
+      return ok
+    })
+
+    ipcMain.handle('remote-control:has-pin', async () => {
+      const pin = await getRemotePin()
+      return !!pin
     })
 
     ipcMain.handle('remote-control:get-port', () => {
       return getRemoteStatus().port
     })
 
-    ipcMain.handle('remote-control:set-port', async (event, port: number) => {
-      const ok = setRemotePort(port)
-      if (ok) await saveRemoteControlSettings({ port })
-      return ok
+    ipcMain.handle('remote-control:set-port', (event, port: number) => {
+      return setRemotePort(port)
     })
 
     // Установка Subsonic сервера для remote проксирования
     ipcMain.handle('remote-control:set-subsonic-url', async (event, url: string, username: string, password: string, authType: 'token' | 'password') => {
       await setRemoteBaseAppUrl(url, username, password, authType)
       return true
-    })
-
-    // PIN доступа к Remote Control (обязателен при включении)
-    ipcMain.handle('remote-control:set-pin', async (event, pin: string) => {
-      const { setRemotePin } = await import('../../src/service/remote-server')
-      return setRemotePin(pin)
-    })
-
-    ipcMain.handle('remote-control:has-pin', async () => {
-      const { hasRemotePin } = await import('../../src/service/remote-server')
-      return hasRemotePin()
     })
 
     // Проверка есть ли сохранённые учётные данные
@@ -266,7 +291,20 @@ if (!instanceLock) {
     // Загрузить сохранённые настройки remote control
     ipcMain.handle('remote-control:loadSettings', async () => {
       const { loadRemoteControlSettings } = await import('../../src/service/remote-server')
-      return loadRemoteControlSettings()
+      const s = await loadRemoteControlSettings()
+      if (s?.ip) selectedRemoteIp = s.ip
+      return s
+    })
+
+    // Восстанавливаем выбранный IP при старте (чтобы VPN-адрес не сбрасывался на первый)
+    import('../../src/service/remote-server').then(async ({ loadRemoteControlSettings }) => {
+      try {
+        const s = await loadRemoteControlSettings()
+        if (s?.ip) {
+          selectedRemoteIp = s.ip
+          console.log(`[Remote] Restored saved IP: ${s.ip}`)
+        }
+      } catch { /* ignore */ }
     })
 
     // Получить список подключённых клиентов
@@ -355,8 +393,11 @@ if (!instanceLock) {
       updateRemoteState(state)
     })
 
-    // Остановка remote сервера — в едином before-quit потоке ниже
-    // (см. flush flow: flush очереди -> stopRemoteServer -> updater/app.quit)
+    // Остановка remote сервера при перезапуске приложения
+    app.on('before-quit', async () => {
+      console.log('[Remote] Shutting down remote server on app quit...')
+      await stopRemoteServer()
+    })
 
     // Yandex Music Auth IPC
     ipcMain.handle('yandex-music:auth', async (_, { login, password }) => {
@@ -631,58 +672,57 @@ if (!instanceLock) {
     })
   })
 
-  // Единый before-quit поток: раньше было три отдельных хендлера
-  // (remote-stop выше, этот save-флоу, quitAndInstall в updater.ts).
-  // Порядок: 1) один awaited IDB-flush очереди из рендера,
-  // 2) остановка remote сервера, 3) установка обновления или app.quit().
-  let isQuitFlowRunning = false
+  let isSaving = false
 
   app.on('before-quit', async (e) => {
-    // Повторный вход (из app.quit()/quitAndInstall ниже) — выходим сразу
-    if (isQuitting || isQuitFlowRunning) {
+    // Если уже сохраняем — выходим
+    if (isSaving) {
+      console.log('[App] Save complete, quitting...')
+      isQuitting = true
       return
     }
 
     e.preventDefault()
-    isQuitFlowRunning = true
-    console.log('[App] before-quit — single flush flow...')
+    console.log('[App] before-quit triggered — saving all data...')
 
-    // 1. Один awaited flush очереди: рендер пишет текущий songlist
-    // в IndexedDB ключ player_songlist и возвращает результат.
-    // localStorage синхронен — его ждать не нужно; дырой был именно IDB.
+    // Принудительно сохраняем все данные перед выходом
+    isSaving = true
     if (mainWindow && !mainWindow.isDestroyed()) {
       try {
-        const res = await Promise.race([
-          mainWindow.webContents.executeJavaScript(
-            '(window.__kumaflowFlushQueue ? window.__kumaflowFlushQueue() : {ok:false,n:-1})',
-          ),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('queue flush timeout 3s')), 3000),
-          ),
-        ])
-        console.log('[App] Queue flush:', JSON.stringify(res))
+        await mainWindow.webContents.executeJavaScript(`
+          (async () => {
+            try {
+              const stores = ['ml_profile', 'ratings', 'settings', 'accounts-persistence', 
+                             'homepage-settings', 'page-design-settings', 'theme-store',
+                             'ml-playlists', 'ml-playlists-state', 'generated-playlists',
+                             'app-persistence', 'auth-persistence', 'shared-accounts'];
+              
+              for (const key of stores) {
+                const data = localStorage.getItem(key);
+                if (data) {
+                  console.log('[Save] ✓', key, '(' + data.length + ' bytes)');
+                } else {
+                  console.log('[Save] -', key, '(empty)');
+                }
+              }
+              
+              // Форсируем запись localStorage
+              window.dispatchEvent(new Event('beforeunload'));
+              await new Promise(r => setTimeout(r, 500));
+            } catch (e) {
+              console.error('[Save] Error:', e);
+            }
+          })();
+        `)
+        console.log('[App] Data save complete')
       } catch (err) {
-        console.error('[App] Queue flush failed (continuing quit):', err)
+        console.error('[App] Error saving data:', err)
       }
     }
 
-    // 2. Remote server stop (раньше отдельный хендлер)
-    try {
-      console.log('[Remote] Shutting down remote server on app quit...')
-      await stopRemoteServer()
-    } catch (err) {
-      console.error('[Remote] Stop error (continuing quit):', err)
-    }
-
-    // 3. Обновление или выход (quitAndInstall в updater.ts больше
-    // не висит отдельным хендлером — вызывается отсюда)
     isQuitting = true
-    if (isUpdateDownloaded()) {
-      console.log('[Updater] Installing update on quit')
-      quitAndInstallOnQuit()
-    } else {
-      app.quit()
-    }
+    isSaving = false
+    app.quit()
   })
 
   app.on('window-all-closed', () => {

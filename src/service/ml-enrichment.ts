@@ -44,6 +44,12 @@ class MLEnrichmentService {
       const { getProfile } = useMLStore.getState()
       const profile = getProfile()
 
+      // Иммутабельная копия. Раньше жанр добавлялся мутацией
+      // profile.preferredGenres[genre] = ... — вложенный объект оставался той же
+      // ссылкой, и zustand-подписчики на preferredGenres не перерендеривались:
+      // данные записывались в store, но интерфейс показывал старое состояние.
+      const preferredGenres = { ...profile.preferredGenres }
+
       let artistsFound = 0
 
       for (const artist of artistsToScan) {
@@ -63,7 +69,7 @@ class MLEnrichmentService {
               // Добавляем жанры в ML профиль
               artistInfo.genres.forEach(genre => {
                 genresDiscovered.add(genre)
-                profile.preferredGenres[genre] = (profile.preferredGenres[genre] || 0) + 1
+                preferredGenres[genre] = (preferredGenres[genre] || 0) + 1
               })
               
               console.log('[ML Enrichment] Found artist:', artist.name, {
@@ -76,8 +82,10 @@ class MLEnrichmentService {
         }
       }
 
-      // Сохраняем обновлённый профиль через Zustand
-      useMLStore.setState({ profile })
+      // Сохраняем обновлённый профиль через Zustand.
+      // profile тоже пересобираем: иначе ссылка на сам profile не изменится,
+      // и подписчики на state.profile не увидят правки.
+      useMLStore.setState({ profile: { ...profile, preferredGenres } })
 
       const genresArray = Array.from(genresDiscovered)
       toast(`✅ Отсканировано ${artistsToScan.length} артистов, найдено ${artistsFound}, обнаружено ${genresArray.length} жанров`, { type: 'success' })

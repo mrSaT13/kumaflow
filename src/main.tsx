@@ -1,3 +1,8 @@
+// ПЕРВЫМ импортом: рендерер при загрузке модулей дёргает window.api.
+// В Electron его даёт preload, в браузере — эта заглушка. В Electron
+// модуль ничего не делает.
+import '@/dev/browser-shim'
+
 import { QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'

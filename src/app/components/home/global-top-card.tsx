@@ -7,18 +7,16 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { Headphones, TrendingUp, Music2 } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 import { toast } from 'react-toastify'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
 import { ScrollArea } from '@/app/components/ui/scroll-area'
 import { getCachedGlobalTopTracks, GlobalTrack } from '@/service/global-top-tracks'
 import { usePlayerActions } from '@/store/player.store'
-import { subsonic } from '@/service/subsonic'
 
 export function GlobalTopCard() {
-  const { t } = useTranslation()
-  const { setSongList, play } = usePlayerActions()
+  // setSongList сам выставляет isPlaying, отдельного play() в actions нет
+  const { setSongList } = usePlayerActions()
 
   // Загружаем глобальный топ
   const { data, isLoading, error } = useQuery({
@@ -43,7 +41,6 @@ export function GlobalTopCard() {
       }
 
       setSongList(songs, 0)
-      play()
       toast.success(`▶️ Запущено: Что слушают другие (${songs.length} треков)`)
     } catch (error) {
       console.error('[GlobalTop] Error playing:', error)
@@ -59,7 +56,6 @@ export function GlobalTopCard() {
 
     try {
       setSongList([track.song], 0)
-      play()
       toast.success(`▶️ ${track.song.artist} - ${track.song.title}`)
     } catch (error) {
       console.error('[GlobalTop] Error playing track:', error)
@@ -96,7 +92,7 @@ export function GlobalTopCard() {
             <CardDescription className="text-xs mt-1">
               <span className="flex items-center gap-1">
                 <TrendingUp className="h-3 w-3" />
-                Топ {data.tracks.length} треков {data.source === 'navidrome' ? 'сервера' : 'Last.fm'}
+                Топ {data.tracks.length} треков сервера
               </span>
             </CardDescription>
           </div>
@@ -122,20 +118,9 @@ export function GlobalTopCard() {
               >
                 {/* Позиция в чарте */}
                 <div className="w-6 text-center">
-                  {track.trend === 'up' && (
-                    <TrendingUp className="h-4 w-4 text-green-500" />
-                  )}
-                  {track.trend === 'down' && (
-                    <TrendingUp className="h-4 w-4 text-red-500 rotate-180" />
-                  )}
-                  {track.trend === 'new' && (
-                    <span className="text-xs font-bold text-blue-500">NEW</span>
-                  )}
-                  {!track.trend && (
-                    <span className="text-sm font-medium text-muted-foreground">
-                      {index + 1}
-                    </span>
-                  )}
+                  <span className="text-sm font-medium text-muted-foreground">
+                    {track.rank ?? index + 1}
+                  </span>
                 </div>
 
                 {/* Обложка */}
@@ -183,11 +168,9 @@ export function GlobalTopCard() {
           </div>
         </ScrollArea>
 
-        {/* Источник данных */}
+        {/* Источник данных: сервис опрашивает только текущий Navidrome-сервер */}
         <div className="mt-3 text-xs text-muted-foreground text-center">
-          {data.source === 'navidrome' 
-            ? '📊 Статистика вашего Navidrome сервера'
-            : '🌍 Глобальный чарт Last.fm'}
+          📊 Статистика вашего Navidrome сервера
         </div>
       </CardContent>
     </Card>

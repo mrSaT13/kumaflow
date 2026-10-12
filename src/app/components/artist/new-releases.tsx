@@ -11,6 +11,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { appleMusicService, type iTunesResult } from '@/service/apple-music-api'
+import type { ISong } from '@/types/responses/song'
 import { useExternalApi } from '@/store/external-api.store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
@@ -138,7 +139,7 @@ export function NewReleases({ artistName }: NewReleasesProps) {
 
         if (artistName) {
           // Новинки конкретного артиста
-          newAlbums = await appleMusicService.getNewReleases(artistName, 5)
+          newAlbums = await appleMusicService.getNewReleases(artistName)
         } else {
           // Общие новинки (топ альбомов)
           const { appleMusicService } = await import('@/service/apple-music-api')
@@ -180,6 +181,12 @@ export function NewReleases({ artistName }: NewReleasesProps) {
         // Асинхронно ищем треки в библиотеке
         for (let i = 0; i < tracksWithStatus.length; i++) {
           const track = tracksWithStatus[i]
+          if (!track.trackName) {
+            setTracks(prev => prev.map(t =>
+              t.trackId === track.trackId ? { ...t, isSearching: false } : t
+            ))
+            continue
+          }
           const libraryTrack = await findInLibrary(track.artistName, track.trackName)
 
           setTracks(prev => prev.map(t => {
@@ -315,17 +322,15 @@ export function NewReleases({ artistName }: NewReleasesProps) {
       toast(`Воспроизводится: ${track.trackName}`, { type: 'success' })
     } else if (track.previewUrl) {
       // Трека нет в библиотеке — воспроизводим превью (30 сек)
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current = null
-      }
-      
       if (playingPreviewId === track.trackId) {
         // Уже играет — останавливаем
-        setPlayingPreviewId(null)
+        stopPreview()
         return
       }
-      
+
+      // Останавливаем ранее запущенное превью
+      stopPreview()
+
       const audio = new Audio(track.previewUrl)
       audioRef.current = audio
       

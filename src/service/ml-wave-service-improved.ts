@@ -6,7 +6,7 @@
  */
 
 import { subsonic } from '@/service/subsonic'
-import { getTopSongs, getSongsByGenre, getRandomSongs } from '@/service/subsonic-api'
+import { getSongsByGenre, getRandomSongs } from '@/service/subsonic-api'
 import { useMLStore } from '@/store/ml.store'
 import { playlistCache } from '@/service/playlist-cache'
 import { isArtistBanned } from '@/service/ban-filter'

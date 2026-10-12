@@ -32,7 +32,7 @@ export function ArtistButtons({
 
   const starMutation = useMutation({
     mutationFn: subsonic.star.handleStarItem,
-    onSuccess: (data, variables) => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: [queryKeys.artist.single, artist.id],
       })

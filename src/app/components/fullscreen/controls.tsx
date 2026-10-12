@@ -24,10 +24,10 @@ import {
   usePlayerPrevAndNext,
   usePlayerShuffle,
   usePlayerStore,
+  selectCurrentSong,
 } from '@/store/player.store'
 import { LoopState } from '@/types/playerContext'
 import { useML } from '@/store/ml.store'
-import { cn } from '@/lib/utils'
 
 export function FullscreenControls() {
   const isPlaying = usePlayerIsPlaying()
@@ -46,7 +46,7 @@ export function FullscreenControls() {
     starCurrentSong,
   } = usePlayerActions()
   const { rateSong } = useML()
-  const currentSong = usePlayerStore((state) => state.songlist.currentSong)
+  const currentSong = usePlayerStore(selectCurrentSong)
   const isLiked = usePlayerStore((state) => state.playerState.isSongStarred)
 
   const handleLike = () => {

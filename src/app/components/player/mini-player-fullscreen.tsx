@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react'
 import { Play, Pause, SkipBack, SkipForward, Heart, Maximize2, Volume2, VolumeX } from 'lucide-react'
-import { usePlayerStore, usePlayerActions, usePlayerSongStarred } from '@/store/player.store'
+import { usePlayerStore, usePlayerActions, usePlayerSongStarred, selectCurrentSong,
+} from '@/store/player.store'
 import { useML } from '@/store/ml.store'
 import { Button } from '@/app/components/ui/button'
 import { Slider } from '@/app/components/ui/slider'
 import { cn } from '@/lib/utils'
+import { getSimpleCoverArtUrl } from '@/api/httpClient'
 import { toast } from 'react-toastify'
 
 export function MiniPlayerFullscreen() {
-  const { currentSong, isPlaying, volume } = usePlayerStore()
+  const currentSong = usePlayerStore(selectCurrentSong)
+  const isPlaying = usePlayerStore((state) => state.playerState.isPlaying)
+  const volume = usePlayerStore((state) => state.playerState.volume)
   const { togglePlayPause, playNextSong, playPrevSong, starCurrentSong } = usePlayerActions()
   const isLiked = usePlayerSongStarred()
   const { rateSong } = useML()
@@ -17,6 +21,14 @@ export function MiniPlayerFullscreen() {
   const [isMuted, setIsMuted] = useState(volume === 0)
   const [showInfo, setShowInfo] = useState(false)
   const [progress, setProgress] = useState(0)
+
+  // У ISong нет поля coverUrl: обложка — это coverArtUrl (локальная
+  // библиотека) либо URL, собранный из coverArt.
+  const coverUrl =
+    currentSong.coverArtUrl
+    ?? (currentSong.coverArt
+      ? getSimpleCoverArtUrl(currentSong.coverArt, 'album', '300')
+      : undefined)
 
   // Выход по ESC
   useEffect(() => {
@@ -97,11 +109,11 @@ export function MiniPlayerFullscreen() {
     >
       {/* ФОНОВАЯ ОБЛОЖКА НА ВЕСЬ ЭКРАН */}
       <div className="absolute inset-0 overflow-hidden">
-        {currentSong.coverUrl ? (
+        {coverUrl ? (
           <>
             {/* Основная обложка */}
             <img
-              src={currentSong.coverUrl}
+              src={coverUrl}
               alt={currentSong.title}
               className="w-full h-full object-cover blur-xl scale-110 opacity-50"
             />

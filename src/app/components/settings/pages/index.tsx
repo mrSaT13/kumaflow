@@ -10,6 +10,7 @@ import { Desktop } from './desktop'
 import { Language } from './language'
 import { LocalMusicSettings } from './content/local-music'
 import { Privacy } from './privacy'
+import { AboutSettings } from './about'
 
 const pages: Record<SettingsOptions, JSX.Element> = {
   appearance: <Appearance />,
@@ -22,6 +23,7 @@ const pages: Record<SettingsOptions, JSX.Element> = {
   account: <Account />,
   desktop: <Desktop />,
   privacy: <Privacy />,
+  about: <AboutSettings />,
 }
 
 export function Pages() {

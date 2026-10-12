@@ -8,6 +8,9 @@ declare global {
     APP_PASSWORD: string | undefined
     APP_AUTH_TYPE: string | undefined
     HIDE_RADIOS_SECTION: boolean | undefined
+    /** Скрытие секций сайдбара. Читаются в app.store при инициализации. */
+    HIDE_AUDIOBOOKS_SECTION: boolean | undefined
+    HIDE_PLAYLISTS_SECTION: boolean | undefined
     SERVER_TYPE: string | undefined
     APP_THEME: string | undefined
     APP_HIDE_THEMES: boolean | undefined

@@ -12,6 +12,7 @@ import { Button } from '@/app/components/ui/button'
 import { SimpleTooltip } from '@/app/components/ui/simple-tooltip'
 import { Slider } from '@/app/components/ui/slider'
 import { usePlayerHotkeys } from '@/app/hooks/use-audio-hotkeys'
+import { applyGain } from '@/features/player/audio-graph'
 import { cn } from '@/lib/utils'
 import { usePlayerVolume, useVolumeSettings } from '@/store/player.store'
 import { PopoverVolume } from './popover-volume'
@@ -29,10 +30,11 @@ export function PlayerVolume({ disabled, audioRef }: PlayerVolumeProps) {
   useAudioHotkeys('mod+up', () => handleVolumeWheel(false))
   useAudioHotkeys('mod+down', () => handleVolumeWheel(true))
 
+  // Громкость применяется в audio.tsx через applyGain. Здесь больше не трогаем
+  // audio.volume напрямую: вместе с gain-узлом это давало двойное применение.
   useEffect(() => {
     if (!audioRef.current) return
-
-    audioRef.current.volume = volume / 100
+    applyGain(audioRef.current, volume / 100)
   }, [audioRef, volume])
 
   const tooltipText =

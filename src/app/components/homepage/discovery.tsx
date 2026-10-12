@@ -83,7 +83,7 @@ export default function Discovery() {
       if (card.filter === 'mood') {
         const result = await generateActivityMix(
           card.id,
-          profile.likedSongIds || [],
+          profile.likedSongs || [],
           ratings,
           profile.preferredGenres,
           25

@@ -1,14 +1,20 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Sparkles } from 'lucide-react'
+import type { ReactNode } from 'react'
+import {
+  Sparkles, Flower2, BookOpen, Footprints, Dumbbell, Bike, Palette, ChefHat,
+  BookMarked, Gamepad2, BedDouble, Guitar, Smile, Frown, Zap, PartyPopper,
+  CloudRain, Flame, Clock, Crosshair, Bot, Waves, Compass, Heart,
+  AudioWaveform, Disc3, ThumbsDown, Activity, Loader2, Play, RotateCw,
+  TrendingUp, Globe, Clapperboard,
+} from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { useML } from '@/store/ml.store'
 import { usePlayerActions } from '@/store/player.store'
 import { useMLPlaylistsStateActions } from '@/store/ml-playlists-state.store'
 import { useMLPlaylists } from '@/store/ml-playlists.store'
 import { useExternalApi, useExternalApiStore } from '@/store/external-api.store'
-import { useArtistSubscriptions } from '@/store/artist-subscriptions.store'
-import { generateDailyMix, generateDiscoverWeekly, generateMyWavePlaylist, generateSimilarArtistsPlaylist, generateDecadePlaylist, generateGenrePlaylist, generateMLRecommendations, generateTimeOfDayMix, generateActivityMix, generateBecauseYouListened, generateMoodMix, generateVibeMix, generateNewReleasesPlaylist } from '@/service/ml-wave-service'
+import { generateDailyMix, generateDiscoverWeekly, generateMyWavePlaylist, generateGenrePlaylist, generateMLRecommendations, generateTimeOfDayMix, generateActivityMix, generateBecauseYouListened, generateMoodMix, generateVibeMix } from '@/service/ml-wave-service'
 import { generateDecadePlaylistV2, generateNewReleasesPlaylistV2, generateSimilarArtistsPlaylistV2 } from '@/service/ml-wave-service-v2'
 import { getRandomSongs, getTopSongs } from '@/service/subsonic-api'
 import { subsonic } from '@/service/subsonic'
@@ -29,10 +35,10 @@ interface MLPlaylistCard {
   id: string
   title: string
   description: string
-  icon: string
+  icon: ReactNode
   color?: string
   trackCount?: number
-  type: 'daily-mix' | 'discover-weekly' | 'my-wave' | 'trends' | 'new-releases' | 'similar-artists' | 'decade' | 'genre' | 'disliked' | 'time-of-day' | 'workout' | 'focus' | 'chill' | 'because-you-listened' | 'instant-mix' | 'ml-recommendations' | 'mood' | 'vibe-similarity' | 'new-releases-subscriptions' | 'ai-generated'
+  type: 'daily-mix' | 'discover-weekly' | 'my-wave' | 'trends' | 'new-releases' | 'similar-artists' | 'decade' | 'genre' | 'disliked' | 'time-of-day' | 'workout' | 'focus' | 'chill' | 'because-you-listened' | 'instant-mix' | 'ml-recommendations' | 'mood' | 'vibe-similarity' | 'new-releases-subscriptions' | 'ai-generated' | 'song-alchemy' | 'shared-listens' | 'activity-mix'
   decade?: string
   genre?: string
   mood?: string
@@ -263,13 +269,13 @@ export default function MLForYouPage() {
 
       if (!settings.llmEnabled || !mlStore.settings?.llmCoordinatorEnabled) {
         console.warn('[AI Gen] ❌ LLM or Coordinator disabled!')
-        toast('⚠️ Включите LLM Координатор в настройках ML плейлистов', { type: 'warning' })
+        toast('Включите LLM Координатор в настройках ML плейлистов', { type: 'warning' })
         setAiPlaylistsGenerating(false)
         return
       }
 
       console.log('[AI Gen] ✅ Starting generation...')
-      toast('🤖 Генерация AI плейлистов...', { type: 'info' })
+      toast('Генерация AI плейлистов...', { type: 'info' })
 
       const playlists = ['ai-morning', 'ai-day', 'ai-evening']
 
@@ -289,7 +295,7 @@ export default function MLForYouPage() {
       }
 
       localStorage.setItem('ai-playlists-last-generated', Date.now().toString())
-      toast('✅ AI плейлисты сгенерированы!', { type: 'success' })
+      toast('AI плейлисты сгенерированы!', { type: 'success' })
     } catch (error) {
       console.error('AI Playlist generation error:', error)
       toast('Ошибка генерации AI плейлистов', { type: 'error' })
@@ -352,17 +358,17 @@ export default function MLForYouPage() {
 
   // Activity Mixer - Миксы для занятий (11 типов, без дублей с Mood)
   const activityMixers = [
-    { id: 'meditation', name: '🧘 Медитация', color: 'from-indigo-600 to-purple-700', icon: '🧘' },
-    { id: 'deepwork', name: '📚 Глубокая работа', color: 'from-blue-600 to-cyan-700', icon: '📚' },
-    { id: 'running', name: '🏃 Бег', color: 'from-red-600 to-orange-700', icon: '🏃' },
-    { id: 'workout', name: '🏋️ Силовая', color: 'from-red-700 to-red-900', icon: '🏋️' },
-    { id: 'cycling', name: '🚴 Вело', color: 'from-green-500 to-teal-600', icon: '🚴' },
-    { id: 'creativity', name: '🎨 Творчество', color: 'from-pink-500 to-rose-600', icon: '🎨' },
-    { id: 'cooking', name: '🍳 Кулинария', color: 'from-yellow-500 to-orange-600', icon: '🍳' },
-    { id: 'reading', name: '🌙 Чтение', color: 'from-slate-600 to-gray-700', icon: '🌙' },
-    { id: 'gaming', name: '🎮 Гейминг', color: 'from-violet-600 to-purple-700', icon: '🎮' },
-    { id: 'sleep', name: '🛁 Сон', color: 'from-blue-800 to-indigo-900', icon: '🛁' },
-    { id: 'acoustic', name: '🎸 Акустика', color: 'from-amber-600 to-yellow-700', icon: '🎸' },
+    { id: 'meditation', name: 'Медитация', color: 'from-indigo-600 to-purple-700', icon: <Flower2 className="w-7 h-7" /> },
+    { id: 'deepwork', name: 'Глубокая работа', color: 'from-blue-600 to-cyan-700', icon: <BookOpen className="w-7 h-7" /> },
+    { id: 'running', name: 'Бег', color: 'from-red-600 to-orange-700', icon: <Footprints className="w-7 h-7" /> },
+    { id: 'workout', name: 'Силовая', color: 'from-red-700 to-red-900', icon: <Dumbbell className="w-7 h-7" /> },
+    { id: 'cycling', name: 'Вело', color: 'from-green-500 to-teal-600', icon: <Bike className="w-7 h-7" /> },
+    { id: 'creativity', name: 'Творчество', color: 'from-pink-500 to-rose-600', icon: <Palette className="w-7 h-7" /> },
+    { id: 'cooking', name: 'Кулинария', color: 'from-yellow-500 to-orange-600', icon: <ChefHat className="w-7 h-7" /> },
+    { id: 'reading', name: 'Чтение', color: 'from-slate-600 to-gray-700', icon: <BookMarked className="w-7 h-7" /> },
+    { id: 'gaming', name: 'Гейминг', color: 'from-violet-600 to-purple-700', icon: <Gamepad2 className="w-7 h-7" /> },
+    { id: 'sleep', name: 'Сон', color: 'from-blue-800 to-indigo-900', icon: <BedDouble className="w-7 h-7" /> },
+    { id: 'acoustic', name: 'Акустика', color: 'from-amber-600 to-yellow-700', icon: <Guitar className="w-7 h-7" /> },
   ]
 
   const handleActivityClick = async (activity: string) => {
@@ -380,7 +386,7 @@ export default function MLForYouPage() {
       trackEvent('playlist_generated', { type: `activity-${activity}`, songCount: activityPlaylist.songs.length })
       
       const activityName = activityMixers.find(a => a.id === activity)?.name || activity
-      toast(`🎵 ${activityName} сгенерирован!`, { type: 'success' })
+      toast(`${activityName} сгенерирован!`, { type: 'success' })
     } catch (error) {
       console.error('Activity mix error:', error)
       toast('Ошибка генерации плейлиста', { type: 'error' })
@@ -391,12 +397,12 @@ export default function MLForYouPage() {
 
   // Mood Mixer - настоящие настроения (6 типов, без дублей с Activity)
   const moodMixers = [
-    { id: 'happy', name: '😊 Счастливое', color: 'from-yellow-400 to-orange-500', icon: '😊' },
-    { id: 'sad', name: '😢 Грустное', color: 'from-blue-600 to-indigo-700', icon: '😢' },
-    { id: 'energetic', name: '⚡ Энергичное', color: 'from-red-500 to-pink-600', icon: '⚡' },
-    { id: 'celebratory', name: '� Праздничное', color: 'from-purple-500 to-pink-500', icon: '�' },
-    { id: 'melancholy', name: '🌧️ Меланхолия', color: 'from-gray-600 to-slate-700', icon: '🌧️' },
-    { id: 'aggressive', name: '🔥 Агрессивное', color: 'from-red-700 to-orange-800', icon: '🔥' },
+    { id: 'happy', name: 'Счастливое', color: 'from-yellow-400 to-orange-500', icon: <Smile className="w-7 h-7" /> },
+    { id: 'sad', name: 'Грустное', color: 'from-blue-600 to-indigo-700', icon: <Frown className="w-7 h-7" /> },
+    { id: 'energetic', name: 'Энергичное', color: 'from-red-500 to-pink-600', icon: <Zap className="w-7 h-7" /> },
+    { id: 'celebratory', name: 'Праздничное', color: 'from-purple-500 to-pink-500', icon: <PartyPopper className="w-7 h-7" /> },
+    { id: 'melancholy', name: 'Меланхолия', color: 'from-gray-600 to-slate-700', icon: <CloudRain className="w-7 h-7" /> },
+    { id: 'aggressive', name: 'Агрессивное', color: 'from-red-700 to-orange-800', icon: <Flame className="w-7 h-7" /> },
   ]
 
   const handleMoodClick = async (mood: string) => {
@@ -423,7 +429,7 @@ export default function MLForYouPage() {
       trackEvent('playlist_generated', { type: `mood-${actualMood}`, songCount: moodPlaylist.songs.length })
 
       const moodName = moodMixers.find(m => m.id === mood)?.name || mood
-      toast(`🎵 ${moodName} сгенерирован!`, { type: 'success' })
+      toast(`${moodName} сгенерирован!`, { type: 'success' })
     } catch (error) {
       console.error('Mood mix error:', error)
       toast('Ошибка генерации плейлиста', { type: 'error' })
@@ -443,7 +449,7 @@ export default function MLForYouPage() {
     }
 
     console.log('[ForYou] Generating comment for type:', type, 'songs count:', songs.length)
-    const genres = [...new Set(songs.map(s => s.genre).filter(Boolean))]
+    const genres = [...new Set(songs.map(s => s.genre).filter((g): g is string => Boolean(g)))]
     const artists = [...new Set(songs.map(s => s.artist).filter(Boolean))]
     console.log('[ForYou] Genres:', genres, 'Artists:', artists)
 
@@ -507,7 +513,7 @@ export default function MLForYouPage() {
 
   // Вспомогательная функция для LLM-enhanced генерации
   const generateWithLLM = async (
-    generator: () => Promise<{ songs: ISong[]; source?: string }>,
+    generator: () => Promise<{ songs: ISong[]; source: string }>,
     context: {
       playlistName: string
       playlistType: string
@@ -529,7 +535,7 @@ export default function MLForYouPage() {
 
     try {
       // Шаг 1: Спрашиваем LLM рекомендации
-      setLlmStatus('🤖 LLM анализирует ваши предпочтения...')
+      setLlmStatus('LLM анализирует ваши предпочтения...')
       console.log('[ForYou] Step 1: Asking LLM for recommendations...')
 
       const profile = getProfile()
@@ -571,8 +577,6 @@ ${context.contextInfo ? `КОНТЕКСТ: ${context.contextInfo}` : ''}
         }),
       })
 
-      let llmRecommendations = null
-
       if (response.ok) {
         const result = await response.json()
         const content = result.choices?.[0]?.message?.content?.trim() || ''
@@ -581,14 +585,14 @@ ${context.contextInfo ? `КОНТЕКСТ: ${context.contextInfo}` : ''}
 
         if (firstBrace !== -1 && lastBrace !== -1) {
           const jsonStr = content.substring(firstBrace, lastBrace + 1)
-          llmRecommendations = JSON.parse(jsonStr)
+          const llmRecommendations = JSON.parse(jsonStr)
           console.log('[ForYou] LLM recommendations:', llmRecommendations)
-          setLlmStatus(`✅ LLM рекомендует: ${llmRecommendations.genres?.join(', ') || 'отличные треки'}`)
+          setLlmStatus(`LLM рекомендует: ${llmRecommendations.genres?.join(', ') || 'отличные треки'}`)
         }
       }
 
       // Шаг 2: Генерируем плейлист
-      setLlmStatus('🎵 Генерируем плейлист...')
+      setLlmStatus('Генерируем плейлист...')
       console.log('[ForYou] Step 2: Generating playlist...')
 
       const result = await generator()
@@ -603,7 +607,7 @@ ${context.contextInfo ? `КОНТЕКСТ: ${context.contextInfo}` : ''}
       // ❌ ОТКЛЮЧЕНО: LLM review - слишком много запросов, комментарий генерируется отдельно
       // Вместо этого используем кэшированный комментарий через getOrGenerateComment
       console.log('[ForYou] Step 3: Skipping LLM review (using cached comment instead)')
-      setLlmStatus('✅ LLM подобрал треки')
+      setLlmStatus('LLM подобрал треки')
 
       // Очищаем статус через 3 секунды
       setTimeout(() => setLlmStatus(null), 3000)
@@ -617,77 +621,6 @@ ${context.contextInfo ? `КОНТЕКСТ: ${context.contextInfo}` : ''}
     }
   }
 
-  // Функция для получения рекомендаций от LLM перед генерацией
-  const getLLMRecommendations = async (
-    playlistType: string,
-    contextInfo?: string
-  ): Promise<{ suggestedGenres?: string[]; suggestedArtists?: string[]; mood?: string } | null> => {
-    const state = useExternalApiStore.getState()
-    const settings = state.settings || {}
-
-    if (!settings.llmEnabled) {
-      return null
-    }
-
-    try {
-      const profile = getProfile()
-      const currentGenres = Object.keys(profile.preferredGenres || {}).slice(0, 5)
-      const currentArtists = Object.keys(profile.preferredArtists || {}).slice(0, 5)
-
-      const prompt = `
-Ты — музыкальный куратор. Пользователь хочет сгенерировать плейлист.
-
-Тип плейлиста: ${playlistType}
-${contextInfo ? `Контекст: ${contextInfo}` : ''}
-Текущие жанры пользователя: ${currentGenres.join(', ') || 'не указаны'}
-Текущие артисты пользователя: ${currentArtists.join(', ') || 'не указаны'}
-
-Порекомендуй:
-1. Какие 3-5 жанров лучше всего подойдут для этого плейлиста?
-2. Какие 3-5 артистов можно добавить для разнообразия?
-3. Какое настроение/атмосфера должны быть?
-
-Ответь ТОЛЬКО в формате JSON:
-{"suggestedGenres": [], "suggestedArtists": [], "mood": "описание атмосферы"}`
-
-      console.log('[ForYou] Asking LLM for recommendations...')
-
-      const response = await fetch(`${settings.llmLmStudioUrl}/v1/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: settings.llmModel || 'qwen2.5-7b',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.7,
-          max_tokens: 150,
-        }),
-      })
-
-      if (!response.ok) {
-        console.warn('[ForYou] LLM recommendations failed:', response.status)
-        return null
-      }
-
-      const result = await response.json()
-      const content = result.choices?.[0]?.message?.content?.trim() || ''
-
-      const firstBrace = content.indexOf('{')
-      const lastBrace = content.lastIndexOf('}')
-
-      if (firstBrace !== -1 && lastBrace !== -1) {
-        const jsonStr = content.substring(firstBrace, lastBrace + 1)
-        const parsed = JSON.parse(jsonStr)
-        console.log('[ForYou] LLM recommendations:', parsed)
-        return parsed
-      }
-
-      return null
-    } catch (error) {
-      console.error('[ForYou] LLM recommendations error:', error)
-      return null
-    }
-  }
-
   const handlePlayPlaylist = async (playlist: MLPlaylistCard) => {
     setIsGenerating(playlist.id)
 
@@ -696,11 +629,6 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
       const likedSongIds = profile.likedSongs
       const preferredGenres = profile.preferredGenres
       const preferredArtists = profile.preferredArtists
-      const dislikedSongIds = profile.dislikedSongs
-
-      // Загружаем настройки ML плейлистов для проверки LLM Координатора
-      const { useMLPlaylistsStore } = await import('@/store/ml-playlists.store')
-      const mlSettings = useMLPlaylistsStore.getState()
 
       let songs: ISong[] = []
 
@@ -727,7 +655,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
             const enabledAccounts = accounts.filter(a => a.enabled)
 
             if (enabledAccounts.length === 0) {
-              toast('⚠️ Нет подключенных аккаунтов! Добавьте их в настройках', { type: 'warning' })
+              toast('Нет подключенных аккаунтов! Добавьте их в настройках', { type: 'warning' })
               setIsGenerating(null)
               return
             }
@@ -736,7 +664,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
             const sharedResult = await generateSharedPlaylist(enabledAccounts, trackLimit)
 
             if (sharedResult.tracks.length === 0) {
-              toast('⚠️ Не удалось получить треки из аккаунтов', { type: 'warning' })
+              toast('Не удалось получить треки из аккаунтов', { type: 'warning' })
               setIsGenerating(null)
               return
             }
@@ -747,7 +675,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
             addPlaylist({
               id: 'shared-listens',
               type: 'shared-listens',
-              name: '🌍 Что слушают другие',
+              name: 'Что слушают другие',
               description: `Плейлист из ${enabledAccounts.length} аккаунтов: ${enabledAccounts.map(a => a.name).join(', ')}`,
               songs: songs,
               createdAt: new Date().toISOString(),
@@ -758,11 +686,11 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
             setGeneratedPlaylistTypes(prev => new Set(prev).add('shared-listens'))
 
             // Воспроизведение
-            setSongList(songs, 0, false, undefined, '🌍 Что слушают другие')
+            setSongList(songs, 0, false, undefined, 'Что слушают другие')
             setIsGenerating(null)
 
             trackEvent('playlist_generated', { type: 'shared-listens', songCount: songs.length })
-            toast(`� Слушают другие: ${songs.length} треков из ${enabledAccounts.length} аккаунтов!`, { type: 'success' })
+            toast(`Слушают другие: ${songs.length} треков из ${enabledAccounts.length} аккаунтов!`, { type: 'success' })
           } catch (error) {
             console.error('Shared listens error:', error)
             toast('Ошибка генерации плейлиста', { type: 'error' })
@@ -772,7 +700,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
 
         case 'daily-mix':
           // Ежедневный микс - чистая ML генерация без LLM
-          setLlmStatus('🎵 Генерируем ежедневный микс...')
+          setLlmStatus('Генерируем ежедневный микс...')
           
           console.log(`[ForYouPage] Calling generateDailyMix with limit: ${trackLimit}`)
 
@@ -819,7 +747,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
 
           // Уведомление ПОСЛЕ всех операций
           trackEvent('playlist_generated', { type: 'daily-mix', songCount: songs.length })
-          toast(`📅 ${playlistName}: ${songs.length} треков!`, { type: 'success' })
+          toast(`${playlistName}: ${songs.length} треков!`, { type: 'success' })
           return
 
         case 'ml-recommendations':
@@ -832,7 +760,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           )
           songs = mlRecsResult.songs
           trackEvent('playlist_generated', { type: 'ml-recommendations', songCount: songs.length })
-          toast('🤖 ML Рекомендации сгенерированы!', { type: 'success' })
+          toast('ML Рекомендации сгенерированы!', { type: 'success' })
 
           // Генерируем комментарий - используем кеш!
           const mlComment = await getOrGenerateComment('ml-recommendations', mlRecsResult.songs)
@@ -878,9 +806,10 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
 
           const myWaveComment = await getOrGenerateComment('my-wave', myWaveResult.songs)
 
-          // Используем сгенерированное название если есть
-          const myWaveName = (myWaveResult.songs as any).playlistName || 'Моя волна'
-          const myWaveAlt = (myWaveResult.songs as any).playlistAlternatives || []
+          // Используем сгенерированное название если есть.
+          // generateMyWavePlaylist вешает playlistName прямо на массив песен.
+          const myWaveSongs = myWaveResult.songs as ISong[] & { playlistName?: string }
+          const myWaveName = myWaveSongs.playlistName || 'Моя волна'
 
           addPlaylist({
             id: 'my-wave',
@@ -898,12 +827,12 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           setIsGenerating(null)
 
           const myWaveSource = myWaveResult.source === 'llm-enhanced' ? '(LLM)' : ''
-          toast(`🌊 ${myWaveName} ${myWaveSource}: ${songs.length} треков!`, { type: 'success' })
+          toast(`${myWaveName} ${myWaveSource}: ${songs.length} треков!`, { type: 'success' })
           return
 
         case 'time-of-day':
           // По времени суток - чистый ML алгоритм без LLM
-          setLlmStatus('🌅 Генерируем микс по времени суток...')
+          setLlmStatus('Генерируем микс по времени суток...')
           
           let timeResult: any = null  // ОБЪЯВЛЯЕМ ДО try
           
@@ -922,7 +851,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
             console.log(`[ForYouPage] Time of Day Mix generated: ${songs.length} tracks`)
           } catch (error) {
             console.error('[ForYouPage] Time of Day Mix ERROR:', error)
-            toast(`❌ Ошибка генерации: ${error.message}`, { type: 'error' })
+            toast(`Ошибка генерации: ${error instanceof Error ? error.message : String(error)}`, { type: 'error' })
             setIsGenerating(null)
             return
           }
@@ -949,13 +878,13 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           setSongList(songs, 0, false, undefined, 'Микс по времени суток')
           setIsGenerating(null)
           setLlmStatus(null)
-          toast(`🌅 Микс по времени суток: ${songs.length} треков!`, { type: 'success' })
+          toast(`Микс по времени суток: ${songs.length} треков!`, { type: 'success' })
           return
 
         case 'mood':
           // По настроению
           const moodResult = await generateWithLLM(
-            () => generateMoodMix(likedSongIds, ratings, trackLimit),
+            () => generateMoodMix(likedSongIds, ratings, preferredGenres, playlist.mood || 'relaxed', trackLimit),
             {
               playlistName: 'Микс настроени',
               playlistType: 'mood',
@@ -985,7 +914,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
 
         case 'vibe-similarity':
           // Vibe Similarity - нужен seed track
-          setLlmStatus('🎵 Находим треки с похожим вайбом...')
+          setLlmStatus('Находим треки с похожим вайбом...')
           
           // Берём случайный лайкнутый трек как seed
           const seedTrackId = likedSongIds.length > 0 
@@ -993,7 +922,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
             : null
             
           if (!seedTrackId) {
-            toast('❌ Нужно больше лайкнутых треков для Vibe Similarity', { type: 'error' })
+            toast('Нужно больше лайкнутых треков для Vibe Similarity', { type: 'error' })
             setIsGenerating(null)
             return
           }
@@ -1001,7 +930,6 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           console.log(`[ForYouPage] Vibe Similarity seed: ${seedTrackId}`)
           
           // Загружаем все треки для анализа
-          const { getRandomSongs } = await import('@/service/subsonic-api')
           const allSongsForVibe = await getRandomSongs(200)
           
           const vibeResult = await generateVibeMix(seedTrackId, allSongsForVibe, trackLimit)
@@ -1027,12 +955,12 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           // Воспроизведение
           setSongList(songs, 0, false, undefined, 'Vibe Микс')
           setIsGenerating(null)
-          toast(`🎶 Vibe Микс: ${songs.length} треков!`, { type: 'success' })
+          toast(`Vibe Микс: ${songs.length} треков!`, { type: 'success' })
           return
 
         case 'because-you-listened':
           // Потому что слушал - чистый ML алгоритм без LLM
-          setLlmStatus('🎵 Генерируем на основе прослушиваний...')
+          setLlmStatus('Генерируем на основе прослушиваний...')
           
           const becauseResult = await generateBecauseYouListened(
             likedSongIds,
@@ -1065,13 +993,16 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           setLlmStatus(null)
           
           trackEvent('playlist_generated', { type: 'because-you-listened', songCount: songs.length })
-          toast(`🎵 Потому что слушал: ${songs.length} треков!`, { type: 'success' })
+          toast(`Потому что слушал: ${songs.length} треков!`, { type: 'success' })
           return
 
         case 'activity-mix':
           // По активности
+          // 'work' в ACTIVITY_CONFIG НЕТ — generateActivityMix возвращал
+          // пустой плейлист, и «Микс для занятий» был всегда пустым. Ближайшее
+          // занятие по смыслу («Музыка для продуктивной работы») — 'focus'.
           const activityResult = await generateWithLLM(
-            () => generateActivityMix('work', likedSongIds, ratings, trackLimit),
+            () => generateActivityMix('focus', likedSongIds, ratings, preferredGenres, trackLimit),
             {
               playlistName: 'Микс для занятий',
               playlistType: 'activity-mix',
@@ -1102,7 +1033,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
 
         case 'discover-weekly':
           // Открытия недели - чистый ML алгоритм без LLM
-          setLlmStatus('🔍 Генерируем открытия недели...')
+          setLlmStatus('Генерируем открытия недели...')
           
           try {
             console.log(`[ForYouPage] Calling generateDiscoverWeekly with limit: ${trackLimit}`)
@@ -1119,7 +1050,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
             console.log(`[ForYouPage] Discover Weekly generated: ${songs.length} tracks`)
           } catch (error) {
             console.error('[ForYouPage] Discover Weekly ERROR:', error)
-            toast(`❌ Ошибка генерации: ${error.message}`, { type: 'error' })
+            toast(`Ошибка генерации: ${error instanceof Error ? error.message : String(error)}`, { type: 'error' })
             setIsGenerating(null)
             return
           }
@@ -1142,7 +1073,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           // Воспроизведение
           setSongList(songs, 0, false, undefined, 'Открытия недели')  // ИСПРАВЛЕНО: songs вместо discoverResult.songs
           setIsGenerating(null)
-          toast(`🔍 Открытия недели: ${songs.length} треков!`, { type: 'success' })
+          toast(`Открытия недели: ${songs.length} треков!`, { type: 'success' })
           return
 
         case 'trends':
@@ -1195,7 +1126,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           // 3. "Что слушают другие" - данные со всех аккаунтов
           // ============================================
           let sharedListensSongs: ISong[] = []
-          const sharedTracksInfo: Record<string, { accounts: string[]; totalPlays: number }> = {}
+          const sharedTracksInfo: Record<string, { accounts: string[]; totalPlays: number; songKey?: string }> = {}
 
           try {
             const { loadSharedAccounts, generateSharedPlaylist } = await import('@/service/shared-listens')
@@ -1345,13 +1276,13 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           })
 
           const trendsDescription = sharedDescriptions.length > 0
-            ? `🌍 Популярное из ${Object.keys(sharedTracksInfo).length} треков shared аккаунтов • Всего прослушиваний: ${totalSharedPlays}`
+            ? `Популярное из ${Object.keys(sharedTracksInfo).length} треков shared аккаунтов • Всего прослушиваний: ${totalSharedPlays}`
             : 'Популярные треки за последние 30 дней'
 
           console.log(`[Trends] 📊 Shared tracks info: ${sharedDescriptions.length} tracks with listen info`)
           console.log(`[Trends] 📊 Total shared plays: ${totalSharedPlays}`)
 
-          toast(`🔥 Популярное: ${songs.length} треков!`, { type: 'success' })
+          toast(`Популярное: ${songs.length} треков!`, { type: 'success' })
 
           // СОХРАНЯЕМ В STORE
           const trendsComment = await getOrGenerateComment('trends', songs)
@@ -1376,7 +1307,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           // Получаем случайные треки (имитация новинок)
           const newReleasesSongs = await getRandomSongs(30)
           songs = newReleasesSongs
-          toast('▶️ Запущено: Новинки', { type: 'success' })
+          toast('Запущено: Новинки', { type: 'success' })
 
           // СОХРАНЯЕМ В STORE
           const newReleasesComment = await getOrGenerateComment('new-releases', songs)
@@ -1397,7 +1328,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
 
         case 'new-releases-subscriptions':
           // Новинки подписок - чистый ML алгоритм
-          setLlmStatus('🎵 Ищем новинки подписок...')
+          setLlmStatus('Ищем новинки подписок...')
 
           const newReleasesSubResult = await generateNewReleasesPlaylistV2(
             30,
@@ -1416,10 +1347,10 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           // Для карточки - стандартный комментарий (шаблонный)
           const genres = [...new Set(songs.map(s => s.genre).filter(Boolean))]
           const standardComments = [
-            `💿 Свежие релизы ${genres.slice(0, 2).join(' и ') || 'новинок'}`,
-            `🎵 Новинки от подписанных артистов`,
-            `🔥 Свежие треки из последних релизов`,
-            `💿 Новые релизы — ${songs.length} треков`,
+            `Свежие релизы ${genres.slice(0, 2).join(' и ') || 'новинок'}`,
+            'Новинки от подписанных артистов',
+            `Свежие треки из последних релизов`,
+            `Новые релизы — ${songs.length} треков`,
           ]
           const newReleasesSubComment = standardComments[Math.floor(Math.random() * standardComments.length)]
 
@@ -1440,7 +1371,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           setLlmStatus(null)
 
           trackEvent('playlist_generated', { type: 'new-releases-subscriptions', songCount: songs.length })
-          toast(`💿 Новинки подписок: ${songs.length} треков!`, { type: 'success' })
+          toast(`Новинки подписок: ${songs.length} треков!`, { type: 'success' })
           return
 
         case 'similar-artists':
@@ -1455,7 +1386,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           const similarPlaylist = await generateSimilarArtistsPlaylistV2(randomArtistId, 25, preferredArtists)
           songs = similarPlaylist.songs
           trackEvent('radio_started', { type: 'similar-artists', artistId: randomArtistId, songCount: songs.length })
-          toast('🎵 Похожих исполнителей сгенерировано!', { type: 'success' })
+          toast('Похожих исполнителей сгенерировано!', { type: 'success' })
 
           // СОХРАНЯЕМ В STORE
           const similarComment = await getOrGenerateComment('similar-artists', songs)
@@ -1481,7 +1412,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           }
           const decadePlaylist = await generateDecadePlaylistV2(playlist.decade, 30)
           songs = decadePlaylist.songs
-          toast(`📻 Хиты ${playlist.title} сгенерированы!`, { type: 'success' })
+          toast(`Хиты ${playlist.title} сгенерированы!`, { type: 'success' })
 
           // СОХРАНЯЕМ В STORE
           const decadeComment = await getOrGenerateComment('decade', songs)
@@ -1507,7 +1438,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
           }
           const genrePlaylist = await generateGenrePlaylist(playlist.genre, 30)
           songs = genrePlaylist.songs
-          toast(`🎵 ${playlist.title} сгенерировано!`, { type: 'success' })
+          toast(`${playlist.title} сгенерировано!`, { type: 'success' })
 
           // СОХРАНЯЕМ В STORE
           const genreComment = await getOrGenerateComment('genre', songs)
@@ -1535,12 +1466,12 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
 
             // Проверяем что LLM включен
             if (!settings.llmEnabled || !mlSettings.settings?.llmCoordinatorEnabled) {
-              toast('⚠️ Включите LLM Координатор для AI плейлистов', { type: 'warning' })
+              toast('Включите LLM Координатор для AI плейлистов', { type: 'warning' })
               setIsGenerating(null)
               return
             }
 
-            setLlmStatus('🤖 LLM генерирует плейлист...')
+            setLlmStatus('LLM генерирует плейлист...')
 
             // Маппинг ID плейлиста к времени суток
             const timeMap: Record<string, string> = {
@@ -1551,7 +1482,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
             const timeOfDay = timeMap[playlist.id] || 'день'
 
             // Шаг 1: LLM генерирует название, описание и жанры
-            setLlmStatus('🤖 LLM придумывает плейлист...')
+            setLlmStatus('LLM придумывает плейлист...')
             const profile = getProfile()
             const currentGenres = Object.entries(profile.preferredGenres || {})
               .filter(([g]) => g.length <= 15 && !/[0-9]/.test(g) && g === g.toLowerCase())
@@ -1604,7 +1535,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
             const llmPlan = JSON.parse(jsonStr)
 
             console.log('[AI Playlist] LLM plan:', llmPlan)
-            setLlmStatus(`🎵 LLM создал: ${llmPlan.name}`)
+            setLlmStatus(`LLM создал: ${llmPlan.name}`)
 
             // Шаг 2: Генерируем плейлист на основе LLM рекомендаций
             const { getRandomSongs, getTopSongs } = await import('@/service/subsonic-api')
@@ -1680,7 +1611,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
             setIsGenerating(null)
             setLlmStatus(null)
 
-            toast(`🤖 ${llmPlan.name}: ${uniqueSongs.length} треков!`, { type: 'success' })
+            toast(`${llmPlan.name}: ${uniqueSongs.length} треков!`, { type: 'success' })
           } catch (error) {
             console.error('AI Playlist generation error:', error)
             toast('Ошибка генерации AI плейлиста', { type: 'error' })
@@ -1697,7 +1628,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
 
       if (songs && songs.length > 0) {
         setSongList(songs, 0)
-        toast(`▶️ Запущено: ${playlist.title}`, { type: 'success' })
+        toast(`Запущено: ${playlist.title}`, { type: 'success' })
       } else {
         toast('Не удалось сгенерировать плейлист', { type: 'error' })
       }
@@ -1713,17 +1644,17 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
     'for-you': [
       {
         id: 'time-of-day',
-        title: '🕐 Микс по времени суток',
+        title: 'Микс по времени суток',
         description: 'Подборка под текущее время дня',
-        icon: '🕐',
+        icon: <Clock className="w-8 h-8" />,
         color: 'from-blue-400 via-purple-400 to-pink-400',
         type: 'time-of-day'
       },
       {
         id: 'instant-mix',
-        title: '⚡ Instant Mix',
+        title: 'Instant Mix',
         description: 'Микс на основе трека, артиста или жанра',
-        icon: '🎯',
+        icon: <Crosshair className="w-8 h-8" />,
         color: 'from-purple-600 to-pink-600',
         type: 'instant-mix'
       },
@@ -1731,7 +1662,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         id: 'ml-recommendations',
         title: 'ML Рекомендации',
         description: 'Попытка угадать что вам понравится',
-        icon: '🤖',
+        icon: <Bot className="w-8 h-8" />,
         color: 'from-indigo-500 to-purple-600',
         type: 'ml-recommendations'
       },
@@ -1739,7 +1670,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         id: 'my-wave', 
         title: 'Моя волна', 
         description: 'Персональный плейлист на основе ваших предпочтений', 
-        icon: '🌊', 
+        icon: <Waves className="w-8 h-8" />, 
         color: 'from-yellow-400 via-orange-400 to-pink-500',
         type: 'my-wave'
       },
@@ -1747,7 +1678,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         id: 'daily-mix-1', 
         title: 'Ежедневный микс', 
         description: 'Обновляется каждые 24 часа', 
-        icon: '✨', 
+        icon: <Sparkles className="w-8 h-8" />, 
         color: 'from-purple-500 to-pink-500',
         type: 'daily-mix'
       },
@@ -1755,39 +1686,39 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         id: 'discover-weekly',
         title: 'Открытия недели',
         description: 'Новые треки для вас каждую неделю',
-        icon: '🧭',
+        icon: <Compass className="w-8 h-8" />,
         color: 'from-green-500 to-emerald-500',
         type: 'discover-weekly'
       },
       {
         id: 'because-you-listened',
-        title: '🎵 Потому что вы слушали...',
+        title: 'Потому что вы слушали...',
         description: 'На основе ваших любимых артистов',
-        icon: '💕',
+        icon: <Heart className="w-8 h-8" />,
         color: 'from-pink-400 to-rose-500',
         type: 'because-you-listened'
       },
       {
         id: 'vibe-similarity',
-        title: '🎵 Vibe Similarity',
+        title: 'Vibe Similarity',
         description: 'Похожие треки по аудио-признакам',
-        icon: '🎵',
+        icon: <AudioWaveform className="w-8 h-8" />,
         color: 'from-indigo-500 to-purple-600',
         type: 'vibe-similarity'
       },
       {
         id: 'new-releases-subscriptions',
-        title: '🎵 Новинки подписок',
+        title: 'Новинки подписок',
         description: 'Новые треки от подписанных артистов',
-        icon: '🆕',
+        icon: <Disc3 className="w-8 h-8" />,
         color: 'from-green-500 via-emerald-500 to-teal-500',
         type: 'new-releases-subscriptions'
       },
       {
         id: 'song-alchemy',
-        title: '🧪 Песенная Алхимия',
+        title: 'Песенная Алхимия',
         description: 'Создайте плейлист по параметрам настроения',
-        icon: '✨',
+        icon: <Sparkles className="w-8 h-8" />,
         color: 'from-purple-600 to-pink-600',
         type: 'song-alchemy'
       },
@@ -1795,7 +1726,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         id: 'disliked',
         title: 'Дизлайки',
         description: 'Треки которые вам не понравились',
-        icon: '👎',
+        icon: <ThumbsDown className="w-8 h-8" />,
         color: 'from-gray-600 to-gray-800',
         type: 'disliked'
       },
@@ -1803,25 +1734,25 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
       /*
       {
         id: 'ai-morning',
-        title: '🤖 AI Плейлист 1',
+        title: 'AI Плейлист 1',
         description: 'Автоматически создан ИИ',
-        icon: '🤖',
+        icon: <Bot className="w-8 h-8" />,
         color: 'from-orange-400 to-yellow-500',
         type: 'ai-generated'
       },
       {
         id: 'ai-day',
-        title: '🤖 AI Плейлист 2',
+        title: 'AI Плейлист 2',
         description: 'Автоматически создан ИИ',
-        icon: '🤖',
+        icon: <Bot className="w-8 h-8" />,
         color: 'from-yellow-400 to-amber-500',
         type: 'ai-generated'
       },
       {
         id: 'ai-evening',
-        title: '🤖 AI Плейлист 3',
+        title: 'AI Плейлист 3',
         description: 'Автоматически создан ИИ',
-        icon: '🤖',
+        icon: <Bot className="w-8 h-8" />,
         color: 'from-purple-500 to-pink-600',
         type: 'ai-generated'
       },
@@ -1830,9 +1761,9 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
     'trends': [
       {
         id: 'shared-listens',
-        title: '👥 Слушают другие',
+        title: 'Слушают другие',
         description: 'Плейлисты на основе того, что слушают другие пользователи',
-        icon: '🌐',
+        icon: <Globe className="w-8 h-8" />,
         color: 'from-cyan-500 to-blue-500',
         type: 'shared-listens'
       },
@@ -1840,7 +1771,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         id: 'top-tracks',
         title: 'Популярное',
         description: 'Чаще всего слушают в вашей библиотеке',
-        icon: '📈',
+        icon: <TrendingUp className="w-8 h-8" />,
         color: 'from-red-500 to-orange-500',
         type: 'trends'
       },
@@ -1850,7 +1781,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         id: 'new-releases',
         title: 'Новинки',
         description: 'Свежие релизы любимых жанров',
-        icon: '🆕',
+        icon: <Disc3 className="w-8 h-8" />,
         color: 'from-indigo-500 to-purple-500',
         type: 'new-releases'
       },
@@ -1858,7 +1789,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         id: 'similar-artists',
         title: 'Похожие исполнители',
         description: 'Откройте новое на основе ваших лайков',
-        icon: '🎵',
+        icon: <AudioWaveform className="w-8 h-8" />,
         color: 'from-pink-500 to-rose-500',
         type: 'similar-artists'
       },
@@ -1867,7 +1798,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         id: '80s',
         title: '80-е',
         description: 'Хиты 1980-1989',
-        icon: '📼',
+        icon: <Clapperboard className="w-8 h-8" />,
         color: 'from-pink-500 to-purple-600',
         type: 'decade',
         decade: '80s'
@@ -1876,7 +1807,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         id: '90s',
         title: '90-е',
         description: 'Хиты 1990-1999',
-        icon: '📀',
+        icon: <Disc3 className="w-8 h-8" />,
         color: 'from-blue-500 to-cyan-600',
         type: 'decade',
         decade: '90s'
@@ -1885,7 +1816,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         id: '2000s',
         title: '2000-е',
         description: 'Хиты 2000-2009',
-        icon: '💿',
+        icon: <Disc3 className="w-8 h-8" />,
         color: 'from-green-500 to-emerald-600',
         type: 'decade',
         decade: '2000s'
@@ -1894,7 +1825,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         id: '2010s',
         title: '2010-е',
         description: 'Хиты 2010-2019',
-        icon: '🎧',
+        icon: <AudioWaveform className="w-8 h-8" />,
         color: 'from-yellow-500 to-orange-600',
         type: 'decade',
         decade: '2010s'
@@ -1903,7 +1834,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         id: '2020s',
         title: '2020-е',
         description: 'Хиты 2020-2029',
-        icon: '🎵',
+        icon: <AudioWaveform className="w-8 h-8" />,
         color: 'from-red-500 to-pink-600',
         type: 'decade',
         decade: '2020s'
@@ -1917,9 +1848,9 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
     <div className="w-full px-8 py-6 space-y-6">
       <div className="space-y-2">
         <h1 className="text-2xl font-bold">
-          {activeTab === 'for-you' && '✨ Для вас'}
-          {activeTab === 'trends' && '📈 Тренды'}
-          {activeTab === 'discover' && '🧭 Открытия'}
+          {activeTab === 'for-you' && 'Для вас'}
+          {activeTab === 'trends' && 'Тренды'}
+          {activeTab === 'discover' && 'Открытия'}
         </h1>
         <p className="text-sm text-muted-foreground">
           {activeTab === 'for-you' && 'Персональные рекомендации на основе ваших предпочтений'}
@@ -1928,14 +1859,31 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         </p>
       </div>
 
-      {/* TODO: AI Кнопка генерации - временно отключена */}
-      {/* 
+      {/* Кнопка ручной генерации AI плейлистов */}
       {activeTab === 'discover' && (
         <div className="flex items-center gap-4 p-4 bg-primary/5 border border-primary/20 rounded-lg">
-          ...кнопка...
+          <Button
+            onClick={handleGenerateAIPlaylists}
+            disabled={aiPlaylistsGenerating}
+            variant="outline"
+          >
+            {aiPlaylistsGenerating ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Генерация...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 mr-2" />
+                Сгенерировать AI плейлисты
+              </>
+            )}
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            LLM создаёт утренний, дневной и вечерний плейлист
+          </span>
         </div>
       )}
-      */}
 
       {/* Вкладки */}
       <div className="flex gap-2 border-b border-border">
@@ -1966,11 +1914,11 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
       </div>
 
       {/* Сетка плейлистов */}
-      {/* {llmStatus && (
+      {llmStatus && (
         <div className="mb-4 p-3 bg-primary/10 border border-primary/20 rounded-lg text-center text-sm animate-pulse">
           {llmStatus}
         </div>
-      )} */}
+      )}
       <div className={styles.grid}>
         {currentPlaylists.map((playlist) => {
           // Генерируем градиент для каждой карточки
@@ -1983,7 +1931,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
             if (savedAIPlaylist && savedAIPlaylist.songs.length > 0) {
               displayPlaylist = {
                 ...playlist,
-                title: `🤖 ${savedAIPlaylist.name}`,
+                title: savedAIPlaylist.name,
                 description: savedAIPlaylist.description || 'Автоматически создан ИИ',
               }
             }
@@ -2017,7 +1965,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
                   <h3 className={styles.title}>{displayPlaylist.title}</h3>
                   <p className={styles.description}>{displayPlaylist.description}</p>
                   {isGenerating === playlist.id && (
-                    <span className={styles.generating}>⏳ Генерация...</span>
+                    <span className={styles.generating}>Генерация...</span>
                   )}
                 </div>
                 <button
@@ -2029,10 +1977,10 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
                   disabled={isGenerating !== null}
                 >
                   {isGenerating === playlist.id
-                    ? '⏳'
+                    ? <Loader2 className="w-5 h-5 animate-spin" />
                     : generatedPlaylistTypes.has(playlist.type)
-                      ? '⟳'  // Уже сгенерирован - перегенерация
-                      : '▶'  // Не сгенерирован - play
+                      ? <RotateCw className="w-5 h-5" />  // Уже сгенерирован - перегенерация
+                      : <Play className="w-5 h-5" />  // Не сгенерирован - play
                   }
                 </button>
               </div>
@@ -2056,7 +2004,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
                 <span className={styles.icon}>{playlist.icon}</span>
                 <h3 className={styles.title}>{displayPlaylist.title}</h3>
                 {isGenerating === playlist.id && (
-                  <span className={styles.generating}>⏳ Генерация...</span>
+                  <span className={styles.generating}>Генерация...</span>
                 )}
                 {!isGenerating && (
                   <>
@@ -2110,7 +2058,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
                 disabled={isGenerating !== null}
               >
                 {isGenerating === playlist.id
-                  ? '⏳'
+                  ? '…'
                   : generatedPlaylistTypes.has(playlist.type)
                     ? '⟳'  // Уже сгенерирован - перегенерация
                     : '▶'  // Не сгенерирован - play
@@ -2126,7 +2074,7 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         <Card className="bg-gradient-to-br from-purple-900/50 to-indigo-900/50 border-purple-500/30">
           <CardHeader>
             <CardTitle className="text-xl flex items-center gap-2">
-              <span className="text-2xl">🎭</span>
+              <Smile className="w-6 h-6" />
               Миксы по настроению
             </CardTitle>
             <p className="text-sm text-muted-foreground">
@@ -2152,12 +2100,12 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
                   `}
                 >
                   <div className="relative z-10">
-                    <div className="text-3xl mb-2">{mood.icon}</div>
+                    <div className="mb-2 flex justify-center text-white/90">{mood.icon}</div>
                     <div className="text-sm font-medium text-white drop-shadow-lg">{mood.name}</div>
                   </div>
                   {isGenerating === mood.id && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-20">
-                      <span className="text-white">⏳</span>
+                      <Loader2 className="w-6 h-6 animate-spin text-white" />
                     </div>
                   )}
                 </button>
@@ -2172,11 +2120,11 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
         <Card className="bg-gradient-to-br from-emerald-900/50 to-teal-900/50 border-emerald-500/30">
           <CardHeader>
             <CardTitle className="text-xl flex items-center gap-2">
-              <span className="text-2xl">🏃</span>
+              <Activity className="w-6 h-6" />
               Миксы для занятий
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              12 плейлистов для разных активностей (BPM и energy оптимизированы)
+              {activityMixers.length} плейлистов для разных активностей (BPM и energy оптимизированы)
             </p>
           </CardHeader>
           <CardContent>
@@ -2198,12 +2146,12 @@ ${contextInfo ? `Контекст: ${contextInfo}` : ''}
                   `}
                 >
                   <div className="relative z-10">
-                    <div className="text-2xl mb-1">{activity.icon}</div>
+                    <div className="mb-1 flex justify-center text-white/90">{activity.icon}</div>
                     <div className="text-xs font-medium text-white drop-shadow-lg">{activity.name}</div>
                   </div>
                   {isGenerating === activity.id && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-20">
-                      <span className="text-white">⏳</span>
+                      <Loader2 className="w-6 h-6 animate-spin text-white" />
                     </div>
                   )}
                 </button>

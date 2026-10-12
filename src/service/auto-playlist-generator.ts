@@ -13,7 +13,7 @@
 
 import { saveAIGenrePlaylist } from '@/store/generated-playlists.store'
 import { analyzeLikedTracksAndCluster, generateGenreClusterPlaylist } from './ai-playlist-generator'
-import { useML } from '@/store/ml.store'
+import { useMLStore } from '@/store/ml.store'
 import { mlLlmIntegration } from './ml-llm-integration'
 import type { ISong } from '@/types/responses/song'
 
@@ -77,7 +77,7 @@ class AutoPlaylistGenerator {
    * Генерация всех типов плейлистов
    */
   private async generateAllPlaylists(): Promise<void> {
-    const state = useML.getState()
+    const state = useMLStore.getState()
     const likedSongIds = state.profile?.likedSongs || []
 
     if (likedSongIds.length < 10) {
@@ -157,7 +157,7 @@ class AutoPlaylistGenerator {
   /**
    * Генерация Daily Mix
    */
-  private async generateDailyMix(likedSongIds: string[]) {
+  private async generateDailyMix(_likedSongIds: string[]) {
     const hour = new Date().getHours()
     const timeOfDay = hour >= 6 && hour < 12 ? 'Утро'
       : hour >= 12 && hour < 18 ? 'День'

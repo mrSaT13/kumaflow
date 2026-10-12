@@ -1,6 +1,7 @@
-import { createRef, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Maximize2, Minimize2, Settings } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
+import { getAnalyserNode } from '@/features/player/audio-graph'
 import { cn } from '@/lib/utils'
 import { toast } from 'react-toastify'
 
@@ -10,7 +11,7 @@ interface VisualizerProps {
 }
 
 export function Visualizer({ expanded = false, onToggleExpand }: VisualizerProps) {
-  const canvasRef = createRef<HTMLDivElement>()
+  const canvasRef = useRef<HTMLDivElement | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [motion, setMotion] = useState<any>(null)
   const [libraryLoaded, setLibraryLoaded] = useState(false)
@@ -44,6 +45,11 @@ export function Visualizer({ expanded = false, onToggleExpand }: VisualizerProps
   }, [])
 
   // Ищем audio элемент и инициализируем визуализатор
+  //
+  // Раньше здесь передавался `source: audio`, и AudioMotionAnalyzer создавал
+  // СВОЙ AudioContext + MediaElementSource на тот же элемент, на который уже
+  // претендовал useAudioContext → InvalidStateError, а при обратном порядке
+  // ломался ReplayGain. Теперь берём AnalyserNode из общего графа.
   useEffect(() => {
     if (!libraryLoaded || !canvasRef.current) return
 
@@ -57,14 +63,19 @@ export function Visualizer({ expanded = false, onToggleExpand }: VisualizerProps
 
     audioRef.current = audio
 
+    const analyser = getAnalyserNode(audio)
+    if (!analyser) {
+      console.log('[Visualizer] Audio graph unavailable')
+      setError('Аудио-граф недоступен — визуализатор отключён.')
+      return
+    }
+
     let audioMotion: any | undefined
 
     try {
       const AudioMotionAnalyzer = AudioMotionAnalyzerRef.current
       if (!AudioMotionAnalyzer) return
 
-      // Используем встроенный анализатор через source parameter
-      // Это работает без создания дополнительного AudioContext
       audioMotion = new AudioMotionAnalyzer(canvasRef.current, {
         bgAlpha: 0,
         showBgColor: false,
@@ -117,10 +128,10 @@ export function Visualizer({ expanded = false, onToggleExpand }: VisualizerProps
         volume: 100,
         weightingFilter: 'none',
         gradient: 'classic',
-        source: audio, // Передаём audio элемент - audiomotion сам создаст контекст
+        audioNode: analyser,
       })
 
-      console.log('[Visualizer] Initialized with source parameter')
+      console.log('[Visualizer] Initialized on shared audio graph')
       setMotion(audioMotion)
       setAnalyserCreated(true)
     } catch (err) {

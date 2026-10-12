@@ -6,7 +6,12 @@ import type { ISong } from '@/types/responses/song'
 
 export interface MLGeneratedPlaylist {
   id: string
-  type: 'daily-mix' | 'discover-weekly' | 'my-wave' | 'trends'
+  /**
+   * Стор — общий кэш сгенерированных плейлистов, и типов на практике 22+
+   * (ai-generated, mood, activity-mix, shared-listens, vibe-similarity, ...).
+   * Узкий union из 4 значений резал выдачу по типам на этапе компиляции.
+   */
+  type: string
   name: string
   description: string
   songs: ISong[]
@@ -15,6 +20,7 @@ export interface MLGeneratedPlaylist {
   expiresAt?: string
   autoUpdateHours?: number
   llmComment?: string  // Короткий комментарий от LLM о плейлисте
+  metadata?: Record<string, unknown>  // Произвольные метаданные генератора
   sharedTracksInfo?: Record<string, { accounts: string[]; totalPlays: number; songKey?: string }>  // Информация о shared listens
 }
 

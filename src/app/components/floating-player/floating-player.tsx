@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, Minimize2, Maximize2, GripVertical, PictureInPicture2, Radio, Users } from 'lucide-react'
-import { usePlayerStore, usePlayerActions } from '@/store/player.store'
+import { usePlayerStore, usePlayerActions, selectCurrentSong,
+} from '@/store/player.store'
 import { usePlaybackSettings, usePlaybackActions } from '@/store/playback.store'
 import { Button } from '@/app/components/ui/button'
 import { Slider } from '@/app/components/ui/slider'
@@ -12,10 +12,11 @@ import { SimpleTooltip } from '@/app/components/ui/simple-tooltip'
 import { getSimpleCoverArtUrl } from '@/api/httpClient'
 
 export function FloatingPlayer() {
-  const { t } = useTranslation()
   const { settings } = usePlaybackSettings()
   const { setFloatingPlayerEnabled, setFloatingPlayerPosition } = usePlaybackActions()
-  const { currentSong, isPlaying, volume } = usePlayerStore()
+  const currentSong = usePlayerStore(selectCurrentSong)
+  const isPlaying = usePlayerStore((state) => state.playerState.isPlaying)
+  const volume = usePlayerStore((state) => state.playerState.volume)
   const { togglePlayPause, playNextSong, playPrevSong } = usePlayerActions()
 
   const [isMinimized, setIsMinimized] = useState(false)
@@ -28,7 +29,7 @@ export function FloatingPlayer() {
   const dragRef = useRef<HTMLDivElement>(null)
   const dragStartRef = useRef({ x: 0, y: 0 })
   const initialPositionRef = useRef({ x: 0, y: 0 })
-  const pipWindowRef = useRef<DocumentPictureInPicture | null>(null)
+  const pipWindowRef = useRef<Window | null>(null)
   const artistSelectorRef = useRef<HTMLDivElement>(null)
 
   // Закрытие выбора артистов при клике вне
@@ -43,6 +44,8 @@ export function FloatingPlayer() {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
+
+    return undefined
   }, [showArtistSelector])
 
   // Обработчик выбора артиста (навигация через hash т.к. FloatingPlayer вне Router)
@@ -102,6 +105,8 @@ export function FloatingPlayer() {
         window.removeEventListener('mouseup', handleDragEnd)
       }
     }
+
+    return undefined
   }, [isDragging])
 
   const handleVolumeChange = (val: number[]) => {
@@ -303,10 +308,15 @@ export function FloatingPlayer() {
         <div className="p-3 space-y-3 bg-card">
           {/* Информация о треке */}
           <div className="flex items-start gap-3 relative">
-            {currentSong?.coverUrl && (
+            {/* Обложка: у ISong поле coverUrl не существует, есть coverArtUrl
+                (локальная библиотека) и coverArt (id Subsonic). */}
+            {currentSong?.coverArt && (
               <img
-                src={currentSong.coverUrl}
-                alt={currentSong?.title || 'Cover'}
+                src={
+                  currentSong.coverArtUrl
+                  ?? getSimpleCoverArtUrl(currentSong.coverArt, 'album', '100')
+                }
+                alt={currentSong.title || 'Cover'}
                 className="w-16 h-16 rounded-md object-cover shadow-md"
               />
             )}
@@ -451,10 +461,7 @@ export function FloatingPlayer() {
               max={100}
               step={1}
               className="flex-1"
-              onValueChange={(e) => {
-                e.stopPropagation()
-                handleVolumeChange(e)
-              }}
+              onValueChange={handleVolumeChange}
             />
             <span className="text-xs text-muted-foreground w-8 text-right">
               {isMuted ? 0 : localVolume}%

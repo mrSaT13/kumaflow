@@ -156,6 +156,13 @@ type ProgressSliderProps = React.ComponentPropsWithoutRef<
   variant?: Variant
   tooltipValue?: string
   tooltipTransformer?: (value: number) => string
+  /**
+   * Свечение заполненной части полосы в такт музыке.
+   * Ожидает, что где-то выше по DOM выставлена CSS-переменная --pulse
+   * (её пишет useAudioPulseOn в fullscreen/progress.tsx). Переменная
+   * наследуется, поэтому сам слайдер анализатор не трогает.
+   */
+  pulseGlow?: boolean
 }
 
 export function ProgressSlider(props: ProgressSliderProps) {
@@ -166,6 +173,7 @@ export function ProgressSlider(props: ProgressSliderProps) {
     variant = 'default',
     onValueChange,
     style,
+    pulseGlow = false,
     ...rest
   } = props
 
@@ -173,7 +181,8 @@ export function ProgressSlider(props: ProgressSliderProps) {
   const customization = usePlayerCustomization()
 
   // ВАЖНО: Хук должен быть на верхнем уровне, до всех useMemo!
-  const { isPlaying } = usePlayerIsPlaying()
+  // usePlayerIsPlaying возвращает сам флаг, а не объект.
+  const isPlaying = usePlayerIsPlaying()
 
   const sliderRef = React.useRef<HTMLSpanElement | null>(null)
   const frameId = React.useRef<number | null>(null)
@@ -316,20 +325,6 @@ export function ProgressSlider(props: ProgressSliderProps) {
     return undefined
   }, [customization])
 
-  // Классы для thumb с анимациями (ОБЪЯВЛЯЕМ РАНЬШЕ!)
-  const thumbAnimationClass = React.useMemo(() => {
-    const { hoverAnimation } = customization
-
-    const classes = []
-
-    // Анимация при наведении
-    if (hoverAnimation) {
-      classes.push('hover:scale-110 hover:rotate-12 transition-transform duration-200')
-    }
-
-    return classes.join(' ')
-  }, [customization])
-
   // Пульсация при воспроизведении (отдельный класс)
   const pulseClass = React.useMemo(() => {
     const { pulseOnPlay } = customization
@@ -339,6 +334,33 @@ export function ProgressSlider(props: ProgressSliderProps) {
     }
     return ''
   }, [customization, isPlaying])
+
+  /**
+   * Свечение заполненной части.
+   *
+   * Раньше glowEffect/glowLayers/glowColor хранились в сторе и выставлялись
+   * в настройках, но нигде не читались — то есть тумблер «Свечение» делал
+   * ровно ничего. Слои собираются в одну строку box-shadow: N одинаковых
+   * теней с растущим радиусом дают мягкий ореол без перерисовки в JS.
+   */
+  const glowStyle = React.useMemo<React.CSSProperties | undefined>(() => {
+    const { glowEffect, glowLayers } = customization
+
+    if (!glowEffect) return undefined
+
+    const color = rangeBackground?.includes('gradient')
+      ? customization.progressColor
+      : rangeBackground || customization.progressColor
+
+    const layers = Math.max(1, Math.min(10, glowLayers))
+
+    const shadows = Array.from(
+      { length: layers },
+      (_, i) => `0 0 ${(i + 1) * 2}px ${color}`,
+    ).join(', ')
+
+    return { boxShadow: shadows } as React.CSSProperties
+  }, [customization, rangeBackground])
 
   const thumbClassName = React.useMemo(() => {
     const { progressIcon } = customization
@@ -463,6 +485,10 @@ export function ProgressSlider(props: ProgressSliderProps) {
               'absolute h-full select-none transition-all rounded-full',
               variant === 'default' && 'bg-primary',
               variant === 'secondary' && 'bg-secondary-foreground',
+              // Пульс в такт музыке: --pulse приходит сверху по наследованию.
+              // Класс, а не инлайн: box-shadow нужен с привязкой к переменной,
+              // которую пересчитывает rAF, инлайн-стиль так не умеет.
+              pulseGlow && 'pulse-glow-strong',
             )}
             onContextMenu={handleContextMenu}
             style={{
@@ -470,6 +496,10 @@ export function ProgressSlider(props: ProgressSliderProps) {
               background: rangeBackground,
               height: `${customization.progressHeight}px`,
               borderRadius: `${Math.max(customization.progressHeight, 999)}px`,
+              // Ореол из настроек кастомизации. При включённом пульсе не
+              // ставим: инлайн box-shadow перебил бы класс pulse-glow-strong,
+              // и музыка перестала бы влиять на свечение.
+              ...(!pulseGlow && customization.glowEffect ? glowStyle : undefined),
             }}
           />
         </SliderPrimitive.Track>

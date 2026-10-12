@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Progress } from '@/app/components/ui/progress'
 import { Switch } from '@/app/components/ui/switch'
@@ -7,8 +6,6 @@ import { Label } from '@/app/components/ui/label'
 import { useBackgroundAudioAnalysis } from '@/app/hooks/use-background-audio-analysis'
 import { usePlaybackSettings, usePlaybackActions } from '@/store/playback.store'
 import { toast } from 'react-toastify'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
-import { BarChart3, Circle, Activity } from 'lucide-react'
 
 export function AudioAnalysisSettings() {
   const { isAnalyzing, queueLength, analyzedCount, totalInPlaylist } = useBackgroundAudioAnalysis()

@@ -45,7 +45,6 @@ const SKIP_BACKWARD_SECONDS = 15
 
 export function useAudiobookPlayer({
   bookId,
-  libraryId,
   onProgressUpdate,
   onFinish,
 }: UseAudiobookPlayerProps): UseAudiobookPlayerReturn {

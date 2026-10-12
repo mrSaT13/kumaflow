@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
-import { Share2 } from 'lucide-react'
+import { Share2, Smartphone, X } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { getSongStreamUrl } from '@/api/httpClient'
 import { getProxyURL } from '@/api/podcastClient'
@@ -9,6 +9,8 @@ import { RadioInfo } from '@/app/components/player/radio-info'
 import { TrackInfo } from '@/app/components/player/track-info'
 import { useAutoScrobble } from '@/app/hooks/use-auto-scrobble'
 import { useAutoDJ } from '@/app/hooks/use-auto-dj'
+import { useRemotePlayback } from '@/app/hooks/use-remote-playback'
+import { applyGain } from '@/features/player/audio-graph'
 import { podcasts } from '@/service/podcasts'
 import { getAudiobookshelfApi } from '@/service/audiobookshelf-api'
 import { useAppStore } from '@/store/app.store'
@@ -25,8 +27,15 @@ import {
   usePlayerStore,
   useReplayGainState,
   useSongColor,
+  selectCurrentSong,
 } from '@/store/player.store'
+import { isBrainActive } from '@/store/brain.store'
+import { wavePublish } from '@/service/brain-wave'
+import { isWavePlaylistName } from '@/service/wave-identity'
+import { StreakWidget } from '@/app/components/streak/streak-widget'
+import { useDopamineSettings } from '@/store/dopamine.store'
 import { getGenreColor } from '@/utils/genreColors'
+import { Button } from '@/app/components/ui/button'
 import { LoopState } from '@/types/playerContext'
 import { hasPiPSupport } from '@/utils/browser'
 import { logger } from '@/utils/logger'
@@ -157,7 +166,7 @@ export function Player() {
   const { isSong, isRadio, isPodcast } = usePlayerMediaType()
   const loopState = usePlayerLoop()
   const audioPlayerRef = usePlayerRef()
-  const currentPlaybackRate = usePlayerStore().playerState.currentPlaybackRate
+  const currentPlaybackRate = usePlayerStore((state) => state.playerState.currentPlaybackRate)
   const { replayGainType, replayGainPreAmp, replayGainDefaultGain } =
     useReplayGainState()
 
@@ -166,6 +175,9 @@ export function Player() {
 
   // Auto DJ hook - умное продление плейлиста
   useAutoDJ()
+
+  // Handoff: продолжить с другого устройства (мозг)
+  const remotePlayback = useRemotePlayback()
 
   // 🔴 Remote: Авто-отправка очереди при смене трека
   useEffect(() => {
@@ -180,6 +192,11 @@ export function Player() {
       title: song?.title || 'Unknown',
       artist: song?.artist || '',
       album: song?.album || '',
+      // Обложка нужна remote-странице: в очереди раньше были только тексты,
+      // поэтому список на телефоне шёл без картинок.
+      coverArt: song?.coverArt
+        ? `/getCoverArt?id=${encodeURIComponent(song.coverArt)}&size=120`
+        : '',
       active: i === currentSongIndex,
     }))
 
@@ -367,7 +384,7 @@ export function Player() {
       const audio = getAudioRef().current
       if (!audio) return
 
-      const currentSong = usePlayerStore.getState().songlist.currentSong
+      const currentSong = selectCurrentSong(usePlayerStore.getState())
 
       // Формируем полный URL для обложки
       const getCoverArtUrl = (coverArtId?: string) => {
@@ -431,6 +448,48 @@ export function Player() {
     }
   }, [song, getAudioRef])
 
+  // Живая очередь мозгу с позицией воспроизведения.
+  // Именно position_sec позволяет «Продолжить с …» на телефоне/вебе
+  // начать с того же места. Троттлинг 5с — внутри wavePublish.
+  useEffect(() => {
+    const audio = getAudioRef().current
+    if (!audio) return
+
+    const publishNow = () => {
+      if (!isBrainActive()) return
+      const st = usePlayerStore.getState()
+      const queue = st.songlist.currentList.map((t) => t.id).filter(Boolean)
+      const playlistName = st.songlist.currentPlaylistName ?? null
+      wavePublish(queue, selectCurrentSong(st)?.id ?? null, {
+        positionSec: Math.floor(audio.currentTime || 0),
+        durationSec: Math.floor(audio.duration || 0) || undefined,
+        paused: audio.paused,
+      }, {
+        playlistName,
+        // Природа ленты едет вместе с очередью. Проверка та же, что в playSong:
+        // по имени плейлиста, иначе принимающее устройство не поймёт,
+        // что продолжает Мою волну.
+        isWave: isWavePlaylistName(playlistName),
+      })
+    }
+
+    audio.addEventListener('play', publishNow)
+    audio.addEventListener('pause', publishNow)
+    audio.addEventListener('timeupdate', publishNow)
+    audio.addEventListener('seeked', publishNow)
+    audio.addEventListener('ended', publishNow)
+    const timer = setInterval(publishNow, 15000)
+
+    return () => {
+      audio.removeEventListener('play', publishNow)
+      audio.removeEventListener('pause', publishNow)
+      audio.removeEventListener('timeupdate', publishNow)
+      audio.removeEventListener('seeked', publishNow)
+      audio.removeEventListener('ended', publishNow)
+      clearInterval(timer)
+    }
+  }, [song, getAudioRef])
+
   // Обработчик команд от Remote Control (только в Electron)
   useEffect(() => {
     // В Electron ipcRenderer доступен через window.electronAPI
@@ -447,25 +506,25 @@ export function Player() {
       return
     }
 
-    const handleRemoteCommand = async (event: any, payload: any) => {
+    const handleRemoteCommand = async (_event: any, payload: any) => {
       console.log('[Player] Remote command:', payload)
 
       try {
         // Получаем ТЕКУЩИЙ трек из store (не из замыкания!)
         const store = (await import('@/store/player.store')).usePlayerStore.getState()
-        const currentSong = store.songlist.currentSong
-        const currentList = store.songlist.currentList || []
-        const currentIndex = store.songlist.currentIndex || 0
+        const currentSong = selectCurrentSong(store)
 
         console.log('[Player] Remote command - currentSong:', currentSong?.title, currentSong?.id)
 
         switch (payload.action) {
+          // Отдельных play()/pause() в actions нет — состояние переключается
+          // через setPlayingState.
           case 'play': {
-            store.actions.play()
+            store.actions.setPlayingState(true)
             break
           }
           case 'pause': {
-            store.actions.pause()
+            store.actions.setPlayingState(false)
             break
           }
           case 'toggle': {
@@ -487,8 +546,9 @@ export function Player() {
             break
           }
           case 'seek': {
-            if (payload.value !== undefined && getAudioRef().current) {
-              getAudioRef().current.currentTime = payload.value
+            const audio = getAudioRef().current
+            if (payload.value !== undefined && audio) {
+              audio.currentTime = payload.value
             }
             break
           }
@@ -540,21 +600,19 @@ export function Player() {
 
                 // Получаем обновлённый currentSong из store
                 const updatedStore = usePlayerStore.getState()
-                const updatedCurrentSong = updatedStore.songlist.currentSong
+                const updatedCurrentSong = selectCurrentSong(updatedStore)
                 const newLikedStatus = updatedCurrentSong?.userFavorite || false
                 console.log('[Player] ❤️ New liked status:', newLikedStatus)
 
                 // Обновляем ML ratings
                 const { useMLStore } = await import('@/store/ml.store')
+                // Действия в ml.store лежат на корне стора, без actions.
                 const mlStore = useMLStore.getState()
-                await mlStore.actions.rateSong(currentSong.id, !currentlyLiked, {
-                  songInfo: {
-                    id: currentSong.id,
-                    title: currentSong.title,
-                    artist: currentSong.artist,
-                    album: currentSong.album,
-                    genre: (currentSong as any).genre,
-                  }
+                await mlStore.rateSong(currentSong.id, !currentlyLiked, {
+                  title: currentSong.title,
+                  artist: currentSong.artist,
+                  album: currentSong.album,
+                  genre: currentSong.genre,
                 })
                 console.log('[Player] ❤️ ML ratings updated')
 
@@ -604,7 +662,7 @@ export function Player() {
 
             // Получаем актуальный трек из store
             const store = usePlayerStore.getState()
-            const currentSong = store.songlist.currentSong
+            const currentSong = selectCurrentSong(store)
 
             if (currentSong?.id) {
               try {
@@ -618,14 +676,11 @@ export function Player() {
                 // Обновляем ML ratings
                 const { useMLStore } = await import('@/store/ml.store')
                 const mlStore = useMLStore.getState()
-                await mlStore.actions.rateSong(currentSong.id, false, {
-                  songInfo: {
-                    id: currentSong.id,
-                    title: currentSong.title,
-                    artist: currentSong.artist,
-                    album: currentSong.album,
-                    genre: (currentSong as any).genre,
-                  }
+                await mlStore.rateSong(currentSong.id, false, {
+                  title: currentSong.title,
+                  artist: currentSong.artist,
+                  album: currentSong.album,
+                  genre: currentSong.genre,
                 })
                 console.log('[Player] 👎 ML ratings updated')
 
@@ -634,7 +689,7 @@ export function Player() {
                   const audio = getAudioRef().current
                   if (audio) {
                     const updatedStore = usePlayerStore.getState()
-                    const updatedSong = updatedStore.songlist.currentSong
+                    const updatedSong = selectCurrentSong(updatedStore)
                     const state = {
                       isPlaying: !audio.paused,
                       title: updatedSong.title || 'Нет трека',
@@ -662,13 +717,16 @@ export function Player() {
             console.log('[Player] ⏰ Received get-queue command')
             const store = usePlayerStore.getState()
             const currentList = store.songlist.currentList || []
-            const currentIndex = store.songlist.currentIndex || 0
+            const currentIndex = store.songlist.currentSongIndex || 0
 
             const queue = currentList.slice(0, 50).map((song: any, i: number) => ({
               id: song?.id || '',
               title: song?.title || 'Unknown',
               artist: song?.artist || '',
               album: song?.album || '',
+              coverArt: song?.coverArt
+                ? `/getCoverArt?id=${encodeURIComponent(song.coverArt)}&size=120`
+                : '',
               active: i === currentIndex,
             }))
 
@@ -723,8 +781,9 @@ export function Player() {
     const audio = getAudioRef().current
     if (!audio) return
 
-    audio.volume = getVolume() / 100
-  }, [getAudioRef])
+    // Не audio.volume напрямую: громкостью владеет applyGain.
+    applyGain(audio, getVolume() / 100)
+  }, [getAudioRef, getVolume])
 
   const sendFinishProgress = useCallback(() => {
     if (!isPodcast || !podcast) return
@@ -768,11 +827,53 @@ export function Player() {
   // Обычный плеер для полноразмерного окна — плавающая закруглённая панель как у Яндекса
   // Подсветка панели динамически: средний цвет обложки → иначе цвет жанра
   const { currentSongColor } = useSongColor()
+  const { streakInPlayerBar } = useDopamineSettings()
   const genreColor = song?.genre ? getGenreColor(song.genre) : null
   const tintColor = currentSongColor || genreColor || null
   const barColor = tintColor || '#10b981'
+  // Стрик — только для музыки: у подкаста и радио дней подряд не считается,
+  // чип там был бы пустышкой.
+  const showStreak = streakInPlayerBar && isSong
   return (
-    <footer
+    <>
+      {remotePlayback.remote && (
+        <div
+          className="fixed bottom-[100px] left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-2 fade-in"
+          role="status"
+        >
+          <div className="flex items-center gap-3 rounded-full glass-player border border-border/40 px-4 py-2 shadow-2xl">
+            <Smartphone className="size-4 shrink-0 opacity-70" />
+            <div className="text-sm leading-tight">
+              <div className="font-medium">
+                {remotePlayback.remote.track.artist_name} —{' '}
+                {remotePlayback.remote.track.title}
+              </div>
+              <div className="text-xs opacity-60">
+                Слушали на {remotePlayback.remote.device ?? 'другом устройстве'}
+                {remotePlayback.remote.ageSec != null
+                  ? ` · ${formatAge(remotePlayback.remote.ageSec)} назад`
+                  : ''}
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => void remotePlayback.takeOver()}
+              disabled={remotePlayback.busy}
+            >
+              {remotePlayback.busy ? 'Переносим…' : 'Продолжить'}
+            </Button>
+            <button
+              type="button"
+              aria-label="Скрыть"
+              className="opacity-50 hover:opacity-100 transition-opacity"
+              onClick={remotePlayback.dismiss}
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+      )}
+      <footer
       className="fixed bottom-3 left-3 right-3 z-40 glass-player border border-border/40 rounded-2xl shadow-2xl h-[88px] flex items-center overflow-hidden"
       style={
         tintColor
@@ -803,6 +904,14 @@ export function Player() {
           {isSong && song && (
             <div className="shrink-0 hidden xl:block">
               <QualityBadge song={song} />
+            </div>
+          )}
+          {/* Стрик дней подряд. Раньше считался, но жил только на /ml/stats,
+              то есть пользователь его никогда не видел. Spotify держит его
+              в плеер-баре с 2023 — это самый дешёвый якорь удержания. */}
+          {showStreak && (
+            <div className="shrink-0 hidden lg:block">
+              <StreakWidget variant="chip" />
             </div>
           )}
         </div>
@@ -910,5 +1019,16 @@ export function Player() {
         />
       )}
     </footer>
+    </>
   )
+}
+
+/** «5 мин назад» / «2 ч назад» — для баннера возврата с другого устройства. */
+function formatAge(sec: number): string {
+  const min = Math.floor(sec / 60)
+  if (min < 1) return 'только что'
+  if (min < 60) return `${min} мин назад`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `${h} ч назад`
+  return `${Math.floor(h / 24)} дн назад`
 }

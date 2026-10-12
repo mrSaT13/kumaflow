@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Sparkles, Clock, Loader2, Music, TrendingUp, Heart, Shuffle, MessageSquare } from 'lucide-react'
+import { Sparkles, Clock, Loader2, Heart, MessageSquare } from 'lucide-react'
 import { Card, CardContent } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
 import { Textarea } from '@/app/components/ui/textarea'
@@ -12,7 +12,7 @@ import { generateMyWavePlaylist, generateMLRecommendations } from '@/service/ml-
 import { generateDJPlaylist, getLibraryMetadata } from '@/service/ai-playlist-dj'
 import { llmService } from '@/service/llm-service'
 import { useExternalApiStore } from '@/store/external-api.store'
-import { buildExplanationPrompt, buildPlaylistGenerationPrompt } from '@/service/llm-prompts'
+import { buildPlaylistGenerationPrompt } from '@/service/llm-prompts'
 
 interface GeneratedPlaylist {
   id: string

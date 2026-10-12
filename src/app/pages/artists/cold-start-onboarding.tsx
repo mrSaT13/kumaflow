@@ -30,7 +30,7 @@ import { usePlayerActions } from '@/store/player.store'
 import { generateArtistBasedPlaylist } from '@/service/ml-wave-service'
 import { trackEvent } from '@/service/ml-event-tracker'
 import { toast } from 'react-toastify'
-import { Heart, Music, Trophy, Check, Search, X } from 'lucide-react'
+import { Heart, Music, Check, Search, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 

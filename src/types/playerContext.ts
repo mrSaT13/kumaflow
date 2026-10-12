@@ -12,14 +12,16 @@ export interface ISongList {
   shuffledList: ISong[]
   currentList: ISong[]
   currentSongIndex: number
-  currentSong: ISong
   originalList: ISong[]
   originalSongIndex: number
   radioList: Radio[]
   podcastList: EpisodeWithPodcast[]
   podcastListProgresses: number[]
-  sharedTracksInfo?: Record<string, { accounts: string[]; totalPlays: number; songKey?: string }>  // Информация о shared listens
-  currentPlaylistName?: string  // Название текущего плейлиста для Title Bar
+  sharedTracksInfo?: Record<
+    string,
+    { accounts: string[]; totalPlays: number; songKey?: string }
+  > // Информация о shared listens
+  currentPlaylistName?: string // Название текущего плейлиста для Title Bar
 }
 
 export interface IPlayerState {
@@ -138,8 +140,21 @@ export interface IPlayerFullscreen {
 
 export interface IPlayerActions {
   playSong: (song: ISong) => void
-  setSongList: (songlist: ISong[], index: number, shuffle?: boolean) => void
-  setCurrentSong: () => void
+  /**
+   * Реальная сигнатура шире, чем была объявлена: 4-й и 5-й аргументы
+   * (sharedTracksInfo и playlistName) молча терялись на типе, и из-за этого
+   * currentPlaylistName не выставлялся. См. player.store.ts.
+   */
+  setSongList: (
+    songlist: ISong[],
+    index: number,
+    shuffle?: boolean,
+    sharedTracksInfo?: Record<
+      string,
+      { accounts: string[]; totalPlays: number; songKey?: string }
+    >,
+    playlistName?: string,
+  ) => void
   checkIsSongStarred: () => void
   starSongInQueue: (id: string) => void
   starCurrentSong: () => Promise<void>
@@ -162,6 +177,13 @@ export interface IPlayerActions {
   setPlayRadio: (list: Radio[], index: number) => void
   setAudioPlayerRef: (ref: HTMLAudioElement) => void
   setNextOnQueue: (songlist: ISong[]) => void
+  /**
+   * Заменить ВСЁ после текущего трека (морф волны при смене пилюли).
+   * В отличие от setSongList не трогает currentSongIndex и playerProgress:
+   * текущий трек доигрывает с той же секунды, а запас старой вайбовой
+   * очереди исчезает.
+   */
+  setQueueTail: (songlist: ISong[]) => void
   setLastOnQueue: (songlist: ISong[]) => void
   removeSongFromQueue: (id: string) => void
   moveSongInQueue: (fromIndex: number, toIndex: number) => void

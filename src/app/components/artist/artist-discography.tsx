@@ -37,16 +37,19 @@ export function ArtistDiscography({ artistName }: ArtistDiscographyProps) {
   const [error, setError] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(true) // Свёрнуто по умолчанию
   const [forceUpdate, setForceUpdate] = useState(0) // Для принудительного обновления
+  // id артиста в Discogs. В DiscogsRelease сервис оставляет только имя
+  // артиста, поэтому id держим отдельно — он нужен для ссылки на все релизы.
+  const [discogsArtistId, setDiscogsArtistId] = useState<string | null>(null)
 
   // Обновляем компонент при изменении настроек Discogs
   useEffect(() => {
     console.log('[ArtistDiscography] Settings changed:', {
       enabled: settings.discogsEnabled,
-      hasKey: !!settings.discogsApiKey,
+      hasKey: !!settings.discogsConsumerKey,
     })
     // Принудительное обновление при изменении настроек
     setForceUpdate(prev => prev + 1)
-  }, [settings.discogsEnabled, settings.discogsApiKey, settings.discogsApiSecret])
+  }, [settings.discogsEnabled, settings.discogsConsumerKey, settings.discogsConsumerSecret])
 
   useEffect(() => {
     async function loadDiscography() {
@@ -69,7 +72,9 @@ export function ArtistDiscography({ artistName }: ArtistDiscographyProps) {
         }
 
         // Получаем релизы
-        const allReleases = await discogsService.getArtistReleases(artists[0].id.toString(), 100)
+        const artistId = artists[0].id.toString()
+        setDiscogsArtistId(artistId)
+        const allReleases = await discogsService.getArtistReleases(artistId, 100)
 
         // Сортируем по году (новые сначала)
         const sortedReleases = allReleases.sort((a, b) => b.year - a.year)
@@ -84,15 +89,17 @@ export function ArtistDiscography({ artistName }: ArtistDiscographyProps) {
     }
 
     loadDiscography()
-  }, [artistName, settings.discogsEnabled, settings.discogsApiKey, settings.discogsApiSecret, forceUpdate])
+  }, [artistName, settings.discogsEnabled, settings.discogsConsumerKey, settings.discogsConsumerSecret, forceUpdate])
 
   // Группируем релизы по типам
   const grouped = releases.reduce<GroupedReleases>(
     (acc, release) => {
-      // format может быть строкой или массивом
-      const formatString = Array.isArray(release.format)
-        ? release.format.join(' ').toLowerCase()
-        : (release.format || '').toLowerCase()
+      // В ответе Discogs format бывает и строкой, и массивом строк
+      const rawFormat: unknown = release.format
+      const formatString = (Array.isArray(rawFormat) ? rawFormat : [rawFormat])
+        .map((value) => String(value ?? ''))
+        .join(' ')
+        .toLowerCase()
 
       const format = formatString || ''
 
@@ -187,15 +194,15 @@ export function ArtistDiscography({ artistName }: ArtistDiscographyProps) {
                 Альбомы ({grouped.albums.length})
               </h3>
               <div className="space-y-1">
-                {grouped.albums.slice(0, 12).map((release, index) => (
-                  <ReleaseRow key={release.id} release={release} index={index} />
+                {grouped.albums.slice(0, 12).map((release) => (
+                  <ReleaseRow key={release.id} release={release} />
                 ))}
               </div>
-              {grouped.albums.length > 12 && (
+              {grouped.albums.length > 12 && discogsArtistId && (
                 <Button
                   variant="link"
                   className="text-xs text-muted-foreground"
-                  onClick={() => window.open(`https://www.discogs.com/artist/${grouped.albums[0].artists?.[0]?.id}/releases`, '_blank')}
+                  onClick={() => window.open(`https://www.discogs.com/artist/${discogsArtistId}/releases`, '_blank')}
                 >
                   Показать ещё {grouped.albums.length - 12} альбомов
                 </Button>
@@ -261,7 +268,7 @@ export function ArtistDiscography({ artistName }: ArtistDiscographyProps) {
   )
 }
 
-function ReleaseRow({ release, index }: { release: DiscogsRelease; index?: number }) {
+function ReleaseRow({ release }: { release: DiscogsRelease }) {
   return (
     <a
       href={`https://www.discogs.com/release/${release.id}`}

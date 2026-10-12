@@ -97,6 +97,80 @@ module.exports = {
           from: { height: 'var(--radix-collapsible-content-height)' },
           to: { height: '0' },
         },
+
+        // ===== «ВАУ»-слой: награды, блики, пульс =====
+
+        /** Появление с лёгким overshoot — для карточек и тостов. */
+        pop: {
+          '0%': { opacity: '0', transform: 'scale(0.92)' },
+          '60%': { opacity: '1', transform: 'scale(1.03)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        'pop-sm': {
+          '0%': { opacity: '0', transform: 'scale(0.96)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        /** Бегущий блик по карточке (как «shine» на витринах). */
+        shimmer: {
+          '0%': { transform: 'translateX(-200%) skewX(-12deg)' },
+          '100%': { transform: 'translateX(600%) skewX(-12deg)' },
+        },
+        /** Свечение вокруг себя. --pulse (0..1) вешается из аудио-пульса. */
+        'glow-pulse': {
+          '0%, 100%': {
+            boxShadow:
+              '0 0 calc(6px + var(--pulse, 0) * 26px) calc(var(--pulse, 0) * 8px) var(--progress-color, rgba(16,185,129,0.6))',
+          },
+          '50%': {
+            boxShadow:
+              '0 0 calc(10px + var(--pulse, 0) * 40px) calc(2px + var(--pulse, 0) * 14px) var(--progress-color, rgba(16,185,129,0.75))',
+          },
+        },
+        /** Мягкое парение — для иконок и бейджей. */
+        'float-y': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-4px)' },
+        },
+        /** Падение частиц (конфетти без библиотеки). */
+        'confetti-fall': {
+          '0%': {
+            opacity: '1',
+            transform: 'translate3d(0, -12vh, 0) rotate(0deg)',
+          },
+          '100%': {
+            opacity: '0',
+            transform: 'translate3d(var(--confetti-x, 0), 108vh, 0) rotate(720deg)',
+          },
+        },
+        'bounce-soft': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-6px)' },
+        },
+        /** Бегущий градиент для полос прогресса и заголовков. */
+        'gradient-x': {
+          '0%, 100%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+        },
+        /** Расходящееся кольцо — «вау» при разблокировке. */
+        'ring-expand': {
+          '0%': { opacity: '0.6', transform: 'scale(0.7)' },
+          '100%': { opacity: '0', transform: 'scale(2.1)' },
+        },
+        'slide-in-right': {
+          from: { opacity: '0', transform: 'translateX(16px)' },
+          to: { opacity: '1', transform: 'translateX(0)' },
+        },
+        /** Пламя стрика: чем длиннее стрик, тем заметнее. */
+        'streak-flame': {
+          '0%, 100%': { transform: 'scale(1) rotate(-2deg)' },
+          '50%': { transform: 'scale(1.12) rotate(3deg)' },
+        },
+        /** Каустика/мерцание для праздничного фона. */
+        'caustic-drift': {
+          '0%, 100%': { transform: 'translate3d(0, 0, 0) scale(1)' },
+          '33%': { transform: 'translate3d(4%, -3%, 0) scale(1.08)' },
+          '66%': { transform: 'translate3d(-4%, 3%, 0) scale(0.96)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -104,6 +178,19 @@ module.exports = {
         marquee: 'marquee var(--tw-marquee-time) linear 2s infinite',
         'slide-down': 'slide-down 0.3s ease-out',
         'slide-up': 'slide-up 0.3s ease-out',
+
+        pop: 'pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'pop-sm': 'pop-sm 0.22s ease-out',
+        shimmer: 'shimmer 1.1s ease-in-out',
+        'glow-pulse': 'glow-pulse 1.4s ease-in-out infinite',
+        'float-y': 'float-y 3s ease-in-out infinite',
+        'confetti-fall': 'confetti-fall var(--confetti-duration, 1.6s) cubic-bezier(0.25, 0.6, 0.4, 1) forwards',
+        'bounce-soft': 'bounce-soft 2s ease-in-out infinite',
+        'gradient-x': 'gradient-x 3s ease infinite',
+        'ring-expand': 'ring-expand 1.1s ease-out forwards',
+        'slide-in-right': 'slide-in-right 0.25s ease-out',
+        'streak-flame': 'streak-flame 1.6s ease-in-out infinite',
+        'caustic-drift': 'caustic-drift 14s ease-in-out infinite',
       },
       gridTemplateColumns: {
         player:

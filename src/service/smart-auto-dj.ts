@@ -22,8 +22,8 @@ import { generateMLRecommendations } from './ml-wave-service'
 import { tryBrainAutoDJ } from './brain-autodj'
 import { isArtistBanned } from './ban-filter'
 import { useMLStore } from '@/store/ml.store'
-import { useAutoDJStore } from '@/store/auto-dj.store'
 import type { ISong } from '@/types/responses/song'
+import type { GenerationSource, BrainSkipReason } from '@/types/generation'
 
 export interface SmartAutoDJOptions {
   /** Сколько треков добавить */
@@ -38,6 +38,9 @@ export interface SmartAutoDJOptions {
   /** Тип энергии: 'wave' | 'ascending' | 'descending' | 'stable' */
   energyCurve?: 'wave' | 'ascending' | 'descending' | 'stable'
   
+  /** Индекс текущего трека в songlist. Нужен, чтобы считать остаток очереди. */
+  currentIndex?: number
+
   /** Исключить недавно сыгранные треки */
   excludeRecentlyPlayed?: string[]
   
@@ -60,6 +63,15 @@ export interface SmartAutoDJResult {
   
   /** Средний BPM добавленных треков */
   avgBpm: number
+
+  /**
+   * Кто на самом деле собрал выдачу. Без этого «мозг отдал 25 треков» и
+   * «мозг не ответил, отработал локальный ML» выглядели одинаково —
+   * очередь в обоих случаях одного размера.
+   */
+  source: GenerationSource
+  /** Почему мозг не дал треков (null — дал). Только для source !== 'brain'. */
+  brainReason: BrainSkipReason | null
 }
 
 /**
@@ -80,6 +92,7 @@ export async function generateSmartAutoDJ(
     candidateCount = count * 3,
     addBridges = true,
     energyCurve = 'wave',
+    currentIndex,
     excludeRecentlyPlayed = [],
     respectTimeOfDay = true,
   } = options
@@ -87,10 +100,69 @@ export async function generateSmartAutoDJ(
   console.log('[SmartAutoDJ] 🎵 Starting Smart Auto-DJ 2.0...')
   console.log('[SmartAutoDJ] Options:', { count, candidateCount, addBridges, energyCurve })
 
+  // Индекс текущего: без него «последние треки» брались с хвоста массива,
+  // а остаток очереди считался как полная длина — из-за чего мозг не
+  // дозапрашивался. Если не передан, считаем что играем на конце.
+  const idx = typeof currentIndex === 'number' ? currentIndex : songlist.length - 1
+  const remainingAfterCurrent = Math.max(0, songlist.length - idx - 1)
+
+  // ============================================
+  // 0. BRAIN — ЕДИНСТВЕННЫЙ ИСТОЧНИК ИСТИНЫ
+  // ============================================
+  // Мозг ранжирует по CLAP, librosa, skip-модели, бандиту, времени суток.
+  // Локальный ML ниже построен на хардкод-профилях жанров и в вайб
+  // проигрывает мозгу. Раньше треки мозга подставлялись в начало пула, но
+  // шаг 3 (VIBE) пересортировывал весь пул заново по локальной
+  // vibeSimilarity и резал до top-60% — то есть ранжирование мозга
+  // отменялось. Теперь при достаточной выдаче мозга возвращаем её сразу,
+  // не трогая локальными фильтрами.
+  const poolByExternalId = new Map<string, ISong>()
+  for (const s of [...songlist]) poolByExternalId.set(s.id, s)
+
+  let brainSongs: ISong[] = []
+  let brainReason: BrainSkipReason | null = null
+  let brainPartial = 0
+
+  const brain = await tryBrainAutoDJ({
+    queue: songlist,
+    current: currentSong,
+    count,
+    poolByExternalId,
+    remainingAfterCurrent,
+  })
+  // reason заполняется всегда: null — мозг дал треки, иначе — почему не дал.
+  brainReason = brain.reason
+
+  if (brain.fromBrain && brain.songs.length > 0) {
+    const { profile } = useMLStore.getState()
+    const bannedArtists = profile.bannedArtists || []
+    const fresh = brain.songs.filter(s => !isArtistBanned(s.artistId, s.artist, bannedArtists))
+    brainSongs = fresh
+
+    // Мозга хватило на всю пачку — отдаём как есть.
+    if (fresh.length >= count) {
+      console.log(`[SmartAutoDJ] 🧠 Brain authoritative: ${fresh.length} tracks, local ML skipped`)
+      const picks = fresh.slice(0, count)
+      return {
+        songs: picks,
+        candidateCount: picks.length,
+        addedCount: picks.length,
+        avgEnergy: avgOf(picks, 'energy'),
+        avgBpm: avgOf(picks, 'bpm'),
+        source: 'brain',
+        brainReason: null,
+      }
+    }
+
+    // Мозг дал меньше, чем просили — локальный ML докладывает хвост.
+    console.log(`[SmartAutoDJ] 🧠 Brain partial: ${fresh.length}/${count}, topping up locally`)
+    brainPartial = fresh.length
+  }
+
   // ============================================
   // 1. АНАЛИЗ ПОСЛЕДНИХ ТРЕКОВ (контекст)
   // ============================================
-  const lastPlayedTracks = songlist.slice(Math.max(0, songlist.length - 5), songlist.length)
+  const lastPlayedTracks = songlist.slice(Math.max(0, idx - 4), idx + 1)
   
   console.log(`[SmartAutoDJ] 📊 Analyzing last ${lastPlayedTracks.length} tracks...`)
   
@@ -126,14 +198,15 @@ export async function generateSmartAutoDJ(
     console.log('[SmartAutoDJ] ⚠️ ONLY PREFERENCES MODE - adding tracks from preferred artists/genres only!')
   }
 
-  // Генерируем кандидатов через ML Recommendations
+  // Генерируем кандидатов через ML Recommendations.
+  // Новизну функция читает из стора сама — шестой аргумент тут ничего
+  // не делал и просто отбрасывался.
   const mlPlaylist = await generateMLRecommendations(
-    profile.likedSongIds || [],
+    profile.likedSongs || [],
     ratings,
     profile.preferredGenres,
     profile.preferredArtists,
     candidateCount,
-    noveltyFactor  // Передаем настройку новизны!
   )
 
   // Исключаем уже сыгранные и заблокированных артистов
@@ -165,27 +238,21 @@ export async function generateSmartAutoDJ(
   candidates = nonAudiobookCandidates
 
   // ============================================
-  // 2.6. BRAIN (1.6.2): треки мозга — в голову очереди, дальше общий оркестратор
+  // 2.6. ДОДОПИСЫВАЕМ НЕДОБОР МОЗГА
   // ============================================
-  try {
-    const poolByExternalId = new Map<string, ISong>()
-    for (const s of [...songlist, ...candidates]) poolByExternalId.set(s.id, s)
-    const brain = await tryBrainAutoDJ({
-      queue: songlist,
-      current: currentSong,
-      count,
-      poolByExternalId,
-    })
-    if (brain.fromBrain && brain.songs.length > 0) {
-      const seen = new Set(candidates.map((s) => s.id))
-      const fresh = brain.songs.filter((s) => !playedIds.has(s.id) && !isBannedArtist(s) && !seen.has(s.id))
-      if (fresh.length > 0) {
-        console.log(`[SmartAutoDJ] 🧠 Brain: ${fresh.length} tracks first, local fallback after`)
-        candidates = [...fresh, ...candidates]
-      }
+  // Мозг уже вызван в шаге 0. Если он дал меньше, чем просили, его треки
+  // идут в начало пула, а локальный VIBE-фильтр ниже их пересортирует —
+  // это осознанный компромисс ради полного размера пачки. Пересортировка
+  // не трогает случай «мозга хватило», он уходит с шага 0.
+  if (brainSongs.length > 0) {
+    const seen = new Set(candidates.map((s) => s.id))
+    const fresh = brainSongs.filter(
+      (s) => !playedIds.has(s.id) && !isBannedArtist(s) && !seen.has(s.id),
+    )
+    if (fresh.length > 0) {
+      console.log(`[SmartAutoDJ] 🧠 Brain: ${fresh.length} tracks merged into candidate pool`)
+      candidates = [...fresh, ...candidates]
     }
-  } catch {
-    // тихий фолбек на локальный ML
   }
 
   // ============================================
@@ -219,7 +286,35 @@ export async function generateSmartAutoDJ(
   }
 
   // ============================================
-  // 4. ОРКЕСТРАТОР: СОРТИРОВКА КАНДИДАТОВ
+  // 4. ВРЕМЯ СУТОК — ДО ОРКЕСТРАЦИИ
+  // ============================================
+  // Раньше фильтр стоял шагом 6, ПОСЛЕ createEnergyWave. Он вырезал треки
+  // из середины волны, ломая дугу, и добор «остальными» заново разрушал
+  // порядок. Отбирать по времени суток надо из кандидатов, тогда оркестрация
+  // и энергетическая кривая строятся уже по подходящим трекам.
+  if (respectTimeOfDay) {
+    const hour = new Date().getHours()
+    const targetEnergy = getTimeOfDayTargetEnergy(hour)
+    console.log(`[SmartAutoDJ] 🕐 Time of day: ${hour}:00, target energy: ${targetEnergy}`)
+
+    const before = candidates.length
+    const byTime = candidates.filter(song => Math.abs((song.energy || 0.5) - targetEnergy) < 0.3)
+
+    // Мягкий пол: если фильтр съел больше, чем нужно, лучше взять часть
+    // «неподходящих», чем отдать очередь короче count.
+    const candidates2 = byTime.length >= Math.min(count, before)
+      ? byTime
+      : candidates
+    if (candidates2.length !== byTime.length) {
+      console.log(`[SmartAutoDJ] 🕐 Time filter left ${byTime.length}/${before} — too few, keeping all`)
+    } else {
+      console.log(`[SmartAutoDJ] 🕐 Time filter: ${byTime.length}/${before} candidates`)
+    }
+    candidates = candidates2
+  }
+
+  // ============================================
+  // 5. ОРКЕСТРАТОР: СОРТИРОВКА КАНДИДАТОВ
   // ============================================
   console.log('[SmartAutoDJ] 🎼 ORCHESTRATOR: Sorting candidates...')
   
@@ -247,33 +342,11 @@ export async function generateSmartAutoDJ(
   }
 
   // ============================================
-  // 5. ENERGY CURVE: ФИНАЛЬНАЯ СОРТИРОВКА
+  // 6. ENERGY CURVE: ФИНАЛЬНАЯ СОРТИРОВКА
   // ============================================
   if (energyCurve === 'wave') {
     console.log('[SmartAutoDJ] 📈 ENERGY: Creating energy wave...')
     orchestrated = createEnergyWave(orchestrated)
-  }
-
-  // ============================================
-  // 6. УЧЁТ ВРЕМЕНИ СУТОК (опционально)
-  // ============================================
-  if (respectTimeOfDay) {
-    const hour = new Date().getHours()
-    const targetEnergy = getTimeOfDayTargetEnergy(hour)
-    
-    console.log(`[SmartAutoDJ] 🕐 Time of day: ${hour}:00, target energy: ${targetEnergy}`)
-    
-    // Фильтруем треки которые не подходят по энергии
-    orchestrated = orchestrated.filter(song => {
-      const energy = song.energy || 0.5
-      return Math.abs(energy - targetEnergy) < 0.3 // Допускаем отклонение ±0.3
-    })
-    
-    // Если мало треков, добавляем остальные
-    if (orchestrated.length < count) {
-      const remaining = candidates.filter(s => !orchestrated.find(t => t.id === s.id))
-      orchestrated.push(...remaining.slice(0, count - orchestrated.length))
-    }
   }
 
   // ============================================
@@ -282,11 +355,17 @@ export async function generateSmartAutoDJ(
   const avgEnergy = orchestrated.reduce((sum, s) => sum + (s.energy || 0.5), 0) / orchestrated.length
   const avgBpm = orchestrated.reduce((sum, s) => sum + (s.bpm || 100), 0) / orchestrated.length
 
+  // brainPartial > 0 — мозг дал часть пачки, локальный ML докладывал хвост.
+  const source: GenerationSource =
+    brainPartial > 0 ? 'mixed' : brainSongs.length > 0 ? 'mixed' : 'local'
+
   console.log('[SmartAutoDJ] ✅ Complete!')
   console.log('[SmartAutoDJ] Statistics:', {
     addedCount: orchestrated.length,
     avgEnergy: avgEnergy.toFixed(2),
     avgBpm: Math.round(avgBpm),
+    source,
+    brainReason: brainReason ?? 'brain-answered',
   })
 
   // Логирование первых треков для отладки
@@ -301,7 +380,22 @@ export async function generateSmartAutoDJ(
     addedCount: orchestrated.length,
     avgEnergy,
     avgBpm,
+    source,
+    brainReason,
   }
+}
+
+/**
+ * Среднее по числовому полю с фолбеком. Поля у brain-треков часто пустые.
+ */
+function avgOf(songs: ISong[], key: 'energy' | 'bpm', fallback = 0): number {
+  if (songs.length === 0) return fallback
+  let sum = 0
+  for (const s of songs) {
+    const v = (s as unknown as Record<string, unknown>)[key]
+    if (typeof v === 'number' && Number.isFinite(v)) sum += v
+  }
+  return sum / songs.length
 }
 
 /**

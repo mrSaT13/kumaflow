@@ -75,7 +75,7 @@ export default function CuratedPlaylists() {
       let result
       if (playlist.type === 'daily') {
         result = await generateDailyMix(
-          profile.likedSongIds || [],
+          profile.likedSongs || [],
           profile.preferredGenres,
           profile.preferredArtists || {},
           profile.ratings || {},
@@ -83,7 +83,7 @@ export default function CuratedPlaylists() {
         )
       } else if (playlist.type === 'discover') {
         result = await generateDiscoverWeekly(
-          profile.likedSongIds || [],
+          profile.likedSongs || [],
           profile.preferredGenres,
           25
         )

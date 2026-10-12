@@ -1,24 +1,29 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
   "compilerOptions": {
-    "composite": true,
+    "composite": false,
+    "incremental": false,
+    "declaration": false,
+    "declarationMap": false,
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
-    "types": [""],
-    "typeRoots": [
-      "./node_modules/@types",
-      "./electron/preload/types.ts",
-      "./electron/env.d.ts"
-    ]
+    "target": "ES2021",
+    /* electron/main/index.ts импортирует src/service/remote-server, а тот
+       тянет subsonic/scrobble/lyrics — рендерер-код с window и axios.
+       Без DOM в lib эти файлы давали ошибки, которых нет в web-проекте. */
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "typeRoots": ["./node_modules/@types", "./node_modules"]
   },
   "include": [
     "electron.vite.config.*",
     "electron/env.d.ts",
     "electron/main/**/*",
-    "electron/preload/**/*"
+    "electron/preload/**/*",
+    "src/manual-chunks.ts",
+    "src/service/remote-server.ts"
   ],
-  "exclude": ["src/**/*"],
-  "files": ["src/manual-chunks.ts"]
+  "exclude": ["src/**/*"]
 }

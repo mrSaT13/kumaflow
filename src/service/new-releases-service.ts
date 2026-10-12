@@ -6,7 +6,6 @@
  */
 
 import { subsonic } from '@/service/subsonic'
-import { artistTrackMonitor } from '@/service/artist-track-monitor'
 import { useArtistSubscriptionsStore } from '@/store/artist-subscriptions.store'
 import type { ISong } from '@/types/responses/song'
 
@@ -85,12 +84,15 @@ export async function generateNewReleasesPlaylist(
  * Запустить плейлист новинок
  */
 export async function playNewReleases(limit: number = 25) {
-  const { setSongList } = await import('@/store/player.store')
-  
+  // Действия лежат в usePlayerStore.getState().actions. Раньше здесь
+  // деструктурировалось setSongList прямо из модуля, чего там нет,
+  // и вызов падал TypeError — «Слушать новинки» не работало.
+  const { usePlayerStore } = await import('@/store/player.store')
+
   const playlist = await generateNewReleasesPlaylist(limit)
-  
+
   if (playlist.songs.length > 0) {
-    setSongList(playlist.songs, 0)
+    usePlayerStore.getState().actions.setSongList(playlist.songs, 0)
     return true
   }
   

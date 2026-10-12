@@ -110,7 +110,7 @@ export default function InStyleArtistsPage() {
     try {
       const result = await generateArtistRadio(artistId, 25)
       if (result.songs.length > 0) {
-        setSongList(result.songs, 0, false)
+        setSongList(result.songs, 0, false, undefined, `Радио · ${artists.find(a => a.id === artistId)?.name}`)
         toast.success(`▶️ Радио: ${artists.find(a => a.id === artistId)?.name}`, { autoClose: 2000 })
       }
     } catch (error) {

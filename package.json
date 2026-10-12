@@ -1,7 +1,7 @@
 {
   "name": "kumaflow",
   "private": true,
-  "version": "1.6.9",
+  "version": "1.11.5",
   "license": "MIT",
   "description": "KumaFlow - умный музыкальный плеер с ML Engine 2.0, Mood Drift Detection, Time-Aware Recommendations и Vibe Similarity",
   "author": {
@@ -17,12 +17,13 @@
   "productName": "KumaFlow",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",
     "lint:check": "biome check --write",
     "lint:format": "biome format --write",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "cy:open": "cypress open",
     "test": "cypress run --component",
     "electron:start": "electron-vite preview",

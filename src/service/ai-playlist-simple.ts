@@ -4,8 +4,7 @@
  * Короткий промт (~100 токенов) вместо 940!
  */
 
-import { subsonic } from '@/service/subsonic'
-import { getSongsByGenre, getTopSongs, search3 } from '@/service/subsonic-api'
+import { getSongsByGenre, getTopSongs } from '@/service/subsonic-api'
 import type { ISong } from '@/types/responses/song'
 import { banDisplayName } from '@/service/ban-filter'
 

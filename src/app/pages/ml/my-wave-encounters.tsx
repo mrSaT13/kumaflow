@@ -10,11 +10,10 @@ import { useThemeStore } from '@/store/theme.store'
 import { isDarkTheme } from '@/utils/theme'
 import { useMLStore } from '@/store/ml.store'
 import { getStarredArtists } from '@/service/subsonic-api'
-import { subsonic } from '@/service/subsonic'
 import { generateArtistRadio } from '@/service/ml-wave-service'
 import { usePlayerActions } from '@/store/player.store'
 import { toast } from 'react-toastify'
-import { ChevronLeft, Play, Loader2, Music2, Star, Calendar, TrendingUp } from 'lucide-react'
+import { ChevronLeft, Play, Loader2, Music2, Star, TrendingUp } from 'lucide-react'
 import { getSimpleCoverArtUrl } from '@/api/httpClient'
 import { LazyLoadImage } from 'react-lazy-load-image-component'
 
@@ -109,7 +108,7 @@ export default function MyWaveEncountersPage() {
     try {
       const result = await generateArtistRadio(artistId, 25)
       if (result.songs.length > 0) {
-        setSongList(result.songs, 0, false)
+        setSongList(result.songs, 0, false, undefined, `Радио · ${artists.find(a => a.id === artistId)?.name}`)
         toast.success(`▶️ Радио: ${artists.find(a => a.id === artistId)?.name}`, { autoClose: 2000 })
       }
     } catch (error) {

@@ -65,7 +65,7 @@ export interface ScoringContext {
   /** Текущее время (час 0-23) */
   currentHour: number
   /** Выбранная активность */
-  activity?: 'wakeup' | 'commute' | 'work' | 'workout' | 'sleep' | 'study' | 'party' | 'walk' | 'rest' | ''
+  activity?: 'wakeup' | 'commute' | 'work' | 'workout' | 'sleep' | ''
   /** Выбранное настроение */
   mood?: 'energetic' | 'happy' | 'calm' | 'sad' | ''
   /** Уже добавленные в плейлист артисты (для diversity penalty) */
@@ -347,7 +347,9 @@ export class TrackScorer {
     const baseNovelty = 1 / (1 + playCount + replayCount * 2)
 
     // Умножаем на genre weight
-    const genreMultiplier = NOVELTY_GENRE_MULTIPLIER[song.genre] || NOVELTY_GENRE_MULTIPLIER.default
+    const genreMultiplier = song.genre
+      ? (NOVELTY_GENRE_MULTIPLIER[song.genre] || NOVELTY_GENRE_MULTIPLIER.default)
+      : NOVELTY_GENRE_MULTIPLIER.default
 
     return Math.min(1, baseNovelty * genreMultiplier)
   }
@@ -384,7 +386,9 @@ export class TrackScorer {
     }
 
     // Множитель жанра (популярные жанры получают больше)
-    const genreMultiplier = NOVELTY_GENRE_MULTIPLIER[song.genre] || NOVELTY_GENRE_MULTIPLIER.default
+    const genreMultiplier = song.genre
+      ? (NOVELTY_GENRE_MULTIPLIER[song.genre] || NOVELTY_GENRE_MULTIPLIER.default)
+      : NOVELTY_GENRE_MULTIPLIER.default
 
     return Math.min(0.2, baseBonus * genreMultiplier)
   }
@@ -414,26 +418,6 @@ export class TrackScorer {
     if (activity === 'workout' || isSportHours) {
       if (features.bpm > 110) bonus += 0.1
       if (features.energy > 0.7) bonus += 0.1
-    }
-
-    // Новые занятия (зеркало ACTIVITY_PRESETS мозга — офлайн должен уметь то же)
-    if (activity === 'study') {
-      if (features.energy >= 0.3 && features.energy <= 0.6) bonus += 0.1
-      if ((features.bpm || 0) <= 120) bonus += 0.05
-    }
-
-    if (activity === 'party') {
-      if (features.energy >= 0.7) bonus += 0.1
-      if ((features.bpm || 0) >= 115) bonus += 0.1
-    }
-
-    if (activity === 'walk') {
-      if (features.energy >= 0.4 && features.energy <= 0.7) bonus += 0.1
-      if (features.valence >= 0.4) bonus += 0.05
-    }
-
-    if (activity === 'rest') {
-      if (features.energy <= 0.5) bonus += 0.1
     }
 
     if (mood === 'calm' || activity === 'sleep' || isRestHours) {
@@ -622,53 +606,6 @@ export class TrackScorer {
       default:
         return songs
     }
-  }
-
-  /**
-   * 🆕 Genre-Aware Energy Curve: штраф за отклонение от жанровой кривой
-   */
-  private calculateGenreCurvePenalty(song: ISong, index: number, totalTracks: number): number {
-    const genre = song.genre || 'default'
-    const curve = GENRE_ENERGY_CURVES[genre] || GENRE_ENERGY_CURVES['default']
-    
-    const features = analyzeTrack(song)
-    const energy = features.energy
-
-    // Рассчитываем целевую энергию для этой позиции в зависимости от типа кривой
-    let targetEnergy: number
-    
-    const position = index / totalTracks  // 0.0 - 1.0
-    
-    switch (curve.type) {
-      case 'smooth':
-        // Плавное изменение: линейная интерполяция
-        targetEnergy = 0.5 + 0.1 * Math.sin(position * Math.PI * 2)
-        break
-      case 'spiky':
-        // Резкие пики: случайно меняем энергию
-        targetEnergy = 0.5 + 0.3 * Math.sin(position * Math.PI * 4)
-        break
-      case 'crescendo':
-        // Нарастание: от низкой к высокой
-        targetEnergy = 0.3 + 0.5 * position
-        break
-      case 'wave':
-        // Волна: несколько пиков
-        targetEnergy = 0.5 + 0.25 * Math.sin(position * Math.PI * 3)
-        break
-      case 'flat':
-        // Плоская: минимальные изменения
-        targetEnergy = 0.5
-        break
-      default:
-        targetEnergy = 0.5
-    }
-
-    // Штраф за отклонение от целевой энергии
-    const delta = Math.abs(energy - targetEnergy)
-    const penalty = Math.min(curve.maxDelta * 2, delta * 0.5)
-
-    return penalty
   }
 
   /**

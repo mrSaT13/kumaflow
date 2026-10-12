@@ -40,7 +40,7 @@ export const DEFAULT_HOLIDAYS: Holiday[] = [
     mood: ['festive', 'happy', 'magical'],
     energy: { min: 0.6, max: 0.9 },
     valence: { min: 0.7, max: 1.0 },
-    icon: '🎄',
+    icon: '',
     isEnabled: true,
   },
   {
@@ -53,7 +53,7 @@ export const DEFAULT_HOLIDAYS: Holiday[] = [
     mood: ['warm', 'cozy', 'peaceful'],
     energy: { min: 0.3, max: 0.7 },
     valence: { min: 0.5, max: 0.9 },
-    icon: '⭐',
+    icon: '',
     isEnabled: true,
   },
   {
@@ -66,7 +66,7 @@ export const DEFAULT_HOLIDAYS: Holiday[] = [
     mood: ['festive', 'happy'],
     energy: { min: 0.5, max: 0.8 },
     valence: { min: 0.6, max: 0.9 },
-    icon: '🎉',
+    icon: '',
     isEnabled: true,
   },
   {
@@ -79,7 +79,7 @@ export const DEFAULT_HOLIDAYS: Holiday[] = [
     mood: ['dark', 'energetic', 'dramatic'],
     energy: { min: 0.7, max: 1.0 },
     valence: { min: 0.0, max: 0.4 },
-    icon: '🎃',
+    icon: '',
     isEnabled: true,
   },
   
@@ -94,7 +94,7 @@ export const DEFAULT_HOLIDAYS: Holiday[] = [
     mood: ['romantic', 'tender', 'warm'],
     energy: { min: 0.3, max: 0.6 },
     valence: { min: 0.5, max: 0.8 },
-    icon: '💝',
+    icon: '',
     isEnabled: true,
   },
   {
@@ -107,7 +107,7 @@ export const DEFAULT_HOLIDAYS: Holiday[] = [
     mood: ['strong', 'proud', 'powerful'],
     energy: { min: 0.6, max: 0.9 },
     valence: { min: 0.4, max: 0.7 },
-    icon: '🎗️',
+    icon: '',
     isEnabled: true,
   },
   {
@@ -120,7 +120,7 @@ export const DEFAULT_HOLIDAYS: Holiday[] = [
     mood: ['feminine', 'beautiful', 'warm'],
     energy: { min: 0.4, max: 0.7 },
     valence: { min: 0.6, max: 0.9 },
-    icon: '🌸',
+    icon: '',
     isEnabled: true,
   },
   {
@@ -133,7 +133,7 @@ export const DEFAULT_HOLIDAYS: Holiday[] = [
     mood: ['spring', 'happy', 'joyful'],
     energy: { min: 0.5, max: 0.8 },
     valence: { min: 0.6, max: 0.9 },
-    icon: '🌷',
+    icon: '',
     isEnabled: true,
   },
   {
@@ -146,7 +146,7 @@ export const DEFAULT_HOLIDAYS: Holiday[] = [
     mood: ['solemn', 'proud', 'memorial'],
     energy: { min: 0.3, max: 0.7 },
     valence: { min: 0.4, max: 0.7 },
-    icon: '🎖️',
+    icon: '',
     isEnabled: true,
   },
   
@@ -161,7 +161,7 @@ export const DEFAULT_HOLIDAYS: Holiday[] = [
     mood: ['patriotic', 'festive', 'proud'],
     energy: { min: 0.5, max: 0.8 },
     valence: { min: 0.6, max: 0.9 },
-    icon: '🇷🇺',
+    icon: '',
     isEnabled: true,
   },
   
@@ -176,7 +176,7 @@ export const DEFAULT_HOLIDAYS: Holiday[] = [
     mood: ['solemn', 'spiritual', 'proud'],
     energy: { min: 0.3, max: 0.6 },
     valence: { min: 0.4, max: 0.7 },
-    icon: '🦅',
+    icon: '',
     isEnabled: true,
   },
 ]
@@ -185,7 +185,7 @@ export const DEFAULT_HOLIDAYS: Holiday[] = [
  * Плавающие праздники (рассчитываются ежегодно)
  */
 export const FLOATING_HOLIDAYS = {
-  easter: (year: number): Holiday => {
+  easter: (_year: number): Holiday => {
     // Пасха (православная) - рассчитывается по лунному календарю
     // Упрощённо: обычно апрель-май
     return {
@@ -198,11 +198,11 @@ export const FLOATING_HOLIDAYS = {
       mood: ['bright', 'joyful', 'spiritual'],
       energy: { min: 0.4, max: 0.7 },
       valence: { min: 0.6, max: 0.9 },
-      icon: '✝️',
+      icon: '',
       isEnabled: true,
     }
   },
-  maslenitsa: (year: number): Holiday => {
+  maslenitsa: (_year: number): Holiday => {
     // Масленица - неделя перед Великим постом
     return {
       id: 'maslenitsa',
@@ -214,7 +214,7 @@ export const FLOATING_HOLIDAYS = {
       mood: ['festive', 'fun', 'traditional'],
       energy: { min: 0.5, max: 0.8 },
       valence: { min: 0.6, max: 0.9 },
-      icon: '🥞',
+      icon: '',
       isEnabled: true,
     }
   },

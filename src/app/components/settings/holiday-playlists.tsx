@@ -6,7 +6,7 @@ import { Badge } from '@/app/components/ui/badge'
 import { toast } from 'react-toastify'
 import { getAllHolidays, getUpcomingHolidays, type Holiday } from '@/service/holidays'
 import { parseIcsFile, saveCustomHoliday, getCustomHolidays, deleteCustomHoliday, exportCustomHolidaysToJson } from '@/service/ics-parser'
-import { Calendar, Plus, Upload, Download, Trash2 } from 'lucide-react'
+import { Plus, Upload, Download, Trash2 } from 'lucide-react'
 import { AddHolidayModal } from './add-holiday-modal'
 
 export function HolidayPlaylistsSettings() {

@@ -4,6 +4,7 @@ import {
   usePlayerIsPlaying,
   usePlayerMediaType,
   usePlayerSonglist,
+  usePlayerStore,
 } from '@/store/player.store'
 import { appName } from '@/utils/appName'
 import { manageMediaSession } from '@/utils/setMediaSession'
@@ -12,8 +13,12 @@ export function MediaSessionObserver() {
   const { t } = useTranslation()
   const isPlaying = usePlayerIsPlaying()
   const { isRadio, isSong, isPodcast } = usePlayerMediaType()
-  const { currentList, radioList, currentSongIndex, podcastList, currentPlaylistName } =
+  const { currentList, radioList, currentSongIndex, podcastList } =
     usePlayerSonglist()
+  // usePlayerSonglist не отдаёт currentPlaylistName — читаем из songlist напрямую.
+  const currentPlaylistName = usePlayerStore(
+    (state) => state.songlist.currentPlaylistName,
+  )
   const radioLabel = t('radios.label')
 
   const song = currentList[currentSongIndex] ?? null

@@ -1,13 +1,25 @@
-import { useState, useEffect } from 'react'
+import { clsx } from 'clsx'
+import {
+  Bell,
+  BellOff,
+  Globe,
+  Loader2,
+  Radio,
+  Share2,
+  ThumbsDown,
+  Users,
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
-import { clsx } from 'clsx'
+import { toast } from 'react-toastify'
 import ImageHeader from '@/app/components/album/image-header'
+import { AppearsInCompilations } from '@/app/components/artist/appears-in-compilations'
+import { ArtistDiscography } from '@/app/components/artist/artist-discography'
 import { ArtistImageViewer } from '@/app/components/artist/artist-image-viewer'
 import ArtistTopSongs from '@/app/components/artist/artist-top-songs'
+import { CacheArtistButton } from '@/app/components/artist/cache-button'
 import { ArtistInfo } from '@/app/components/artist/info'
-import { ArtistDiscography } from '@/app/components/artist/artist-discography'
-import { AppearsInCompilations } from '@/app/components/artist/appears-in-compilations'
 import { NewReleases } from '@/app/components/artist/new-releases'
 import RelatedArtistsList from '@/app/components/artist/related-artists'
 import { AlbumFallback } from '@/app/components/fallbacks/album-fallbacks'
@@ -16,34 +28,38 @@ import { TopSongsTableFallback } from '@/app/components/fallbacks/table-fallback
 import { BadgesData } from '@/app/components/header-info'
 import PreviewList from '@/app/components/home/preview-list'
 import ListWrapper from '@/app/components/list-wrapper'
+import { Button } from '@/app/components/ui/button'
+import { DataTable } from '@/app/components/ui/data-table'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/app/components/ui/tooltip'
 import {
   useGetArtist,
   useGetArtistInfo,
   useGetTopSongs,
 } from '@/app/hooks/use-artist'
 import ErrorPage from '@/app/pages/error-page'
-import { ROUTES } from '@/routes/routesList'
-import { sortRecentAlbums } from '@/utils/album'
-import { Button } from '@/app/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/app/components/ui/tooltip'
-import { usePlayerActions } from '@/store/player.store'
-import { generateArtistRadio } from '@/service/ml-wave-service'
-import { toast } from 'react-toastify'
-import { useArtistSubscriptions } from '@/store/artist-subscriptions.store'
-import { artistTrackMonitor } from '@/service/artist-track-monitor'
-import { useExternalApi } from '@/store/external-api.store'
-import { lastFmService } from '@/service/lastfm-api'
-import { fanartService } from '@/service/fanart-api'
-import { wikipediaService } from '@/service/wikipedia-api'
-import { CacheArtistButton } from '@/app/components/artist/cache-button'
-import { Bell, BellOff, Radio, Loader2, ThumbsDown, Globe, Download, Share2 } from 'lucide-react'
-import { useML, useMLActions } from '@/store/ml.store'
-import { trackViewArtistPage } from '@/service/ml-event-tracker'
-import { usePageDesignSettings } from '@/store/page-design.store'
-import NewArtistPage from './new-artist-page'  // 🆕 Новый дизайн
-import { Users } from 'lucide-react'
 import { songsColumns } from '@/app/tables/songs-columns'
-import { DataTable } from '@/app/components/ui/data-table'
+import { ROUTES } from '@/routes/routesList'
+import { artistTrackMonitor } from '@/service/artist-track-monitor'
+import { waveSeedStart } from '@/service/brain-wave'
+import { fanartService } from '@/service/fanart-api'
+import { lastFmService } from '@/service/lastfm-api'
+import { trackViewArtistPage } from '@/service/ml-event-tracker'
+import { generateArtistRadio } from '@/service/ml-wave-service'
+import { subsonic } from '@/service/subsonic'
+import { applyWaveSeed } from '@/service/wave-seed'
+import { wikipediaService } from '@/service/wikipedia-api'
+import { useArtistSubscriptions } from '@/store/artist-subscriptions.store'
+import { useExternalApi } from '@/store/external-api.store'
+import { useML, useMLActions } from '@/store/ml.store'
+import { usePageDesignSettings } from '@/store/page-design.store'
+import { usePlayerActions } from '@/store/player.store'
+import type { ISong } from '@/types/responses/song'
+import { sortRecentAlbums } from '@/utils/album'
+import NewArtistPage from './new-artist-page' // 🆕 Новый дизайн
 
 export default function Artist() {
   const { t } = useTranslation()
@@ -58,8 +74,12 @@ export default function Artist() {
   const [isGeneratingRadio, setIsGeneratingRadio] = useState(false)
   const [isSubscribing, setIsSubscribing] = useState(false)
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false)
-  const [artistBannerUrl, setArtistBannerUrl] = useState<string | undefined>(undefined)
-  const [artistLogoUrl, setArtistLogoUrl] = useState<string | undefined>(undefined)
+  const [artistBannerUrl, setArtistBannerUrl] = useState<string | undefined>(
+    undefined,
+  )
+  const [artistLogoUrl, setArtistLogoUrl] = useState<string | undefined>(
+    undefined,
+  )
   const [wikiUrl, setWikiUrl] = useState<string | undefined>(undefined)
 
   const subscribed = isSubscribed(artistId)
@@ -80,11 +100,13 @@ export default function Artist() {
   useEffect(() => {
     // Сбрасываем логотип при смене артиста
     setArtistLogoUrl(undefined)
-    
+
     if (!settings.fanartShowBanner || !artistInfo?.musicBrainzId) return
 
     const loadLogo = async () => {
-      const images = await fanartService.getArtistImages(artistInfo.musicBrainzId)
+      const images = await fanartService.getArtistImages(
+        artistInfo.musicBrainzId,
+      )
       if (images?.logos?.[0]) {
         setArtistLogoUrl(images.logos[0].url)
         console.log('[Artist] Fanart.tv logo loaded:', images.logos[0].url)
@@ -99,7 +121,7 @@ export default function Artist() {
   // Загрузка Wikipedia информации
   useEffect(() => {
     setWikiUrl(undefined)
-    
+
     if (!artist?.name) return
 
     const loadWiki = async () => {
@@ -132,15 +154,21 @@ export default function Artist() {
       try {
         const images = await fanartService.getArtistImages(mbid)
         console.log('[Artist] Fanart.tv response:', images)
-        
+
         // Пробуем сначала фоны, потом логотипы
         if (images?.backgrounds?.[0]) {
           setArtistBannerUrl(images.backgrounds[0])
-          console.log('[Artist] Fanart.tv banner loaded:', images.backgrounds[0])
+          console.log(
+            '[Artist] Fanart.tv banner loaded:',
+            images.backgrounds[0],
+          )
         } else if (images?.logos?.[0]) {
           // Если нет фонов, используем логотип (с прозрачностью)
           setArtistBannerUrl(images.logos[0])
-          console.log('[Artist] Fanart.tv logo loaded (no backgrounds):', images.logos[0])
+          console.log(
+            '[Artist] Fanart.tv logo loaded (no backgrounds):',
+            images.logos[0],
+          )
         } else {
           console.log('[Artist] Fanart.tv no backgrounds or logos found')
         }
@@ -219,12 +247,56 @@ export default function Artist() {
     },
   ]
 
+  /**
+   * Радио по артисту (старый дизайн страницы).
+   *
+   * Дублирует новый дизайн (new-artist-page.handlePlayRadio): сначала мозг
+   * через POST /api/wave/seed — треки сида + похожие артисты + серверные
+   * похожие через общий скоринг волны. Локальный generateArtistRadio берёт
+   * только top-10 треков артиста, потому что artists.getInfo на Navidrome
+   * без Last.fm-ключа отдаёт пустой similarArtist — это был не радио, а
+   * десять треков подряд одного артиста.
+   *
+   * Эта страница включается по умолчанию (newArtistDesignEnabled: false),
+   * так что чинить только новый дизайн было недостаточно.
+   */
   const handlePlayArtistRadio = async () => {
     setIsGeneratingRadio(true)
     try {
+      if (artist?.name) {
+        const brain = await waveSeedStart({
+          kind: 'artist',
+          artistName: artist.name,
+        })
+        if (brain) {
+          const loaded = await Promise.all(
+            brain.tracks.map((t) =>
+              subsonic.songs
+                .getSong(t.external_id || t.track_id)
+                .catch(() => null),
+            ),
+          )
+          const songs = loaded.filter((s): s is ISong => !!s)
+          if (songs.length > 0) {
+            const name = applyWaveSeed('artist', artist.name, songs)
+            const extra = brain.similarArtists.length
+              ? ` · +${brain.similarArtists.length} похожих`
+              : ''
+            toast(`Мозг: ${name}${extra}`, { type: 'success' })
+            return
+          }
+        }
+      }
+      // Фолбек: локальный генератор (как раньше).
       const playlist = await generateArtistRadio(artistId, 50)
       if (playlist.songs.length > 0) {
-        setSongList(playlist.songs, 0)
+        setSongList(
+          playlist.songs,
+          0,
+          false,
+          undefined,
+          `Радио · ${artist.name}`,
+        )
         toast(`▶️ Запущено радио: ${artist.name}`, { type: 'success' })
       } else {
         toast('Не удалось сгенерировать радио', { type: 'error' })
@@ -240,13 +312,14 @@ export default function Artist() {
   // Функция "Поделиться" артистом
   const handleShareArtist = () => {
     if (!artist) return
-    
+
     const shareText = `@artist:${artist.name}`
-    navigator.clipboard.writeText(shareText)
+    navigator.clipboard
+      .writeText(shareText)
       .then(() => {
         toast(`📋 Скопировано: ${shareText}`, { type: 'success' })
       })
-      .catch(err => {
+      .catch((err) => {
         console.error('Failed to copy:', err)
         toast('Ошибка копирования', { type: 'error' })
       })
@@ -260,10 +333,13 @@ export default function Artist() {
         toast(`❌ Отписка от ${artist.name}`, { type: 'info' })
       } else {
         subscribe(artistId, artist.name)
-        toast(`✅ Подписка на ${artist.name}! Будем уведомлять о новых треках`, {
-          type: 'success',
-          autoClose: 5000,
-        })
+        toast(
+          `✅ Подписка на ${artist.name}! Будем уведомлять о новых треках`,
+          {
+            type: 'success',
+            autoClose: 5000,
+          },
+        )
 
         // Сразу проверим артиста
         await artistTrackMonitor.checkArtistNow(artistId)
@@ -278,7 +354,7 @@ export default function Artist() {
 
   const handleBanArtist = async () => {
     if (!artistId || !artist.name) return
-    
+
     mlActions.banArtist(artistId, artist.name)
     toast(`🚫 ${artist.name} заблокирован! Не будет добавляться в плейлисты`, {
       type: 'warning',
@@ -288,7 +364,7 @@ export default function Artist() {
 
   const handleUnbanArtist = async () => {
     if (!artistId || !artist.name) return
-    
+
     mlActions.unbanArtist(artistId, artist.name)
     toast(`✅ ${artist.name} разблокирован!`, {
       type: 'success',
@@ -299,10 +375,13 @@ export default function Artist() {
   const recentAlbums = artist.album ? sortRecentAlbums(artist.album) : []
 
   // Совместные треки (если есть topSongs)
-  const collaborativeSongs = topSongs?.filter((song: any) => 
-    song.artists && song.artists.length > 1 && 
-    song.artists.some((a: any) => a.id === artistId)
-  ) || []
+  const collaborativeSongs =
+    topSongs?.filter(
+      (song: any) =>
+        song.artists &&
+        song.artists.length > 1 &&
+        song.artists.some((a: any) => a.id === artistId),
+    ) || []
 
   return (
     <div className="w-full">
@@ -322,7 +401,10 @@ export default function Artist() {
             {/* Кеш - сохранить артиста */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <CacheArtistButton artistId={artistId} artistName={artist?.name} />
+                <CacheArtistButton
+                  artistId={artistId}
+                  artistName={artist?.name}
+                />
               </TooltipTrigger>
               <TooltipContent side="top">
                 Сохранить артиста в кеш
@@ -341,9 +423,7 @@ export default function Artist() {
                   <Share2 className="h-5 w-5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top">
-                Поделиться артистом
-              </TooltipContent>
+              <TooltipContent side="top">Поделиться артистом</TooltipContent>
             </Tooltip>
 
             {/* Wikipedia */}
@@ -359,9 +439,7 @@ export default function Artist() {
                     <Globe className="h-5 w-5" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="top">
-                  Wikipedia
-                </TooltipContent>
+                <TooltipContent side="top">Wikipedia</TooltipContent>
               </Tooltip>
             )}
 
@@ -412,7 +490,7 @@ export default function Artist() {
                     'h-10 w-10 rounded-full',
                     subscribed
                       ? 'bg-red-600/20 hover:bg-red-600/30 text-red-600'
-                      : 'hover:bg-green-600/20 text-muted-foreground hover:text-green-600'
+                      : 'hover:bg-green-600/20 text-muted-foreground hover:text-green-600',
                   )}
                 >
                   {isSubscribing ? (
@@ -443,7 +521,7 @@ export default function Artist() {
                     'h-10 w-10 rounded-full',
                     isGeneratingRadio
                       ? 'bg-primary/20 text-primary'
-                      : 'hover:bg-primary/20 text-muted-foreground hover:text-primary'
+                      : 'hover:bg-primary/20 text-muted-foreground hover:text-primary',
                   )}
                 >
                   {isGeneratingRadio ? (
@@ -487,8 +565,19 @@ export default function Artist() {
             <DataTable
               columns={songsColumns()}
               data={collaborativeSongs.slice(0, 10)}
-              handlePlaySong={(row) => setSongList(collaborativeSongs, row.index)}
-              columnFilter={['index', 'title', 'artist', 'album', 'year', 'duration', 'playCount', 'select']}
+              handlePlaySong={(row) =>
+                setSongList(collaborativeSongs, row.index)
+              }
+              columnFilter={[
+                'index',
+                'title',
+                'artist',
+                'album',
+                'year',
+                'duration',
+                'playCount',
+                'select',
+              ]}
               variant="modern"
             />
           </div>
@@ -513,13 +602,16 @@ export default function Artist() {
 
         {/* Участвует в сборниках/саундтреках */}
         {artist && (
-          <AppearsInCompilations artistId={artist.id} artistName={artist.name} />
+          <AppearsInCompilations
+            artistId={artist.id}
+            artistName={artist.name}
+          />
         )}
-        
+
         {/* Дискография из Discogs */}
         <ArtistDiscography artistName={artist.name} />
       </ListWrapper>
-      
+
       {/* Просмотрщик обложек */}
       <ArtistImageViewer
         open={isImageViewerOpen}

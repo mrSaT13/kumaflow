@@ -21,6 +21,10 @@ export interface PlaylistCacheEntry {
     source?: string
     vibeSimilarity?: boolean
     orchestrated?: boolean
+    /** Человекочитаемая формула сборки плейлиста (только для логов/отладки) */
+    formula?: string
+    /** Настройки, по которым плейлист был собран (только для логов/отладки) */
+    settings?: object
   }
 }
 

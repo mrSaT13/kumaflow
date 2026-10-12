@@ -12,7 +12,7 @@ import {
   Mic2,
 } from 'lucide-react'
 import { ISong } from '@/types/responses/song'
-import { usePlayerActions } from '@/store/player.store'
+import { usePlayerActions, usePlayerStore } from '@/store/player.store'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -40,8 +40,7 @@ export function QueueContextMenu({ song, index, children }: QueueContextMenuProp
 
   const handlePlayFromHere = () => {
     // Play from this track in current queue
-    const { currentList } = usePlayerActions.getState()
-    // Need to get current list from store
+    const currentList = usePlayerStore.getState().songlist.currentList
     setSongList(currentList, index)
     toast(`▶️ Playing from: ${song.title}`, { type: 'default' })
   }
@@ -54,7 +53,7 @@ export function QueueContextMenu({ song, index, children }: QueueContextMenuProp
   }
 
   const handleMoveToBottom = () => {
-    const { currentList } = usePlayerActions.getState()
+    const currentList = usePlayerStore.getState().songlist.currentList
     if (index < currentList.length - 1) {
       moveSongInQueue(index, currentList.length - 1)
       toast(`⬇️ Moved to bottom: ${song.title}`, { type: 'default' })

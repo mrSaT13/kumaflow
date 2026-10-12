@@ -153,21 +153,22 @@ const api: IKumaFlowAPI = {
   },
   // Remote Control IPC
   remoteControl: {
-    start: () => ipcRenderer.invoke('remote-control:start'),
+    start: (portOrOpts?: number | { port?: number; host?: string }) => ipcRenderer.invoke('remote-control:start', portOrOpts),
     stop: () => ipcRenderer.invoke('remote-control:stop'),
     getStatus: () => ipcRenderer.invoke('remote-control:get-status'),
     getUrl: () => ipcRenderer.invoke('remote-control:get-url'),
     getAllIps: () => ipcRenderer.invoke('remote-control:get-all-ips'),
+    getAllUrls: () => ipcRenderer.invoke('remote-control:get-all-urls'),
     setIp: (ip: string) => ipcRenderer.invoke('remote-control:set-ip', ip),
     setPort: (port: number) => ipcRenderer.invoke('remote-control:set-port', port),
     getPort: () => ipcRenderer.invoke('remote-control:get-port'),
+    setPin: (pin: string) => ipcRenderer.invoke('remote-control:set-pin', pin),
+    hasPin: () => ipcRenderer.invoke('remote-control:has-pin'),
     setSubsonicUrl: (url: string, username: string, password: string, authType: 'token' | 'password') =>
       ipcRenderer.invoke('remote-control:set-subsonic-url', url, username, password, authType),
     getConnectedClients: () => ipcRenderer.invoke('remote-control:get-connected-clients'),
     hasSavedCredentials: () => ipcRenderer.invoke('remote-control:hasSavedCredentials'),
     loadSettings: () => ipcRenderer.invoke('remote-control:loadSettings'),
-    setPin: (pin: string) => ipcRenderer.invoke('remote-control:set-pin', pin),
-    hasPin: () => ipcRenderer.invoke('remote-control:has-pin'),
   },
   // DLNA IPC
   dlna: {

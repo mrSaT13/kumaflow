@@ -5,7 +5,7 @@ import { useAudiobookshelf } from '@/store/audiobookshelf.store'
 import { usePlayerActions, usePlayerSonglist, usePlayerIsPlaying } from '@/store/player.store'
 import { toast } from 'react-toastify'
 import { Button } from '@/app/components/ui/button'
-import { ArrowLeft, Play, Pause, SkipForward, SkipBack, BookOpen, Settings, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Play, Pause, BookOpen, Settings, AlertCircle } from 'lucide-react'
 import { useAppStore } from '@/store/app.store'
 import styles from './audiobook-detail.module.css'
 

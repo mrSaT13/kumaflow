@@ -115,7 +115,7 @@ export function ArtistCollageCard({
 
       if (result.songs.length > 0) {
         console.log('[ArtistCollage] Starting radio:', result.songs.length, 'tracks')
-        setSongList(result.songs, 0)
+        setSongList(result.songs, 0, false, undefined, `Радио · ${artistName}`)
         toast(`▶️ Радио: ${artistName}`, { type: 'default' })
       } else {
         console.warn('[ArtistCollage] No songs found for artist radio')

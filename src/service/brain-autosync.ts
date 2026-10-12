@@ -1,25 +1,24 @@
 /**
  * KumaFlow — автосинк вкусов десктопа в мозг.
  * Вкл по умолчанию, если мозг добавлен (brain.store.autoSync, дефолт true).
- * Первый прогон через ~90с после старта (сторы успевают гидратиться),
- * дальше каждые 30 минут. Всё best-effort и тихо: без тостов, только console.
+ * Первый прогон вскоре после старта (user_id мозга поднимает brain-bootstrap),
+ * дальше каждые 30 минут. Пока мозг не поднят — повторяем через минуту, а не
+ * через полчаса: раньше один неудачный прогон «съедал» весь интервал.
+ * Всё best-effort и тихо: без тостов, только console.
  */
 
 import { isBrainActive, useBrainStore } from '@/store/brain.store'
-import {
-  buildTasteSyncPayload,
-  ensureBrainUserId,
-  pullServerTaste,
-  resolveNavidromeUsername,
-  syncFromMobile,
-} from './brain-sync'
+import { ensureBrainReady } from './brain-bootstrap'
+import { buildTasteSyncPayload, pullServerTaste, syncFromMobile } from './brain-sync'
 
-const FIRST_DELAY_MS = 90_000
+const FIRST_DELAY_MS = 20_000
 const INTERVAL_MS = 30 * 60_000
+/** Мозг ещё не поднят (нет user_id/логина) — пробуем раньше, чем через полчаса. */
+const NOT_READY_RETRY_MS = 60_000
 
 let started = false
 let running = false
-let timer: ReturnType<typeof setInterval> | null = null
+let timer: ReturnType<typeof setTimeout> | null = null
 
 /** Один прогон автосинка. Возвращает true если вкусы реально долетели. */
 export async function runBrainAutoSync(reason: string): Promise<boolean> {
@@ -30,13 +29,15 @@ export async function runBrainAutoSync(reason: string): Promise<boolean> {
   } catch {
     return false
   }
-  const username = resolveNavidromeUsername()
-  if (!username) return false
   running = true
   try {
-    const uid = await ensureBrainUserId(username, username)
+    // user_id поднимает brain-bootstrap (он же знает логин Navidrome).
+    // Здесь только ждём его — раньше этот шаг жил здесь же, и без него весь
+    // автосинк молчал до ручной кнопки в настройках.
+    // Детали причины bootstrap уже пишет (и не чаще раза в конфиг).
+    const uid = await ensureBrainReady()
     if (!uid) {
-      console.warn('[BrainAutoSync] no user_id, skip')
+      console.log('[BrainAutoSync] мозг не поднят (user_id/логин) — пропускаем прогон')
       return false
     }
     // Сначала забираем серверные вкусы (баны/лайки/дизлайки) в локальный
@@ -63,11 +64,31 @@ export async function runBrainAutoSync(reason: string): Promise<boolean> {
   }
 }
 
+function schedule(ms: number): void {
+  if (timer) clearTimeout(timer)
+  timer = setTimeout(() => {
+    tick('timer').catch(() => undefined)
+  }, ms)
+}
+
+async function tick(reason: string): Promise<void> {
+  // Мозг выключен или автосинк выключен тумблером — просто ждём следующего цикла.
+  let autoSyncOn = false
+  try {
+    autoSyncOn = isBrainActive() && useBrainStore.getState().autoSync !== false
+  } catch {
+    autoSyncOn = false
+  }
+  if (!autoSyncOn) {
+    schedule(INTERVAL_MS)
+    return
+  }
+  const ok = await runBrainAutoSync(reason)
+  schedule(ok ? INTERVAL_MS : NOT_READY_RETRY_MS)
+}
+
 export function startBrainAutoSyncLoop(): void {
   if (started) return
   started = true
-  setTimeout(() => { void runBrainAutoSync('startup') }, FIRST_DELAY_MS)
-  if (!timer) {
-    timer = setInterval(() => { void runBrainAutoSync('interval') }, INTERVAL_MS)
-  }
+  schedule(FIRST_DELAY_MS)
 }

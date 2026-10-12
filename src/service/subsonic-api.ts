@@ -2,6 +2,7 @@
 // Использует готовый httpClient с авторизацией
 
 import { httpClient } from '@/api/httpClient'
+import type { ISong } from '@/types/responses/song'
 
 // Types
 export interface SubsonicGenre {
@@ -19,19 +20,21 @@ export interface SubsonicArtist {
   artistImageUrl?: string
 }
 
-export interface SubsonicSong {
-  id: string
-  title: string
-  artist: string
-  artistId: string
-  album: string
-  albumId: string
+/**
+ * Ответ Subsonic-эндпоинтов getRandomSongs / getTopSongs / getSongsByGenre /
+ * getSimilarSongs / getStarredSongs.
+ *
+ * Раньше это был рукописный дубль ISong, из-за чего на нём не было year,
+ * bpm, moods и аудио-признаков — 73 ошибки в потребителях. Теперь выводится
+ * из ISong, чтобы поля не расходились снова: это полноценный ISong, который
+ * можно класть в `ISong[]` (так и делают все потребители). Navidrome/
+ * Subsonic для этих эндпоинтов отдаёт те же поля песни, что и getSong,
+ * поэтому дополнительно уточняются только genre и artistId — их потребители
+ * (isBannedArtist, getSongsByGenre) считают обязательными.
+ */
+export type SubsonicSong = ISong & {
   genre: string
-  duration: number
-  playCount?: number
-  starred?: string
-  userRating?: number
-  coverArt?: string
+  artistId: string
 }
 
 export interface SubsonicArtistInfo {
@@ -63,7 +66,7 @@ export async function getGenres(): Promise<SubsonicGenre[]> {
  */
 export async function getArtists(): Promise<SubsonicArtist[]> {
   try {
-    const response = await httpClient<{ artists?: { index: { artist: SubsonicArtist[] }[] } }>('getArtists')
+    const response = await httpClient<{ artists?: { index: { artist: SubsonicArtist[] }[] } }>('getArtists', {})
 
     const indexes = response?.data?.artists?.index || []
     const artists = indexes.flatMap(index => index.artist || [])
@@ -94,8 +97,8 @@ export async function getStarredArtists(): Promise<SubsonicArtist[]> {
  */
 export async function getRandomArtists(count: number = 20): Promise<SubsonicArtist[]> {
   try {
-    // Получаем случайные треки и извлекаем уникальных артистов
-    const songsResponse = await httpClient<{ randomSongs?: { song: SubsonicArtist[] } }>('getRandom', {
+    // getRandom возвращает ПЕСНИ — из них вытаскиваем уникальных артистов
+    const songsResponse = await httpClient<{ randomSongs?: { song: SubsonicSong[] } }>('getRandom', {
       query: { size: count * 3 },
     })
 
@@ -109,8 +112,7 @@ export async function getRandomArtists(count: number = 20): Promise<SubsonicArti
           id: song.artistId,
           name: song.artist || 'Unknown',
           coverArt: song.coverArt,
-          artistImageUrl: undefined,
-        } as SubsonicArtist)
+        })
       }
     }
 

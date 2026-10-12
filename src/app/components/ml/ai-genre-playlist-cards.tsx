@@ -5,8 +5,8 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Sparkles, Play, RotateCcw, Loader2, Music, TrendingUp, Clock } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { Sparkles, Play, RotateCcw, Loader2, Music, Clock, Guitar, Mic, Headphones, Piano, Drum, AudioWaveform, Leaf, Star } from 'lucide-react'
 import { Card, CardContent } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
 import { toast } from 'react-toastify'
@@ -28,13 +28,12 @@ interface GenreCard {
   trackCount: number
   weight: number
   gradient: string
-  icon: string
+  icon: ReactNode
   playlist?: GeneratedPlaylist
   isGenerating?: boolean
 }
 
 export function AIGenrePlaylistCards() {
-  const navigate = useNavigate()
   const [genreCards, setGenreCards] = useState<GenreCard[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [generatingForGenre, setGeneratingForGenre] = useState<string | null>(null)
@@ -57,17 +56,17 @@ export function AIGenrePlaylistCards() {
     'Indie': 'from-teal-500 via-emerald-500 to-green-500',
   }
 
-  const genreIcons: Record<string, string> = {
-    'K-Pop': '🇰🇷',
-    'Rock': '🎸',
-    'Pop': '🎤',
-    'Hip-Hop': '🎧',
-    'Electronic': '🎹',
-    'Jazz': '🎺',
-    'Classical': '🎻',
-    'R&B': '🎵',
-    'Metal': '🤘',
-    'Indie': '🌿',
+  const genreIcons: Record<string, ReactNode> = {
+    'K-Pop': <Star className="w-6 h-6" />,
+    'Rock': <Guitar className="w-6 h-6" />,
+    'Pop': <Mic className="w-6 h-6" />,
+    'Hip-Hop': <Headphones className="w-6 h-6" />,
+    'Electronic': <Piano className="w-6 h-6" />,
+    'Jazz': <Drum className="w-6 h-6" />,
+    'Classical': <Music className="w-6 h-6" />,
+    'R&B': <AudioWaveform className="w-6 h-6" />,
+    'Metal': <AudioWaveform className="w-6 h-6" />,
+    'Indie': <Leaf className="w-6 h-6" />,
   }
 
   // Загрузка существующих плейлистов при монтировании
@@ -86,7 +85,7 @@ export function AIGenrePlaylistCards() {
   }, [])
 
   const loadExistingPlaylists = async () => {
-    const existing = getAllGeneratedPlaylists()
+    const existing = await getAllGeneratedPlaylists()
     const genrePlaylists = existing.filter(p => p.type === 'genre-cluster' || p.type === 'k-pop-top')
     
     if (genrePlaylists.length > 0) {
@@ -96,7 +95,7 @@ export function AIGenrePlaylistCards() {
         trackCount: playlist.songs.length,
         weight: 1,
         gradient: playlist.gradient || 'from-purple-500 to-pink-500',
-        icon: genreIcons[playlist.metadata.genre || ''] || '🎵',
+        icon: genreIcons[playlist.metadata.genre || ''] || <Music className="w-6 h-6" />,
         playlist,
       }))
       
@@ -118,7 +117,15 @@ export function AIGenrePlaylistCards() {
       }
 
       // Кластеризация по жанрам
-      const clusters = await analyzeLikedTracksAndCluster(likedSongIds, ratings)
+      // TrackRating.like — boolean | null, а генератор ждёт like?: boolean,
+      // поэтому null приводим к отсутствующему значению.
+      const ratingsForCluster = Object.fromEntries(
+        Object.entries(ratings).map(([songId, rating]) => [
+          songId,
+          { like: rating.like ?? undefined, skipCount: rating.skipCount },
+        ]),
+      )
+      const clusters = await analyzeLikedTracksAndCluster(likedSongIds, ratingsForCluster)
       
       if (clusters.length === 0) {
         toast.info('Недостаточно данных для анализа жанров')
@@ -133,7 +140,7 @@ export function AIGenrePlaylistCards() {
         trackCount: cluster.trackCount,
         weight: cluster.weight,
         gradient: genreGradients[cluster.genre] || 'from-purple-500 to-pink-500',
-        icon: genreIcons[cluster.genre] || '🎵',
+        icon: genreIcons[cluster.genre] || <Music className="w-6 h-6" />,
       }))
 
       setGenreCards(cards)
@@ -167,7 +174,7 @@ export function AIGenrePlaylistCards() {
           if (genre === 'K-Pop') {
             const kpopPlaylist = await generateKPopTopPlaylist(30)
             
-            const saved = saveAIGenrePlaylist({
+            const saved = await saveAIGenrePlaylist({
               type: 'k-pop-top',
               name: kpopPlaylist.title,
               description: kpopPlaylist.description,
@@ -208,7 +215,7 @@ export function AIGenrePlaylistCards() {
             30
           )
 
-          const saved = saveAIGenrePlaylist({
+          const saved = await saveAIGenrePlaylist({
             type: 'genre-cluster',
             name: playlist.title,
             description: playlist.description,
@@ -245,7 +252,7 @@ export function AIGenrePlaylistCards() {
           : card
       ))
 
-      toast.success(`${genreCards.find(c => c.genre === genre)?.icon} Плейлист готов!`)
+      toast.success(`Плейлист «${genre}» готов!`)
 
     } catch (error: any) {
       if (error.message !== 'Task removed from queue') {
@@ -258,7 +265,8 @@ export function AIGenrePlaylistCards() {
   }
 
   // Воспроизведение существующего плейлиста
-  const playPlaylist = (playlist: GeneratedPlaylist) => {
+  const playPlaylist = (playlist: GeneratedPlaylist | undefined) => {
+    if (!playlist) return
     setSongList(playlist.songs, 0)
     toast.success(`Воспроизводим: ${playlist.name}`)
   }
@@ -319,7 +327,7 @@ export function AIGenrePlaylistCards() {
                   {/* Жанр и иконка */}
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <h3 className="text-xl font-bold">{card.icon} {card.genre}</h3>
+                      <h3 className="text-xl font-bold flex items-center gap-2">{card.icon} {card.genre}</h3>
                       <p className="text-sm opacity-80">{card.trackCount} треков в жанре</p>
                     </div>
                     <Sparkles className="w-5 h-5 opacity-70" />

@@ -1,7 +1,85 @@
-# Локальный оверрайд: вывод unpacked-сборки на C: (на D: нет места).
-# Использование: pnpm exec electron-builder --dir --win --x64 -c electron-builder.yml -c electron-builder.local.yml
+# Полный конфиг сборки для этой машины.
+#
+# ВАЖНО, почему он один, а не два: electron-builder НЕ объединяет несколько
+# файлов, переданных через -c — побеждает ПОСЛЕДНИЙ. При `-c electron-builder.yml
+# -c electron-builder.local.yml` молча применялись только локальные два поля,
+# а всё остальное уходило в дефолты: иконка, фильтр files (в сборку попадал
+# весь node_modules), extraResources, oneClick, artifactName.
+# Проверялось по логу: oneClick=true вместо false и имя «KumaFlow Setup 1.8.0.exe»
+# вместо KumaFlow-v1.8.0-win-x64.exe.
+#
+# Поэтому ниже — копия electron-builder.yml целиком + два локальных отличия,
+# помеченных «ЛОКАЛЬНОЕ». При правке electron-builder.yml синхронизировать сюда.
+
+appId: com.kumaflow.app
+productName: KumaFlow
+copyright: Copyright © 2026 Victor Alves
+icon: ./build/icon.ico
+artifactName: '${productName}-v${version}-${os}-${arch}.${ext}'
+
 directories:
-  output: C:/kumaflow-dist
-# @electron/rebuild падает под Node 22 (tar ESM-конфликт); bufferutil/utf-8-validate
-# имеют JS-фолбэк, поэтому пропускаем пересборку
+  buildResources: build
+  # ЛОКАЛЬНОЕ: на C: свободно 0 ГБ, туда сборщик писать не может.
+  # Изначально было C:/kumaflow-dist, оттуда тоже не вышло — упёрлось в %TEMP%.
+  output: B:/githubprog/kumaflow-dist
+
+files:
+  - '!**/*'
+  - 'out/**'
+  - '!out/renderer/screenshots{,/**}'
+  - 'package.json'
+
+extraResources:
+  - from: resources
+    to: resources
+
+win:
+  executableName: KumaFlow
+  target:
+    - target: nsis
+      arch:
+        # ЛОКАЛЬНОЕ: в основном конфиге x64 + arm64. Флаг --x64 в командной
+        # строке НЕ перебивает явный список arch, поэтому arm64 и универсальный
+        # установщик всё равно собирались: +276 МБ и +8 минут на машине,
+        # где свободно 4,5 ГБ. Эта — обычный x64 Windows.
+        - x64
+
+nsis:
+  shortcutName: ${productName}
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+  license: ./LICENSE.txt
+  uninstallerIcon: ./build/icon.ico
+
+mac:
+  category: public.app-category.music
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
+  identity: "-"
+  icon: ./build/icon.icns
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+
+linux:
+  target:
+    - AppImage
+    - deb
+    - tar.gz
+  maintainer: victoralvesf
+  category: AudioVideo
+  synopsis: 'A modern desktop music client for Navidrome and OpenSubsonic servers.'
+
+# ЛОКАЛЬНОЕ: @electron/rebuild падает под Node 22+ (tar ESM-конфликт).
+# bufferutil/utf-8-validate имеют JS-фолбэк, поэтому пересборку пропускаем.
 npmRebuild: false
+nativeRebuilder: legacy
+
+publish:
+  provider: github
+  owner: mrSaT13
+  repo: kumaflow

@@ -6,7 +6,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getRandomSongs, getSongsByGenre } from '@/service/subsonic-api'
+import { getSongsByGenre } from '@/service/subsonic-api'
 import type { ISong } from '@/types/responses/song'
 import { ROUTES } from '@/routes/routesList'
 import { Card, CardContent } from '@/app/components/ui/card'
@@ -52,7 +52,7 @@ export function ArtistsInSameGenre({ topSongs, currentArtistId }: ArtistsInSameG
       try {
         // Для каждого жанра ищем треки
         for (const genre of genres) {
-          const songs = await getRandomSongs(50, genre)
+          const songs = await getSongsByGenre(genre, 50)
           
           for (const song of songs) {
             if (song.artistId === currentArtistId) continue // Пропускаем текущего артиста
@@ -103,7 +103,7 @@ export function ArtistsInSameGenre({ topSongs, currentArtistId }: ArtistsInSameG
             <Card
               key={artist.id}
               className="cursor-pointer hover:bg-accent/50 transition-colors group overflow-hidden bg-transparent border-0"
-              onClick={() => navigate(ROUTES.ARTIST.PAGE(artist.id, artist.name))}
+              onClick={() => navigate(ROUTES.ARTIST.PAGE(artist.id))}
             >
               <CardContent className="p-0">
                 <AspectRatio ratio={1} className="bg-muted rounded-md overflow-hidden mb-2 relative">

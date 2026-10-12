@@ -1,5 +1,5 @@
 import { Row } from '@tanstack/react-table'
-import { XIcon, ChevronUp, ChevronDown, Download } from 'lucide-react'
+import { XIcon, ChevronUp, ChevronDown, } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { usePlayerActions } from '@/store/player.store'
 import { ISong } from '@/types/responses/song'

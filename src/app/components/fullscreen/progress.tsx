@@ -1,9 +1,7 @@
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { useCallback, useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { QualityBadge } from '@/app/components/player/quality-badge'
 import { ProgressSlider } from '@/app/components/ui/slider'
-import { usePlaybackSettings } from '@/store/playback.store'
+import { useAudioPulseOn } from '@/app/hooks/use-audio-pulse'
 import {
   usePlayerActions,
   usePlayerDuration,
@@ -12,24 +10,35 @@ import {
   usePlayerSonglist,
   useSongColor,
 } from '@/store/player.store'
+import { usePlaybackStore } from '@/store/playback.store'
+import { useDopamineSettings } from '@/store/dopamine.store'
 import { convertSecondsToTime } from '@/utils/convertSecondsToTime'
 import { getGenreColor } from '@/utils/genreColors'
+import { QualityBadge } from '@/app/components/player/quality-badge'
 import { DotProgress } from './dot-progress'
 import { SpectrogramProgress } from './spectrogram-progress'
 
 let isSeeking = false
 
 export function FullscreenProgress() {
-  const { t } = useTranslation()
   const progress = usePlayerProgress()
   const [localProgress, setLocalProgress] = useState(progress)
   const audioPlayerRef = usePlayerRef()
   const currentDuration = usePlayerDuration()
   const { setProgress } = usePlayerActions()
   const { currentSong } = usePlayerSonglist()
-  const progressBarType = usePlaybackSettings(
+  // usePlaybackSettings() — это хук без аргументов, возвращающий весь стор.
+  // С селектором нужно usePlaybackStore, иначе progressBarType получался
+  // объектом стора, а switch по нему сравнивал строки с PlaybackStore.
+  const progressBarType = usePlaybackStore(
     (state) => state.settings.progressBarType,
   )
+  const { pulseProgressBar } = useDopamineSettings()
+
+  // Хост CSS-переменной --pulse для полосы. Сам анализатор живёт в хуке,
+  // здесь только элемент, на который он пишет.
+  const pulseHost = useRef<HTMLDivElement>(null)
+  useAudioPulseOn(pulseHost, pulseProgressBar)
 
   // Переключение времени: всего / оставшееся
   const [showRemaining, setShowRemaining] = useState(false)
@@ -67,20 +76,20 @@ export function FullscreenProgress() {
 
   const currentTime = useMemo(
     () => convertSecondsToTime(isSeeking ? localProgress : progress),
-    [isSeeking, localProgress, progress],
+    [isSeeking, localProgress, progress]
   )
 
   // Оставшееся или общее время
   const songDuration = useMemo(() => {
     const time = showRemaining
-      ? currentDuration - progress // Оставшееся время
-      : currentDuration // Общее время
+      ? currentDuration - progress  // Оставшееся время
+      : currentDuration             // Общее время
     return convertSecondsToTime(time)
   }, [currentDuration, progress, showRemaining])
 
   // Обработчик клика для переключения
   const handleDurationClick = useCallback(() => {
-    setShowRemaining((prev) => !prev)
+    setShowRemaining(prev => !prev)
   }, [])
 
   // Динамический цвет как у нижней панели: средний цвет обложки → цвет жанра
@@ -118,6 +127,7 @@ export function FullscreenProgress() {
             step={1}
             className="w-full h-4"
             style={barStyle}
+            pulseGlow={pulseProgressBar}
             onValueChange={([value]) => handleSeeking(value)}
             onValueCommit={([value]) => handleSeeked(value)}
             onPointerUp={handleSeekedFallback}
@@ -133,22 +143,22 @@ export function FullscreenProgress() {
         {currentTime}
       </div>
 
-      {/* Приглушён по умолчанию, выделяется при наведении */}
-      <div className="flex-1 opacity-50 hover:opacity-100 transition-opacity duration-200">
+      {/* Приглушён по умолчанию, выделяется при наведении.
+          Реф сюда: useAudioPulseOn пишет --pulse на этот элемент, дальше
+          переменная наследуется в ProgressSlider и ею читает .pulse-glow-strong. */}
+      <div
+        ref={pulseHost}
+        className="flex-1 opacity-50 hover:opacity-100 transition-opacity duration-200"
+      >
         {renderProgressBar()}
       </div>
 
       <div
         className="min-w-[50px] max-w-[60px] text-left drop-shadow-lg cursor-pointer hover:text-primary/80 transition-all opacity-0 group-hover/fs-progress:opacity-100 duration-200"
         onClick={handleDurationClick}
-        title={
-          showRemaining
-            ? t('fullscreen.showTotalTime')
-            : t('fullscreen.showRemainingTime')
-        }
+        title={showRemaining ? 'Показать общее время' : 'Показать оставшееся время'}
       >
-        {showRemaining ? '-' : ''}
-        {songDuration}
+        {showRemaining ? '-' : ''}{songDuration}
       </div>
 
       {/* Quality Badge */}

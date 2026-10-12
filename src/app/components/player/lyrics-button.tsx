@@ -7,9 +7,10 @@ import { useLyricsState, useMainDrawerState } from '@/store/player.store'
 
 interface PlayerLyricsButtonProps {
   disabled?: boolean
+  className?: string
 }
 
-export function PlayerLyricsButton({ disabled }: PlayerLyricsButtonProps) {
+export function PlayerLyricsButton({ disabled, className }: PlayerLyricsButtonProps) {
   const { t } = useTranslation()
   const { mainDrawerState } = useMainDrawerState()
   const { lyricsState, toggleLyricsAction } = useLyricsState()
@@ -28,6 +29,7 @@ export function PlayerLyricsButton({ disabled }: PlayerLyricsButtonProps) {
         className={clsx(
           'rounded-full w-10 h-10 p-2 text-secondary-foreground relative',
           isActive && 'player-button-active',
+          className,
         )}
         onClick={handleClick}
         disabled={disabled}

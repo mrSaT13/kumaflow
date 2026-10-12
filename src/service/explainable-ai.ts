@@ -4,22 +4,21 @@
  * Генерирует понятные объяснения почему рекомендован тот или иной трек
  */
 
-import i18n from '@/i18n'
-import type { MLProfile, TrackRating } from '@/store/ml.store'
 import type { ISong } from '@/types/responses/song'
+import type { MLProfile, TrackRating } from '@/store/ml.store'
 import { analyzeTrack, vibeSimilarity } from './vibe-similarity'
 
 export interface Explanation {
-  type:
-    | 'similar-track' // Похож на трек X
-    | 'similar-artist' // Любимый артист
-    | 'genre-match' // Любимый жанр
-    | 'bpm-match' // BPM совпадает с предпочтениями
-    | 'energy-match' // Energy совпадает
-    | 'time-of-day' // Подходит для текущего времени суток
-    | 'new-discovery' // Новая музыка
+  type: 
+    | 'similar-track'      // Похож на трек X
+    | 'similar-artist'     // Любимый артист
+    | 'genre-match'        // Любимый жанр
+    | 'bpm-match'          // BPM совпадает с предпочтениями
+    | 'energy-match'       // Energy совпадает
+    | 'time-of-day'        // Подходит для текущего времени суток
+    | 'new-discovery'      // Новая музыка
   text: string
-  priority: number // 1 = самый важный, 5 = наименее важный
+  priority: number  // 1 = самый важный, 5 = наименее важный
   details?: {
     similarity?: number
     trackId?: string
@@ -58,7 +57,7 @@ export function explainRecommendation(
   profile: MLProfile,
   ratings: Record<string, TrackRating>,
   listeningHistory?: TrackRating[],
-  timeAdaptivityEnabled?: boolean, // Новая переменная
+  timeAdaptivityEnabled?: boolean  // Новая переменная
 ): Explanation[] {
   const explanations: Explanation[] = []
   const audioFeatures = analyzeTrack(track)
@@ -68,10 +67,7 @@ export function explainRecommendation(
   if (similarTrack && similarTrack.similarity > 0.85) {
     explanations.push({
       type: 'similar-track',
-      text: i18n.t('explain.similarTrack', {
-        title: similarTrack.title,
-        pct: Math.round(similarTrack.similarity * 100),
-      }),
+      text: `Похоже на "${similarTrack.title}" (${Math.round(similarTrack.similarity * 100)}% совпадение)`,
       priority: 1,
       details: {
         similarity: similarTrack.similarity,
@@ -87,7 +83,7 @@ export function explainRecommendation(
     if (weight >= 5) {
       explanations.push({
         type: 'similar-artist',
-        text: i18n.t('explain.favArtist', { artist: track.artist, weight }),
+        text: `Любимый артист: ${track.artist} (вес ${weight})`,
         priority: 2,
         details: {
           artistName: track.artist,
@@ -102,10 +98,7 @@ export function explainRecommendation(
     if (genreRank <= 3 && genreRank !== 999) {
       explanations.push({
         type: 'genre-match',
-        text: i18n.t('explain.genreTop', {
-          genre: track.genre,
-          rank: genreRank,
-        }),
+        text: `${track.genre} (твой топ-${genreRank} жанр)`,
         priority: 3,
         details: {
           genre: track.genre,
@@ -116,10 +109,7 @@ export function explainRecommendation(
   }
 
   // 4. Проверяем время суток (адаптивность) — ТЕПЕРЬ С ПРОВЕРКОЙ НАСТРОЙКИ!
-  const timeExplanation = getTimeOfDayExplanation(
-    audioFeatures,
-    timeAdaptivityEnabled,
-  )
+  const timeExplanation = getTimeOfDayExplanation(audioFeatures, timeAdaptivityEnabled)
   if (timeExplanation) {
     explanations.push(timeExplanation)
   }
@@ -127,9 +117,9 @@ export function explainRecommendation(
   // 5. Подробные совпадения по аудио-признакам
   const targetBpm = getTargetBpm(profile)
   const targetEnergy = getTargetEnergy(profile)
-
+  
   const matchDetails: Explanation['details']['matchDetails'] = {}
-
+  
   // BPM совпадение
   if (targetBpm && track.bpm) {
     const bpmMatch = Math.abs(track.bpm - targetBpm.mid) <= targetBpm.range
@@ -137,11 +127,7 @@ export function explainRecommendation(
       matchDetails.bpmMatch = true
       explanations.push({
         type: 'bpm-match',
-        text: i18n.t('explain.bpmRange', {
-          bpm: track.bpm,
-          min: targetBpm.min,
-          max: targetBpm.max,
-        }),
+        text: `Темп: ${track.bpm} BPM (твой диапазон: ${targetBpm.min}-${targetBpm.max})`,
         priority: 4,
         details: {
           bpm: track.bpm,
@@ -153,17 +139,12 @@ export function explainRecommendation(
 
   // Energy совпадение
   if (targetEnergy && track.energy !== undefined) {
-    const energyMatch =
-      Math.abs(track.energy - targetEnergy.mid) <= targetEnergy.range
+    const energyMatch = Math.abs(track.energy - targetEnergy.mid) <= targetEnergy.range
     if (energyMatch) {
       matchDetails.energyMatch = true
       explanations.push({
         type: 'energy-match',
-        text: i18n.t('explain.energyRange', {
-          value: track.energy.toFixed(2),
-          min: targetEnergy.min.toFixed(2),
-          max: targetEnergy.max.toFixed(2),
-        }),
+        text: `Энергия: ${track.energy.toFixed(2)} (твой диапазон: ${targetEnergy.min.toFixed(2)}-${targetEnergy.max.toFixed(2)})`,
         priority: 5,
         details: {
           energy: track.energy,
@@ -194,7 +175,7 @@ export function explainRecommendation(
   if (explanations.length === 0) {
     explanations.push({
       type: 'new-discovery',
-      text: i18n.t('explain.newDiscovery'),
+      text: 'Новая музыка для тебя',
       priority: 6,
       details: {
         audioFeatures: {
@@ -217,7 +198,7 @@ export function explainRecommendation(
  */
 function getTimeOfDayExplanation(
   features: ReturnType<typeof analyzeTrack>,
-  timeAdaptivityEnabled?: boolean,
+  timeAdaptivityEnabled?: boolean
 ): Explanation | null {
   // Если адаптивность выключена — НЕ показываем объяснения по времени!
   if (timeAdaptivityEnabled === false) {
@@ -225,13 +206,13 @@ function getTimeOfDayExplanation(
   }
 
   const hour = new Date().getHours()
-
+  
   // Утро (6:00 - 12:00)
   if (hour >= 6 && hour < 12) {
     if (features.energy >= 0.6 && features.bpm >= 100) {
       return {
         type: 'time-of-day',
-        text: i18n.t('explain.morning'),
+        text: '☀️ Утро: энергичная музыка для начала дня',
         priority: 3,
         details: {
           timeOfDay: 'morning',
@@ -243,13 +224,13 @@ function getTimeOfDayExplanation(
       }
     }
   }
-
+  
   // День (12:00 - 18:00)
   if (hour >= 12 && hour < 18) {
     if (features.energy >= 0.4 && features.energy <= 0.8) {
       return {
         type: 'time-of-day',
-        text: i18n.t('explain.day'),
+        text: '🌤️ День: сбалансированная музыка',
         priority: 3,
         details: {
           timeOfDay: 'day',
@@ -260,13 +241,13 @@ function getTimeOfDayExplanation(
       }
     }
   }
-
+  
   // Вечер (18:00 - 23:00)
   if (hour >= 18 && hour < 23) {
     if (features.energy <= 0.6 && features.bpm <= 110) {
       return {
         type: 'time-of-day',
-        text: i18n.t('explain.evening'),
+        text: '🌆 Вечер: спокойная музыка для отдыха',
         priority: 3,
         details: {
           timeOfDay: 'evening',
@@ -278,13 +259,13 @@ function getTimeOfDayExplanation(
       }
     }
   }
-
+  
   // Ночь (23:00 - 6:00)
   if (hour >= 23 || hour < 6) {
     if (features.energy <= 0.4 && features.bpm <= 90) {
       return {
         type: 'time-of-day',
-        text: i18n.t('explain.night'),
+        text: '🌙 Ночь: медитативная музыка',
         priority: 3,
         details: {
           timeOfDay: 'night',
@@ -296,66 +277,8 @@ function getTimeOfDayExplanation(
       }
     }
   }
-
+  
   return null
-}
-
-/**
- * Есть ли у трека настоящие аудио-теги (не жанровый фолбэк).
- * Без них analyzeTrack выдаёт одинаковый вектор всем трекам жанра —
- * и любые два «рок без тегов» дают «100% совпадение». Такие пары
- * считать похожестью нельзя.
- */
-export function hasRealAudioTags(t: {
-  bpm?: number | string | null
-  energy?: number | null
-  valence?: number | null
-  danceability?: number | null
-  acousticness?: number | null
-  instrumentalness?: number | null
-} | null | undefined): boolean {
-  if (!t) return false
-  if (typeof t.bpm === 'number' && t.bpm > 0) return true
-  if (typeof t.bpm === 'string' && /^\d+/.test(t.bpm)) return true
-  return (
-    t.energy !== undefined ||
-    t.valence !== undefined ||
-    t.danceability !== undefined ||
-    t.acousticness !== undefined ||
-    t.instrumentalness !== undefined
-  )
-}
-
-/**
- * Похожий трек с мозга (best-effort).
- * Мозг считает по настоящему sonic-анализу (librosa + CLAP-гибрид),
- * а не по жанровой наклейке. Возвращает готовое объяснение или null —
- * тогда вызывающий использует локальный vibe-скоринг.
- */
-export async function fetchBrainSimilarExplanation(track: ISong): Promise<Explanation | null> {
-  try {
-    const { recommendSimilarTracks } = await import('./brain-wave')
-    const items = await recommendSimilarTracks(track.id)
-    const top = (items ?? []).find(
-      (it) => it.external_id && it.external_id !== track.id && (it.score ?? 0) >= 0.6,
-    )
-    if (!top || !top.external_id) return null
-    return {
-      type: 'similar-track',
-      text: i18n.t('explain.similarTrack', {
-        title: top.title,
-        pct: Math.min(99, Math.round(top.score * 100)),
-      }),
-      priority: 1,
-      details: {
-        similarity: top.score,
-        trackId: top.external_id,
-        trackTitle: top.title,
-      },
-    }
-  } catch {
-    return null
-  }
 }
 
 /**
@@ -364,48 +287,36 @@ export async function fetchBrainSimilarExplanation(track: ISong): Promise<Explan
 function findMostSimilarTrack(
   track: ISong,
   profile: MLProfile,
-  ratings: Record<string, TrackRating>,
+  ratings: Record<string, TrackRating>
 ): { id: string; title: string; similarity: number } | null {
   const targetFeatures = analyzeTrack(track)
 
-  let mostSimilar: { id: string; title: string; similarity: number } | null =
-    null
+  let mostSimilar: { id: string; title: string; similarity: number } | null = null
   let maxSimilarity = 0
-
+  
   let totalCandidates = 0
   let skippedBySkipRatio = 0
   let skippedByPlayCount = 0
   let skippedBySimilarity = 0
 
-  // Цель без тегов + кандидат без тегов = два одинаковых жанровых
-  // вектора и ложные «100%». Такие пары пропускаем сразу.
-  const targetHasTags = hasRealAudioTags(track)
-
   // Ищем среди ХОРОШО прослушанных треков (не просто playCount > 0)
   for (const [songId, rating] of Object.entries(ratings)) {
     if (!rating.songInfo) continue
-
-    if (!targetHasTags && !hasRealAudioTags(rating.songInfo)) {
-      continue
-    }
-
+    
     totalCandidates++
-
+    
     // Пропускаем треки которые пользователь скипал
-    const skipRatio =
-      rating.skipCount && rating.playCount
-        ? rating.skipCount / rating.playCount
-        : 0
+    const skipRatio = rating.skipCount && rating.playCount ? rating.skipCount / rating.playCount : 0
     if (skipRatio > 0.3) {
       skippedBySkipRatio++
-      continue // Если скипал чаще 30% случаев — не используем
+      continue  // Если скипал чаще 30% случаев — не используем
     }
-
+    
     // Трек должен быть либо лайкнут, либо прослушан много раз
     const isLiked = rating.userFavorite || false
     const isWellPlayed = rating.playCount >= 3
     const isHighReplay = rating.replayCount && rating.replayCount > 0
-
+    
     if (!isLiked && !isWellPlayed && !isHighReplay) {
       skippedByPlayCount++
       continue
@@ -420,8 +331,7 @@ function findMostSimilarTrack(
     const similarity = vibeSimilarity(targetFeatures, candidateFeatures)
 
     // Повышенный порог + проверяем что это действительно похоже
-    if (similarity > maxSimilarity && similarity > 0.92) {
-      // 92% вместо 85%
+    if (similarity > maxSimilarity && similarity > 0.92) {  // 92% вместо 85%
       maxSimilarity = similarity
       mostSimilar = {
         id: songId,
@@ -432,7 +342,7 @@ function findMostSimilarTrack(
       skippedBySimilarity++
     }
   }
-
+  
   // Лог для отладки
   if (totalCandidates > 0) {
     console.log('[ExplainableAI] findMostSimilarTrack:', {
@@ -452,15 +362,12 @@ function findMostSimilarTrack(
 /**
  * Получить ранг жанра в предпочтениях
  */
-function getGenreRank(
-  genre: string,
-  preferredGenres: Record<string, number>,
-): number {
+function getGenreRank(genre: string, preferredGenres: Record<string, number>): number {
   const sortedGenres = Object.entries(preferredGenres)
     .sort((a, b) => b[1] - a[1])
     .map(([g]) => g.toLowerCase())
-
-  const rank = sortedGenres.findIndex((g) => g === genre.toLowerCase()) + 1
+  
+  const rank = sortedGenres.findIndex(g => g === genre.toLowerCase()) + 1
   return rank === 0 ? 999 : rank
 }
 
@@ -468,19 +375,17 @@ function getGenreRank(
  * Получить целевой BPM из профиля
  * На основе анализа истории прослушиваний
  */
-function getTargetBpm(
-  profile: MLProfile,
-): { min: number; max: number; mid: number; range: number } | null {
+function getTargetBpm(profile: MLProfile): { min: number; max: number; mid: number; range: number } | null {
   // TODO: Вычислить на основе истории прослушиваний
   // Пока используем дефолтные значения
   // В будущем можно анализировать preferredArtists и их треки
-
+  
   // Дефолтный диапазон: 90-130 BPM (средний темп)
   const min = 90
   const max = 130
   const mid = (min + max) / 2
   const range = (max - min) / 2
-
+  
   return { min, max, mid, range }
 }
 
@@ -488,17 +393,15 @@ function getTargetBpm(
  * Получить целевую Energy из профиля
  * На основе анализа истории прослушиваний
  */
-function getTargetEnergy(
-  profile: MLProfile,
-): { min: number; max: number; mid: number; range: number } | null {
+function getTargetEnergy(profile: MLProfile): { min: number; max: number; mid: number; range: number } | null {
   // TODO: Вычислить на основе истории прослушиваний
   // Пока используем дефолтные значения
-
+  
   // Дефолтный диапазон: 0.4-0.8 (средняя энергия)
   const min = 0.4
   const max = 0.8
   const mid = (min + max) / 2
   const range = (max - min) / 2
-
+  
   return { min, max, mid, range }
 }

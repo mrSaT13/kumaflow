@@ -23,6 +23,12 @@ export interface ExportData {
   bannedArtists: string[]
   likedSongs: string[]
   dislikedSongs: string[]
+  /** Сырое состояние ListenBrainz-стора из localStorage */
+  listenbrainz?: unknown
+  /** Last.fm session key */
+  lastfmToken?: string
+  /** ListenBrainz user token */
+  listenbrainzToken?: string
 }
 
 /**

@@ -3,7 +3,7 @@ import { subsonic } from '@/service/subsonic'
 import { queryKeys } from '@/utils/queryKeys'
 import { appleMusicService, translateGenre } from '@/service/apple-music-api'
 import { lastFmService } from '@/service/lastfm-api'
-import { useExternalApi } from '@/store/external-api.store'
+import { useExternalApiStore } from '@/store/external-api.store'
 
 export interface ArtistBiography {
   biography: string
@@ -20,7 +20,8 @@ export interface ArtistBiography {
  * 3. Last.fm (fallback)
  */
 async function fetchArtistBiography(artistName: string): Promise<ArtistBiography | null> {
-  const { settings } = useExternalApi.getState()
+  // useExternalApi — хук, а не стор: вне компонента берём стор напрямую
+  const { settings } = useExternalApiStore.getState()
   
   // 1. Пробуем Apple Music (с переводом на русский)
   if (settings.appleMusicEnabled) {

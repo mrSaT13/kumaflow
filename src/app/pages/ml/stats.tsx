@@ -4,7 +4,7 @@ import { useML } from '@/store/ml.store'
 import { useMLStore } from '@/store/ml.store'
 import { useMLPlaylistsStore } from '@/store/ml-playlists.store'
 import { useMLPlaylistsState } from '@/store/ml-playlists-state.store'
-import { useExternalApi, useExternalApiStore } from '@/store/external-api.store'
+import { useExternalApiStore } from '@/store/external-api.store'
 import { useAchievements } from '@/store/achievements.store'
 import { fanartService } from '@/service/fanart-api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card'
@@ -13,14 +13,26 @@ import { Button } from '@/app/components/ui/button'
 import { Progress } from '@/app/components/ui/progress'
 import { useNavigate } from 'react-router-dom'
 import { subsonic } from '@/service/subsonic'
-import type { IArtist } from '@/types/responses/artist'
 import { getTotalPlays } from '@/app/hooks/use-auto-scrobble'
 import { ROUTES } from '@/routes/routesList'
 import { toast } from 'react-toastify'
 import { YandexMLImport } from '@/app/components/ml/yandex-ml-import'
 import { OrchestratorStats } from '@/app/components/ml/orchestrator-stats'
 import { MusicMapCard } from '@/app/components/ml/music-map-card'
+import { ListeningInsightsCard } from '@/app/components/ml/listening-insights-card'
 import { getSimpleCoverArtUrl } from '@/api/httpClient'
+import { Music, Mic, Trophy, Check, ThumbsUp, ThumbsDown, Heart, Star, ChevronUp, ChevronDown, Download, Loader2, Brain, Waves, Crosshair, Clock, Sun, Sunset, Moon, Crown, Compass, Map as MapIcon, ClipboardList, SlidersHorizontal, AudioWaveform, Headphones } from 'lucide-react'
+
+const ACHIEVEMENT_ICONS: Record<string, typeof Music> = {
+  music: Music, headphones: Headphones, waveform: AudioWaveform, crown: Crown,
+  'thumbs-up': ThumbsUp, heart: Heart, hearts: Heart, compass: Compass, map: MapIcon,
+  clipboard: ClipboardList, sliders: SlidersHorizontal,
+}
+function AchievementIcon({ name }: { name: string }) {
+  const C = ACHIEVEMENT_ICONS[name] ?? Music
+  return <C className="w-8 h-8" />
+}
+
 
 export default function MLStats() {
   const { t } = useTranslation()
@@ -606,11 +618,11 @@ export default function MLStats() {
         console.log('[ML Stats] Final preferredGenres:', state.profile.preferredGenres)
       })
       
-      toast.success(`✅ Импортировано ${favoriteArtists.length} артистов и ${Object.keys(trackGenres).length} жанров!`)
+      toast.success(`Импортировано ${favoriteArtists.length} артистов и ${Object.keys(trackGenres).length} жанров!`)
       console.log('[ML Stats] Import complete!')
     } catch (error) {
       console.error('Failed to import from Navidrome:', error)
-      toast.error('❌ Ошибка импорта')
+      toast.error('Ошибка импорта')
     } finally {
       setIsImporting(false)
     }
@@ -631,11 +643,11 @@ export default function MLStats() {
           >
             {isImporting ? (
               <>
-                <span className="mr-2">⏳</span> Импорт из Navidrome...
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Импорт из Navidrome...
               </>
             ) : (
               <>
-                <span className="mr-2">📥</span> Импортировать жанры из Navidrome
+                <Download className="w-4 h-4 mr-2" /> Импортировать жанры из Navidrome
               </>
             )}
           </Button>
@@ -645,7 +657,7 @@ export default function MLStats() {
             variant="outline"
             className="border-red-500/50 text-red-300 hover:bg-red-500/20"
           >
-            <span className="mr-2">🎵</span> Импорт из Яндекс.Музыки
+            <Music className="w-4 h-4 mr-2" /> Импорт из Яндекс.Музыки
           </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
@@ -665,14 +677,14 @@ export default function MLStats() {
             <div className="text-3xl font-bold">{totalRatings}</div>
             <div className="flex gap-2 mt-2">
               <Badge variant="default" className="bg-green-600">
-                👍 {likedCount}
+                <ThumbsUp className="w-3 h-3 inline mr-1" /> {likedCount}
               </Badge>
               <Badge variant="secondary" className="bg-red-600 text-white">
-                👎 {dislikedCount}
+                <ThumbsDown className="w-3 h-3 inline mr-1" /> {dislikedCount}
               </Badge>
               {navidromeStats.lovedTracks > 0 && (
                 <Badge variant="secondary" className="bg-blue-600 text-white">
-                  ❤️ {navidromeStats.lovedTracks}
+                  <Heart className="w-3 h-3 inline mr-1" /> {navidromeStats.lovedTracks}
                 </Badge>
               )}
             </div>
@@ -688,7 +700,7 @@ export default function MLStats() {
           <CardContent>
             <div className="text-3xl font-bold">{totalPlays}</div>
             <p className="text-xs text-muted-foreground mt-2">
-              🎵 KumaFlow + Navidrome
+              KumaFlow + Navidrome
             </p>
           </CardContent>
         </Card>
@@ -720,7 +732,7 @@ export default function MLStats() {
           <CardContent>
             <div className="text-3xl font-bold">{Object.keys(profile.preferredGenres).length}</div>
             <p className="text-xs text-muted-foreground mt-2">
-              🎭 {topGenres.length} активных
+              {topGenres.length} активных
             </p>
           </CardContent>
         </Card>
@@ -734,7 +746,7 @@ export default function MLStats() {
           <CardContent>
             <div className="text-3xl font-bold">{favoriteArtists.length}</div>
             <p className="text-xs text-muted-foreground mt-2">
-              ❤️ Из Navidrome
+              Из Navidrome
             </p>
           </CardContent>
         </Card>
@@ -744,7 +756,7 @@ export default function MLStats() {
       {favoriteArtists.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">❤️ Любимые артисты (Navidrome)</CardTitle>
+            <CardTitle className="text-lg">Любимые артисты (Navidrome)</CardTitle>
             <p className="text-sm text-muted-foreground">
               Артисты которых вы лайкнули в Navidrome
             </p>
@@ -804,7 +816,7 @@ export default function MLStats() {
                       </span>
                       {artist.starred && (
                         <Badge variant="secondary" className="text-xs">
-                          ⭐ {new Date(artist.starred).toLocaleDateString()}
+                          <Star className="w-3 h-3 inline mr-1" /> {new Date(artist.starred).toLocaleDateString()}
                         </Badge>
                       )}
                     </button>
@@ -821,11 +833,11 @@ export default function MLStats() {
               >
                 {showAllFavorites ? (
                   <>
-                    <span className="mr-2">🔼</span> Свернуть
+                    <ChevronUp className="w-4 h-4 mr-2" /> Свернуть
                   </>
                 ) : (
                   <>
-                    <span className="mr-2">🔽</span> + ещё {favoriteArtists.length - 12} артистов
+                    <ChevronDown className="w-4 h-4 mr-2" /> + ещё {favoriteArtists.length - 12} артистов
                   </>
                 )}
               </Button>
@@ -837,7 +849,7 @@ export default function MLStats() {
       {/* Топ жанры */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">🎭 Топ жанры</CardTitle>
+          <CardTitle className="text-lg">Топ жанры</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {topGenres.length > 0 ? (
@@ -851,7 +863,7 @@ export default function MLStats() {
                 <span className="text-sm text-muted-foreground w-12 text-right">{weight}</span>
                 {genreSongCounts[genre.toLowerCase()] != null && (
                   <span className="text-xs text-muted-foreground w-20 text-right tabular-nums">
-                    🎵 {genreSongCounts[genre.toLowerCase()]}
+                    <Music className="w-3 h-3 inline mr-1" />{genreSongCounts[genre.toLowerCase()]}
                   </span>
                 )}
               </div>
@@ -867,7 +879,7 @@ export default function MLStats() {
       {/* Топ артисты */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">🎤 Топ артисты</CardTitle>
+          <CardTitle className="text-lg">Топ артисты</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {topArtists.length > 0 ? (
@@ -887,13 +899,11 @@ export default function MLStats() {
                     className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement
-                      target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50%" x="50%" text-anchor="middle" font-size="50">🎤</text></svg>'
+                      target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50%" x="50%" text-anchor="middle" font-size="50">\u266A</text></svg>'
                     }}
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                    🎤
-                  </div>
+                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0"><Mic className="w-5 h-5" /></div>
                 )}
                 <span className="flex-1 font-medium text-left">
                   {artistNames[artistId] || `Артист #${artistId.slice(0, 8)}`}
@@ -913,7 +923,7 @@ export default function MLStats() {
       {/* Достижения */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">🏆 Достижения</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2"><Trophy className="w-5 h-5" /> Достижения</CardTitle>
           <p className="text-sm text-muted-foreground">
             Разблокировано: {getUnlockedCount()} из {getTotalCount()}
           </p>
@@ -928,13 +938,13 @@ export default function MLStats() {
                   : 'bg-muted/30 border-muted'
               }`}
             >
-              <div className="text-3xl">{achievement.icon}</div>
+              <div className="flex items-center justify-center text-primary"><AchievementIcon name={achievement.icon} /></div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{achievement.title}</span>
                   {achievement.unlocked && (
                     <Badge variant="default" className="bg-green-600 text-xs">
-                      ✅
+                      <Check className="w-3 h-3" />
                     </Badge>
                   )}
                 </div>
@@ -959,7 +969,7 @@ export default function MLStats() {
           onClick={() => window.location.hash = '/artists/cold-start'}
           className="flex-1"
         >
-          🎯 Уточнить предпочтения
+          <Crosshair className="w-4 h-4 mr-2" /> Уточнить предпочтения
         </Button>
 
         <Button
@@ -967,9 +977,12 @@ export default function MLStats() {
           variant="outline"
           className="flex-1"
         >
-          🎵 Моя волна
+          <Waves className="w-4 h-4 mr-2" /> Моя волна
         </Button>
       </div>
+
+      {/* Инсайты по прослушиванию: стрик, минуты, паттерн скипов */}
+      <ListeningInsightsCard refreshKey={totalPlays} />
 
       {/* Статистика оркестратора */}
       <div id="orchestrator-stats" className="scroll-mt-4">
@@ -982,13 +995,13 @@ export default function MLStats() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-lg">🧠 ML Паттерны (реальное время)</CardTitle>
+                <CardTitle className="text-lg flex items-center gap-2"><Brain className="w-5 h-5" /> ML Паттерны (реальное время)</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   Анализируется история прослушиваний
                 </p>
               </div>
               <Badge variant="outline" className="text-xs">
-                📊 Обновлено: {mlPatterns.lastUpdated.toLocaleTimeString()}
+                Обновлено: {mlPatterns.lastUpdated.toLocaleTimeString()}
               </Badge>
             </div>
           </CardHeader>
@@ -996,76 +1009,76 @@ export default function MLStats() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* SKIP RATE */}
               <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">🚫 Skip Rate (процент скипов)</div>
+                <div className="text-sm font-medium text-muted-foreground">Skip Rate (процент скипов)</div>
                 <div className="text-2xl font-bold">{mlPatterns.skipRate}</div>
                 <Progress value={mlPatterns.skipRate * 100} className="h-2" />
                 <p className="text-xs text-muted-foreground">
-                  {mlPatterns.skipRate < 0.1 ? '✅ Отлично' :
-                   mlPatterns.skipRate < 0.3 ? '⚠️ Норма' : '❌ Много скипов'}
+                  {mlPatterns.skipRate < 0.1 ? 'Отлично' :
+                   mlPatterns.skipRate < 0.3 ? 'Норма' : 'Много скипов'}
                 </p>
               </div>
 
               {/* REPLAY RATE */}
               <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">🔁 Replay Rate (процент повторов)</div>
+                <div className="text-sm font-medium text-muted-foreground">Replay Rate (процент повторов)</div>
                 <div className="text-2xl font-bold">{mlPatterns.replayRate}</div>
                 <Progress value={mlPatterns.replayRate * 100} className="h-2" />
                 <p className="text-xs text-muted-foreground">
-                  {mlPatterns.replayRate > 0.5 ? '✅ Много повторов' :
-                   mlPatterns.replayRate > 0.2 ? '⚠️ Норма' : '📝 Мало повторов'}
+                  {mlPatterns.replayRate > 0.5 ? 'Много повторов' :
+                   mlPatterns.replayRate > 0.2 ? 'Норма' : 'Мало повторов'}
                 </p>
               </div>
 
               {/* DIVERSITY SCORE */}
               <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">🎲 Diversity Score (разнообразие вкуса)</div>
+                <div className="text-sm font-medium text-muted-foreground">Diversity Score (разнообразие вкуса)</div>
                 <div className="text-2xl font-bold">{mlPatterns.diversityScore}</div>
                 <Progress value={mlPatterns.diversityScore * 100} className="h-2" />
                 <p className="text-xs text-muted-foreground">
-                  {mlPatterns.diversityScore > 0.7 ? '✅ Разнообразно' :
-                   mlPatterns.diversityScore > 0.4 ? '⚠️ Норма' : '🎯 Узкий вкус'}
+                  {mlPatterns.diversityScore > 0.7 ? 'Разнообразно' :
+                   mlPatterns.diversityScore > 0.4 ? 'Норма' : 'Узкий вкус'}
                 </p>
               </div>
 
               {/* LIKE RATE */}
               <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">❤️ Like Rate (процент лайков)</div>
+                <div className="text-sm font-medium text-muted-foreground">Like Rate (процент лайков)</div>
                 <div className="text-2xl font-bold">{mlPatterns.likeRate}</div>
                 <Progress value={mlPatterns.likeRate * 100} className="h-2" />
                 <p className="text-xs text-muted-foreground">
-                  {mlPatterns.likeRate > 0.3 ? '✅ Много лайков' :
-                   mlPatterns.likeRate > 0.1 ? '⚠️ Норма' : '📝 Мало лайков'}
+                  {mlPatterns.likeRate > 0.3 ? 'Много лайков' :
+                   mlPatterns.likeRate > 0.1 ? 'Норма' : 'Мало лайков'}
                 </p>
               </div>
 
               {/* ACTION PATTERNS */}
               <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">📊 Действия за 24ч</div>
+                <div className="text-sm font-medium text-muted-foreground">Действия за 24ч</div>
                 <div className="text-2xl font-bold">{mlPatterns.actionsLast24h}</div>
                 <div className="text-xs text-muted-foreground space-y-1">
-                  <div>👍 Лайки: {mlPatterns.totalLikes}</div>
-                  <div>👎 Дизлайки: {mlPatterns.totalDislikes}</div>
+                  <div>Лайки: {mlPatterns.totalLikes}</div>
+                  <div>Дизлайки: {mlPatterns.totalDislikes}</div>
                 </div>
               </div>
 
               {/* TEMPORAL PATTERNS */}
               <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">🕐 Активность по времени</div>
+                <div className="text-sm font-medium text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> Активность по времени</div>
                 <div className="grid grid-cols-4 gap-1 text-xs">
                   <div className="text-center">
-                    <div className="font-bold">☀️</div>
+                    <div className="font-bold flex justify-center"><Sun className="w-4 h-4" /></div>
                     <div>{mlPatterns.temporalPatterns.morning.tracks}</div>
                   </div>
                   <div className="text-center">
-                    <div className="font-bold">🌤️</div>
+                    <div className="font-bold flex justify-center"><Sun className="w-4 h-4" /></div>
                     <div>{mlPatterns.temporalPatterns.day.tracks}</div>
                   </div>
                   <div className="text-center">
-                    <div className="font-bold">🌆</div>
+                    <div className="font-bold flex justify-center"><Sunset className="w-4 h-4" /></div>
                     <div>{mlPatterns.temporalPatterns.evening.tracks}</div>
                   </div>
                   <div className="text-center">
-                    <div className="font-bold">🌙</div>
+                    <div className="font-bold flex justify-center"><Moon className="w-4 h-4" /></div>
                     <div>{mlPatterns.temporalPatterns.night.tracks}</div>
                   </div>
                 </div>
@@ -1077,17 +1090,17 @@ export default function MLStats() {
 
             {/* Detailed Temporal Patterns Table */}
             <div className="mt-6">
-              <h4 className="text-sm font-medium mb-3">📈 Паттерны по времени суток</h4>
+              <h4 className="text-sm font-medium mb-3">Паттерны по времени суток</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 {[
-                  { name: 'Утро (6-12)', data: mlPatterns.temporalPatterns.morning, icon: '☀️' },
-                  { name: 'День (12-18)', data: mlPatterns.temporalPatterns.day, icon: '🌤️' },
-                  { name: 'Вечер (18-23)', data: mlPatterns.temporalPatterns.evening, icon: '🌆' },
-                  { name: 'Ночь (23-6)', data: mlPatterns.temporalPatterns.night, icon: '🌙' },
+                  { name: 'Утро (6-12)', data: mlPatterns.temporalPatterns.morning },
+                  { name: 'День (12-18)', data: mlPatterns.temporalPatterns.day },
+                  { name: 'Вечер (18-23)', data: mlPatterns.temporalPatterns.evening },
+                  { name: 'Ночь (23-6)', data: mlPatterns.temporalPatterns.night },
                 ].map(period => (
                   <Card key={period.name} className="p-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg">{period.icon}</span>
+                      
                       <span className="text-sm font-medium">{period.name}</span>
                     </div>
                     <div className="space-y-1 text-xs">
@@ -1129,7 +1142,7 @@ export default function MLStats() {
           variant="outline"
           className="w-full border-purple-500/50 text-purple-300 hover:bg-purple-500/20"
         >
-          🎵 Итоги года
+          <Music className="w-4 h-4 mr-2" /> Итоги года
         </Button>
       </div>
     </div>

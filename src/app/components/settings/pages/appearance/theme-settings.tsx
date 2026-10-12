@@ -3,7 +3,7 @@
  * Выбор из 20+ тем
  */
 
-import { useThemeStore, useAllThemes, useThemeActions } from '@/shared/themes'
+import { useThemeStore, useAllThemes, } from '@/shared/themes'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'

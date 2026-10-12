@@ -6,7 +6,7 @@
 import { devtools, persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { createWithEqualityFn } from 'zustand/traditional'
-import { KumaFlowTheme, KUMAFLOW_THEMES } from './kumaflow-theme-types'
+import { KumaFlowTheme, } from './kumaflow-theme-types'
 import { defaultDark } from './default-dark'
 import { defaultLight } from './default-light'
 import { dracula } from './dracula'

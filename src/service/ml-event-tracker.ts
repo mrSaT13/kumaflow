@@ -3,6 +3,8 @@
  * Сохраняет события в localStorage для анализа и обучения ML
  */
 
+import { useAchievementsStore } from '@/store/achievements.store'
+
 export type MLEventType =
   // Onboarding
   | 'onboarding_started'
@@ -241,36 +243,52 @@ export function trackMilestoneReached(milestone: string, count: number) {
 }
 
 /**
- * Проверка достижений и автоматический трекинг
+ * Проверка достижений.
+ *
+ * Раньше здесь был свой список достижений с id вида 'first_like' / '10_likes'
+ * и события с приведённым через `as any` типом. Эти id не совпадали с id в
+ * achievements.store ('likes_1' и т.д.), поэтому награды из стора они не
+ * открывали, а пользователь ничего не видел — был только console.log.
+ *
+ * Теперь единственный источник — стор: checkAll() сам обновляет прогресс и
+ * открывает достижения, а разблокировка попадает в justUnlocked, откуда её
+ * показывает AchievementObserver.
  */
 export function checkAchievements(profile: any) {
-  const achievements = [
-    { id: 'first_like', check: () => profile.likedSongs?.length >= 1, count: 1 },
-    { id: '10_likes', check: () => profile.likedSongs?.length >= 10, count: 10 },
-    { id: '50_likes', check: () => profile.likedSongs?.length >= 50, count: 50 },
-    { id: '100_likes', check: () => profile.likedSongs?.length >= 100, count: 100 },
-    { id: '500_likes', check: () => profile.likedSongs?.length >= 500, count: 500 },
-    
-    { id: 'first_artist_follow', check: () => Object.keys(profile.preferredArtists || {}).length >= 1, count: 1 },
-    { id: '10_artists', check: () => Object.keys(profile.preferredArtists || {}).length >= 10, count: 10 },
-    { id: '50_artists', check: () => Object.keys(profile.preferredArtists || {}).length >= 50, count: 50 },
-    
-    { id: 'first_genre', check: () => Object.keys(profile.preferredGenres || {}).length >= 1, count: 1 },
-    { id: '10_genres', check: () => Object.keys(profile.preferredGenres || {}).length >= 10, count: 10 },
-    
-    { id: 'playlist_master', check: () => profile.listeningHistory?.length >= 100, count: 100 },
-    { id: 'playlist_legend', check: () => profile.listeningHistory?.length >= 500, count: 500 },
-  ]
+  const likedSongs = Array.isArray(profile?.likedSongs) ? profile.likedSongs.length : 0
+  const disliked = Array.isArray(profile?.dislikedSongs)
+    ? profile.dislikedSongs.length
+    : 0
+  const history = Array.isArray(profile?.listeningHistory) ? profile.listeningHistory : []
+  const artists = Object.keys(profile?.preferredArtists || {}).length
+  const genres = Object.keys(profile?.preferredGenres || {}).length
 
-  achievements.forEach(achievement => {
-    if (achievement.check()) {
-      // Проверяем не было ли уже этого достижения
-      const hasAchievement = hasEventOccurred(`achievement_${achievement.id}`)
-      if (!hasAchievement) {
-        trackMilestoneReached(achievement.id, achievement.count)
-        trackEvent(`achievement_${achievement.id}` as any, { count: achievement.count })
-        console.log(`🏆 Achievement unlocked: ${achievement.id} (${achievement.count})`)
-      }
-    }
+  // Счётчик прослушиваний: история урезана, поэтому берём максимум
+  // накопленного playCount, а не длину массива.
+  const totalPlays = history.reduce((max, item) => {
+    const plays = Number(item?.playCount ?? 0)
+    return Math.max(max, plays)
+  }, 0)
+
+  const firstHeard = history
+    .map((item) => (item as { firstHeard?: string })?.firstHeard)
+    .filter((value): value is string => Boolean(value))
+    .sort()[0]
+  const daysSinceFirstListen = firstHeard
+    ? Math.max(
+        0,
+        Math.floor((Date.now() - new Date(firstHeard).getTime()) / 86_400_000),
+      )
+    : 0
+
+  useAchievementsStore.getState().checkAll({
+    totalPlays,
+    totalLikes: likedSongs,
+    totalDislikes: disliked,
+    totalSkips: 0,
+    totalPlaylists: 0,
+    totalGenres: genres,
+    totalArtists: artists,
+    daysSinceFirstListen,
   })
 }

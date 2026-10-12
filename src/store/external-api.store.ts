@@ -44,6 +44,8 @@ export interface ExternalApiSettings {
   llmAllowPlaylistAccess: boolean
   llmAllowPlayerAccess: boolean
   llmCustomPrompt: string
+  /** Текущая выбранная модель. Ставится в setLlmModel, читается в App/llm-service. */
+  llmModel: string
 }
 
 interface ExternalApiStore {
@@ -120,6 +122,7 @@ const defaultSettings: ExternalApiSettings = {
   llmAllowPlaylistAccess: true,
   llmAllowPlayerAccess: true,
   llmCustomPrompt: '',
+llmModel: '',
 }
 
 export const useExternalApiStore = createWithEqualityFn<ExternalApiStore>()(

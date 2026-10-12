@@ -21,7 +21,7 @@ import { Switch } from '@/app/components/ui/switch'
 import { usePlayerCustomization, usePlayerCustomizationActions } from '@/store/player-customization.store'
 import { usePlaybackActions, usePlaybackStore } from '@/store/playback.store'
 import { cn } from '@/lib/utils'
-import { RotateCcw, Upload, Sparkles, Music, Zap, Star, Heart } from 'lucide-react'
+import { RotateCcw, Upload, Sparkles, Zap, } from 'lucide-react'
 
 // Пресеты иконок SVG
 const ICON_PRESETS = [

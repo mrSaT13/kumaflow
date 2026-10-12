@@ -14,7 +14,10 @@ import { toast } from 'react-toastify'
 import { useMLPlaylistsState } from '@/store/ml-playlists-state.store'
 import { useMLPlaylistsStore } from '@/store/ml-playlists.store'
 import { useMLStore } from '@/store/ml.store'
-import { usePlayerStore } from '@/store/player.store'
+import {
+  usePlayerStore,
+  selectCurrentSong,
+} from '@/store/player.store'
 import {
   generateDailyMix,
   generateDiscoverWeekly,
@@ -163,7 +166,11 @@ class MLPlaylistAutoUpdateService {
     const mlProfile = useMLStore.getState().profile
     const { ratings } = useMLStore.getState()
     const { addPlaylist } = useMLPlaylistsState.getState()
-    const { setSongList, currentSong } = usePlayerStore.getState()
+    // setSongList лежит в actions, а не в корне стора: раньше он и
+    // currentSong брались деструктуризацией из getState(), то есть были
+    // undefined — очередь никогда не обновлялась, а проверка играющего
+    // плейлиста всегда давала false.
+    const { setSongList } = usePlayerStore.getState().actions
     const { maxTracks } = useMLPlaylistsStore.getState().settings
 
     const likedSongIds = mlProfile.likedSongs
@@ -306,6 +313,7 @@ class MLPlaylistAutoUpdateService {
     console.log(`${SERVICE_NAME} ${type} regenerated with ${playlist.playlist?.songs?.length || playlist.songs?.length} tracks`)
 
     // Если этот плейлист сейчас играет - обновляем очередь
+    const currentSong = selectCurrentSong(usePlayerStore.getState())
     if (currentSong && this.isPlaylistPlaying(type)) {
       console.log(`${SERVICE_NAME} ${type} is currently playing, updating queue`)
       const songs = playlist.playlist?.songs || playlist.songs || []
@@ -322,7 +330,7 @@ class MLPlaylistAutoUpdateService {
    * Проверить играет ли сейчас плейлист этого типа
    */
   private isPlaylistPlaying(type: string): boolean {
-    const { currentSong } = usePlayerStore.getState()
+    const currentSong = selectCurrentSong(usePlayerStore.getState())
     if (!currentSong) return false
 
     // Проверяем по названию или описанию

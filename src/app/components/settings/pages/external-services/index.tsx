@@ -15,7 +15,7 @@ export function ExternalServices() {
     <div className="space-y-6">
       {/* Last.fm */}
       <div>
-        <h3 className="text-lg font-semibold mb-3">🎵 Last.fm</h3>
+        <h3 className="text-lg font-semibold mb-3">Last.fm</h3>
         <ExternalApiContent />
       </div>
 
@@ -23,7 +23,7 @@ export function ExternalServices() {
 
       {/* ListenBrainz */}
       <div>
-        <h3 className="text-lg font-semibold mb-3">🧠 ListenBrainz</h3>
+        <h3 className="text-lg font-semibold mb-3">ListenBrainz</h3>
         <ListenBrainzSettings />
       </div>
 
@@ -31,7 +31,7 @@ export function ExternalServices() {
 
       {/* Discord RPC */}
       <div>
-        <h3 className="text-lg font-semibold mb-3">💬 Discord Rich Presence</h3>
+        <h3 className="text-lg font-semibold mb-3">Discord Rich Presence</h3>
         {/* Discord RPC встроен в ExternalAPISettings */}
       </div>
 
@@ -39,7 +39,7 @@ export function ExternalServices() {
 
       {/* Fanart.tv */}
       <div>
-        <h3 className="text-lg font-semibold mb-3">🎨 Fanart.tv</h3>
+        <h3 className="text-lg font-semibold mb-3">Fanart.tv</h3>
         {/* Fanart встроен в ExternalAPISettings */}
       </div>
 
@@ -47,7 +47,7 @@ export function ExternalServices() {
 
       {/* Discogs */}
       <div>
-        <h3 className="text-lg font-semibold mb-3">💿 Discogs</h3>
+        <h3 className="text-lg font-semibold mb-3">Discogs</h3>
         <DiscogsSettings />
       </div>
 
@@ -55,7 +55,7 @@ export function ExternalServices() {
 
       {/* Apple Music */}
       <div>
-        <h3 className="text-lg font-semibold mb-3">🍎 Apple Music</h3>
+        <h3 className="text-lg font-semibold mb-3">Apple Music</h3>
         <AppleMusicSettings />
       </div>
 
@@ -63,7 +63,7 @@ export function ExternalServices() {
 
       {/* Yandex Music */}
       <div>
-        <h3 className="text-lg font-semibold mb-3">🇷🇺 Yandex Music</h3>
+        <h3 className="text-lg font-semibold mb-3">Yandex Music</h3>
         <YandexMusicSettings />
       </div>
 
@@ -71,7 +71,7 @@ export function ExternalServices() {
 
       {/* Audiobookshelf */}
       <div>
-        <h3 className="text-lg font-semibold mb-3">📚 Audiobookshelf</h3>
+        <h3 className="text-lg font-semibold mb-3">Audiobookshelf</h3>
         <AudiobookshelfContent />
       </div>
     </div>

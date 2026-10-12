@@ -57,7 +57,6 @@ const LIGHT_THEMES: ReadonlySet<Theme> = new Set([
   Theme.RosePineDawn,
   Theme.GithubLight,
   Theme.VSCODELight,
-  Theme.PolarLight,
 ])
 
 export function isDarkTheme(theme: Theme): boolean {

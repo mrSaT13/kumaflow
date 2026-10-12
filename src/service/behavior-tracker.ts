@@ -11,8 +11,6 @@
  * - Время суток → контекст для рекомендаций
  */
 
-import type { ISong } from '@/types/responses/song'
-
 export interface PlayEvent {
   trackId: string
   timestamp: number
@@ -21,6 +19,22 @@ export interface PlayEvent {
   sessionId: string
   timeContext: 'morning' | 'day' | 'evening' | 'night'
   dayOfWeek: number  // 0-6
+}
+
+/**
+ * Усреднённые предпочтения пользователя по окну последних треков.
+ * Раньше метод объявлялся как Record<string, number>, хотя возвращал
+ * topGenres: string[] и nullable-поля — из-за этого падали все потребители.
+ */
+export interface UserVibeVector {
+  /** Сколько событий попало в окно */
+  total: number
+  /** Топ жанров по количеству положительных событий */
+  topGenres: string[]
+  /** Средний BPM или null, если BPM неизвестен */
+  avgBpm: number | null
+  /** Средняя энергия или null, если энергия неизвестна */
+  avgEnergy: number | null
 }
 
 export interface TrackScore {
@@ -46,7 +60,12 @@ export class BehaviorTracker {
   /**
    * Логирование события
    */
-  async logEvent(event: Omit<PlayEvent, 'sessionId' | 'timeContext' | 'dayOfWeek'>): Promise<void> {
+  async logEvent(
+    event: Omit<
+      PlayEvent,
+      'sessionId' | 'timeContext' | 'dayOfWeek' | 'timestamp'
+    >,
+  ): Promise<void> {
     const hour = new Date().getHours()
     const timeContext: PlayEvent['timeContext'] = 
       hour >= 6 && hour < 12 ? 'morning' :
@@ -55,6 +74,11 @@ export class BehaviorTracker {
 
     const fullEvent: PlayEvent = {
       ...event,
+      // Раньше timestamp не проставлялся здесь, и ни один вызывающий его не
+      // передавал. Событие сохранялось с timestamp === undefined, а все чтения
+      // фильтруют по нему (e.timestamp > cutoff → false), то есть весь
+      // локальный поведенческий трекинг был мёртвым.
+      timestamp: Date.now(),
       sessionId: this.sessionId,
       timeContext,
       dayOfWeek: new Date().getDay(),
@@ -78,7 +102,7 @@ export class BehaviorTracker {
    * @param window - количество последних треков для анализа (по умолчанию 50)
    * @returns усреднённый вектор предпочтений или null если мало данных
    */
-  async getUserVibeVector(window: number = 50): Promise<Record<string, number> | null> {
+  async getUserVibeVector(window: number = 50): Promise<UserVibeVector | null> {
     const events = await this.getEvents(200)
 
     // Берём только положительные события
@@ -170,7 +194,7 @@ export class BehaviorTracker {
    */
   async getTopGenres(limit: number = 10): Promise<string[]> {
     const vibe = await this.getUserVibeVector(100)
-    return vibe?.topGenres || []
+    return (vibe?.topGenres || []).slice(0, limit)
   }
 
   /**

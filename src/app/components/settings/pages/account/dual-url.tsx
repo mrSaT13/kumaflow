@@ -15,7 +15,7 @@ import { Badge } from '@/app/components/ui/badge'
 import { Switch } from '@/app/components/ui/switch'
 import { useAppStore } from '@/store/app.store'
 import { dualUrlService } from '@/service/dual-url-service'
-import { Activity, CheckCircle2, Wifi, WifiOff, XCircle } from 'lucide-react'
+import { Activity, CheckCircle2, Wifi, XCircle } from 'lucide-react'
 
 export function DualUrlSettings() {
   const { t } = useTranslation()

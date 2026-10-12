@@ -7,7 +7,7 @@
  * - Клик → меню с информацией об аккаунте и настройками
  */
 
-import { CircleUserRound, Info, Keyboard, LogOut, Settings, Users, Plus, Loader2, Upload, X } from 'lucide-react'
+import { CircleUserRound, Info, Keyboard, LogOut, Settings, Plus, Loader2, Upload, X } from 'lucide-react'
 import React, { useState } from 'react'
 import { Fragment } from 'react/jsx-runtime'
 import { AboutDialog } from '@/app/components/about/dialog'

@@ -15,8 +15,8 @@ import { useAppDesktopActions, useAppDesktopData } from '@/store/app.store'
 
 export function DesktopSettings() {
   const { t } = useTranslation()
-  const { minimizeToTray } = useAppDesktopData()
-  const { setMinimizeToTray } = useAppDesktopActions()
+  const { minimizeToTray, launchOnStartup } = useAppDesktopData()
+  const { setMinimizeToTray, setLaunchOnStartup } = useAppDesktopActions()
 
   return (
     <Root>
@@ -35,6 +35,17 @@ export function DesktopSettings() {
             <Switch
               checked={minimizeToTray}
               onCheckedChange={setMinimizeToTray}
+            />
+          </ContentItemForm>
+        </ContentItem>
+        <ContentItem>
+          <ContentItemTitle>
+            Запускать вместе с системой
+          </ContentItemTitle>
+          <ContentItemForm>
+            <Switch
+              checked={launchOnStartup}
+              onCheckedChange={setLaunchOnStartup}
             />
           </ContentItemForm>
         </ContentItem>

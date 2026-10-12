@@ -9,6 +9,7 @@ import {
   usePlayerActions,
   usePlayerSongStarred,
   usePlayerStore,
+  selectCurrentSong,
 } from '@/store/player.store'
 
 interface PlayerLikeButtonProps {
@@ -18,13 +19,12 @@ interface PlayerLikeButtonProps {
 export function PlayerLikeButton({ disabled }: PlayerLikeButtonProps) {
   const { t } = useTranslation()
   const isSongStarred = usePlayerSongStarred()
-  const { title: song, artist } = usePlayerStore(
-    (state) => state.songlist.currentSong,
-  )
   const { starCurrentSong, playNextSong } = usePlayerActions()
   const { ratings, rateSong } = useML()
 
-  const currentSong = usePlayerStore((state) => state.songlist.currentSong)
+  const currentSong = usePlayerStore(selectCurrentSong)
+  const song = currentSong?.title
+  const artist = currentSong?.artist
   const currentRating = currentSong?.id ? ratings[currentSong.id]?.like : null
 
   // Исправляем controlled/uncontrolled warning

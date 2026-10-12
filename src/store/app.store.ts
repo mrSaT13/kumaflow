@@ -331,11 +331,23 @@ export const useAppStore = createWithEqualityFn<IAppContext>()(
           desktop: {
             data: {
               minimizeToTray: false,
+              launchOnStartup: false,
             },
             actions: {
               setMinimizeToTray: (value) => {
                 set((state) => {
                   state.desktop.data.minimizeToTray = value
+                })
+              },
+              setLaunchOnStartup: (value) => {
+                set((state) => {
+                  state.desktop.data.launchOnStartup = value
+                })
+                // Настройка живёт в главном процессе: renderer её только
+                // отображает, применяется через IPC.
+                window.api?.saveAppSettings?.({
+                  minimizeToTray: get().desktop.data.minimizeToTray,
+                  launchOnStartup: value,
                 })
               },
             },

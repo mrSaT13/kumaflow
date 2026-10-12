@@ -31,13 +31,14 @@ import {
   usePlayerPrevAndNext,
   usePlayerShuffle,
   usePlayerStore,
+  selectCurrentSong,
 } from '@/store/player.store'
 import { LoopState } from '@/types/playerContext'
 import { EpisodeWithPodcast } from '@/types/responses/podcasts'
 import { Radio } from '@/types/responses/radios'
 import { ISong } from '@/types/responses/song'
 import { manageMediaSession } from '@/utils/setMediaSession'
-import { trackSeekForward, trackSeekBackward, trackRepeatModeEnabled } from '@/service/ml-event-tracker'
+import { trackSeekForward, trackSeekBackward, } from '@/service/ml-event-tracker'
 import { SleepTimerButton } from './sleep-timer-button'
 import { AutoDJButton } from './auto-dj-button'
 import { DLNACastButton } from './dlna-cast-button'
@@ -72,7 +73,7 @@ export function PlayerControls({
     starCurrentSong,
   } = usePlayerActions()
   const { rateSong } = useML()
-  const currentSong = usePlayerStore((state) => state.songlist.currentSong)
+  const currentSong = usePlayerStore(selectCurrentSong)
   const isLiked = usePlayerStore((state) => state.playerState.isSongStarred)
   const { useAudioHotkeys } = usePlayerHotkeys()
 

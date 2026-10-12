@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ShadowHeader } from '@/app/components/album/shadow-header'
@@ -13,11 +13,9 @@ import { Button } from '@/app/components/ui/button'
 import { useInfiniteArtists } from '@/app/hooks/use-infinite-artists'
 import { useSongList } from '@/app/hooks/use-song-list'
 import { artistsColumns } from '@/app/tables/artists-columns'
-import { subsonic } from '@/service/subsonic'
 import { useAppArtistsViewType } from '@/store/app.store'
 import { usePlayerActions } from '@/store/player.store'
 import { ISimilarArtist } from '@/types/responses/artist'
-import { queryKeys } from '@/utils/queryKeys'
 
 const MemoShadowHeader = memo(ShadowHeader)
 const MemoHeaderTitle = memo(HeaderTitle)

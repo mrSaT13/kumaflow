@@ -15,7 +15,7 @@ interface UseArtistImage {
   imageUrl: string | null
   isLoading: boolean
   hasError: boolean
-  source: 'appleMusic' | 'yandexMusic' | 'lastFm' | 'navidrome' | null
+  source: 'appleMusic' | 'yandexMusic' | 'lastFm' | 'navidrome' | 'fanart' | null
 }
 
 export function useArtistImage(
@@ -62,7 +62,8 @@ export function useArtistImage(
             const fanartImages = await fanartService.getArtistImages(artistName)
             
             if (fanartImages && fanartImages.backgrounds && fanartImages.backgrounds.length > 0) {
-              const highResUrl = fanartImages.backgrounds[0]
+              // backgrounds — это FanartImageItem[], нужен сам url
+              const highResUrl = fanartImages.backgrounds[0].url
               console.log('[ArtistImage] Fanart.tv found:', highResUrl)
               setImageUrl(highResUrl)
               setSource('fanart')

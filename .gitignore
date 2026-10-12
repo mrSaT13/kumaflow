@@ -7,6 +7,9 @@ node_modules/
 # Сборка electron-vite (main/preload/renderer)
 out/
 
+# Временные файлы сборки (setup.ps1 уводит сюда TEMP/TMP, т.к. C: забит)
+.build-tmp/
+
 # Артефакты electron-builder (инсталляторы, unpacked)
 dist/
 release/

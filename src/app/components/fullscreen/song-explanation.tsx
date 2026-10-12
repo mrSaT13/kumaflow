@@ -1,17 +1,17 @@
-import { Activity, Compass, Info, Music, Tag, User, Zap } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { explainRecommendation } from '@/service/explainable-ai'
+import { useML } from '@/store/ml.store'
+import { usePlayerStore, selectCurrentSong,
+} from '@/store/player.store'
 import { Button } from '@/app/components/ui/button'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/app/components/ui/popover'
+import { Info, Music, User, Tag, Activity, Zap, Compass } from 'lucide-react'
 import { useSongList } from '@/app/hooks/use-song-list'
 import { ROUTES } from '@/routes/routesList'
-import { explainRecommendation } from '@/service/explainable-ai'
-import { useML } from '@/store/ml.store'
-import { usePlayerStore } from '@/store/player.store'
 
 const explanationIcons: Record<Explanation['type'], React.ReactNode> = {
   'similar-track': <Music className="w-3 h-3" />,
@@ -32,38 +32,31 @@ const explanationColors: Record<Explanation['type'], string> = {
 }
 
 interface Explanation {
-  type:
-    | 'similar-track'
-    | 'similar-artist'
-    | 'genre-match'
-    | 'bpm-match'
-    | 'energy-match'
-    | 'new-discovery'
+  type: 'similar-track' | 'similar-artist' | 'genre-match' | 'bpm-match' | 'energy-match' | 'new-discovery'
   text: string
   details?: {
     trackId?: string
-    albumId?: string // Добавили albumId
+    albumId?: string  // Добавили albumId
     genreRank?: number
   }
 }
 
 export function FullscreenSongExplanation() {
-  const { t } = useTranslation()
-  const currentSong = usePlayerStore((state) => state.songlist.currentSong)
+  const currentSong = usePlayerStore(selectCurrentSong)
   const { getProfile, ratings } = useML()
   const { getArtistAllSongs } = useSongList()
   const [open, setOpen] = useState(false)
-
+  
   const explanations = useMemo(() => {
     if (!currentSong) return []
     const profile = getProfile()
     return explainRecommendation(currentSong, profile, ratings).slice(0, 3)
   }, [currentSong, getProfile, ratings])
-
+  
   if (!currentSong || explanations.length === 0) {
     return null
   }
-
+  
   const handleNavigateToArtist = async () => {
     try {
       const songs = await getArtistAllSongs(currentSong.artist)
@@ -74,7 +67,7 @@ export function FullscreenSongExplanation() {
       console.error('Failed to navigate to artist:', error)
     }
   }
-
+  
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -86,7 +79,7 @@ export function FullscreenSongExplanation() {
             e.stopPropagation()
             setOpen(true)
           }}
-          title={t('fullscreen.whyTitle')}
+          title="Почему этот трек рекомендован"
         >
           <Info className="w-4 h-4 text-muted-foreground" />
         </Button>
@@ -95,32 +88,33 @@ export function FullscreenSongExplanation() {
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 pb-1.5 border-b">
             <Info className="w-3.5 h-3.5 text-muted-foreground" />
-            <p className="text-xs font-medium">{t('fullscreen.whyHeader')}</p>
+            <p className="text-xs font-medium">Почему этот трек:</p>
           </div>
           {explanations.map((exp, index) => (
-            <div key={index} className="flex items-start gap-1.5 text-xs">
+            <div 
+              key={index}
+              className="flex items-start gap-1.5 text-xs"
+            >
               <span className={`${explanationColors[exp.type]} mt-0.5`}>
                 {explanationIcons[exp.type]}
               </span>
-              <span className="text-muted-foreground flex-1">{exp.text}</span>
+              <span className="text-muted-foreground flex-1">
+                {exp.text}
+              </span>
               {exp.type === 'similar-track' && exp.details?.trackId && (
-                <Button
-                  variant="link"
-                  size="sm"
+                <Button 
+                  variant="link" 
+                  size="sm" 
                   className="h-auto p-0 text-[10px]"
                   onClick={async (e) => {
                     e.stopPropagation()
                     try {
                       // Получаем информацию о треке чтобы узнать albumId
                       const { subsonic } = await import('@/service/subsonic')
-                      const songInfo = await subsonic.songs.getSong(
-                        exp.details.trackId!,
-                      )
+                      const songInfo = await subsonic.songs.getSong(exp.details.trackId!)
                       if (songInfo && songInfo.albumId) {
                         // Переходим на страницу альбома с этим треком
-                        window.location.hash = ROUTES.ALBUM.PAGE(
-                          songInfo.albumId,
-                        )
+                        window.location.hash = ROUTES.ALBUM.PAGE(songInfo.albumId)
                       } else {
                         // Фоллбэк: просто страница songs
                         window.location.hash = `/library/songs?songId=${exp.details.trackId}`
@@ -131,13 +125,13 @@ export function FullscreenSongExplanation() {
                     setOpen(false)
                   }}
                 >
-                  {t('fullscreen.trackLink')}
+                  Трек
                 </Button>
               )}
               {exp.type === 'similar-artist' && (
-                <Button
-                  variant="link"
-                  size="sm"
+                <Button 
+                  variant="link" 
+                  size="sm" 
                   className="h-auto p-0 text-[10px]"
                   onClick={async (e) => {
                     e.stopPropagation()
@@ -152,7 +146,7 @@ export function FullscreenSongExplanation() {
                     setOpen(false)
                   }}
                 >
-                  {t('fullscreen.artistLink')}
+                  Артист
                 </Button>
               )}
             </div>

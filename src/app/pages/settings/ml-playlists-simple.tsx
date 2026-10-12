@@ -8,10 +8,9 @@ import { Slider } from '@/app/components/ui/slider'
 import { Switch } from '@/app/components/ui/switch'
 import { Label } from '@/app/components/ui/label'
 import { Progress } from '@/app/components/ui/progress'
-import { Badge } from '@/app/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { trackEvent } from '@/service/ml-event-tracker'
-import { Sparkles, Loader2, BarChart3, RefreshCw, Zap } from 'lucide-react'
+import { Loader2, BarChart3, RefreshCw, } from 'lucide-react'
 import type { MABStats } from '@/service/multi-armed-bandit'
 import { LastFmTagsImport } from '@/app/components/settings/pages/content/lastfm-tags-import'
 import {
@@ -21,7 +20,6 @@ import {
   resetAnalysisProgress,
   type AnalysisState,
 } from '@/service/library-analyzer'
-import { getArtists } from '@/service/subsonic-api'
 import { exportAnalysisData, importAnalysisData } from '@/service/analysis-export'
 import { HolidayPlaylistsSettings } from '@/app/components/settings/holiday-playlists'
 import { RemoteControlSettings } from '@/app/components/settings/remote-control'

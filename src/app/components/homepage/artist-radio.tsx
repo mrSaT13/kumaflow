@@ -10,6 +10,7 @@ import { generateArtistRadio } from '@/service/ml-wave-service'
 import { subsonic } from '@/service/subsonic'
 import { toast } from 'react-toastify'
 import { Play, Loader2 } from 'lucide-react'
+import { getSimpleCoverArtUrl } from '@/api/httpClient'
 import { useML } from '@/store/ml.store'
 import type { IArtist } from '@/types/responses/artist'
 
@@ -43,18 +44,12 @@ export default function ArtistRadio() {
           console.log('[ArtistRadio] Loaded artist:', artist?.name, 'coverArt:', artist?.coverArt)
           
           if (artist && artist.coverArt) {
-            // Получаем данные авторизации
-            let username = ''  // ЗАГЛУШКА - УДАЛИТЬ ПОСЛЕ ТЕСТА!
-            let token = 'REDACTED_SUBSONIC_TOKEN'  // ЗАГЛУШКА - УДАЛИТЬ ПОСЛЕ ТЕСТА!
-            
-            console.log('[ArtistRadio] Using hardcoded auth:', { username, token: '***' })
-            
-            // Формируем URL с правильными параметрами авторизации
-            // Для артистов используем type=artist!
-            const imageUrl = `/rest/getCoverArt?id=${artist.coverArt}&u=${username}&t=${token}&v=1.16.1&c=KumaFlow&type=artist`
-            
-            console.log(`[ArtistRadio] Artist ${artist.name}: url=${imageUrl}`)
-            
+            // URL обложки строит httpClient: он сам подставляет u/t из
+            // настроек активного аккаунта. Раньше здесь стояли захардкоженные
+            // логин и Subsonic-токен Navidrome — они уехали в публичный репозиторий
+            // вместе с комментарием «ЗАГЛУШКА - УДАЛИТЬ ПОСЛЕ ТЕСТА!».
+            const imageUrl = getSimpleCoverArtUrl(artist.coverArt, 'artist')
+
             loadedArtists.push({
               ...artist,
               imageUrl,
@@ -86,10 +81,14 @@ export default function ArtistRadio() {
       console.log('[ArtistRadio] ✅ Generated playlist:', result.songs.length, 'tracks')
 
       if (result.songs.length > 0) {
+        const artistLabel =
+          artists.find((a) => a.id === artistId)?.name ?? 'артист'
         setSongList(
           result.songs,
           0,
-          false
+          false,
+          undefined,
+          `Радио · ${artistLabel}`,
         )
 
         toast.success('▶️ Радио артиста запущено!', {

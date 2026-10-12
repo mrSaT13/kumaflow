@@ -1,5 +1,8 @@
 import { useAppStore } from '@/store/app.store'
-import { usePlayerStore } from '@/store/player.store'
+import {
+  usePlayerStore,
+  selectCurrentSong,
+} from '@/store/player.store'
 import { ISong } from '@/types/responses/song'
 import { isDesktop } from './desktop'
 
@@ -38,12 +41,12 @@ function clear() {
 function sendCurrentSong() {
   if (!isDesktop()) return
 
-  const { playerState, songlist, actions } = usePlayerStore.getState()
+  const { playerState, actions } = usePlayerStore.getState()
 
   const { mediaType } = playerState
   if (mediaType !== 'song') return
 
-  const { currentSong } = songlist
+  const currentSong = selectCurrentSong(usePlayerStore.getState())
   const currentTime = actions.getCurrentProgress()
   const { isPlaying, currentDuration } = playerState
 

@@ -5,6 +5,7 @@
  */
 
 import { brainGet, brainPost, isBrainConfigured } from './brain-client'
+import { ensureBrainReady } from './brain-bootstrap'
 import { isBrainActive, useBrainStore } from '@/store/brain.store'
 import { useAccountsStore } from '@/store/accounts.store'
 import { useAppStore } from '@/store/app.store'
@@ -23,7 +24,23 @@ export interface BrainRating {
   lastPlayed?: string
 }
 
-export type BrainAction = 'play' | 'complete' | 'skip' | 'replay' | 'seek_back' | 'abandon'
+/**
+ * Действия, которые мозг умеет принимать.
+ *
+ * like/dislike добавлены вместе с отправкой явной оценки из плеера: сервер
+ * (taste.py) их обрабатывает — создаёт Favorite / TrackDislike и закрывает
+ * «показ» в метриках рекомендаций. До этого они падали в `skipped`, отсюда
+ * «ЛАЙК С ВОЛНЫ 0%» при живых лайках.
+ */
+export type BrainAction =
+  | 'play'
+  | 'complete'
+  | 'skip'
+  | 'replay'
+  | 'seek_back'
+  | 'abandon'
+  | 'like'
+  | 'dislike'
 
 export interface BrainEvent {
   track_id: string
@@ -130,8 +147,11 @@ export async function syncFromMobile(
 
 /** best-effort отправка событий пачкой */
 export async function reportBrainEvents(events: BrainEvent[]): Promise<{ auto_dislikes?: number; auto_bans?: string[] } | null> {
-  const userId = brainUserId()
-  if (!isBrainActive() || !userId || events.length === 0) return null
+  if (!isBrainActive() || events.length === 0) return null
+  // user_id мог не подняться к моменту флаша — поднимаем на лету, иначе пачка
+  // событий (скипы/завершения) молча уходила в никуда.
+  const userId = brainUserId() ?? (await ensureBrainReady())
+  if (!userId) return null
   return brainPost(`/api/users/${userId}/events`, {
     events: events.map((e) => ({ track_id: e.track_id, action: e.action, position_sec: e.position_sec })),
   })
@@ -250,34 +270,18 @@ export interface ServerTastePull {
   bans: number
   liked: number
   disliked: number
-  removed: number
 }
 
-/** Подтяжка вкусов с мозга в локальный профиль.
- * Курсор — server_now из прошлого ответа (часы клиентов врут), минус
- * 15 минут запаса: применение удалений идемпотентно, пропуск — нет.
- * Union-мерж + вычитание removed (разбаны/анлайки). Вызывать при старте.
- */
+/** Подтяжка вкусов с мозга в локальный профиль (union). Вызывать при старте. */
 export async function pullServerTaste(): Promise<ServerTastePull | null> {
   const userId = brainUserId()
   if (!isBrainActive() || !userId) return null
-  const bs = useBrainStore.getState()
-  let since = bs.tasteCursor ?? bs.lastSyncAt
-  try {
-    if (since) {
-      const t = new Date(since).getTime()
-      if (Number.isFinite(t)) since = new Date(t - 15 * 60000).toISOString()
-    }
-  } catch { /* сырой курсор как есть */ }
-  const qs = since ? `?since=${encodeURIComponent(since)}` : ''
   const snap = await brainGet<{
-    server_now?: string
     bannedArtistsDetailed?: Array<{ name: string; external_id: string }>
     bannedArtists?: string[]
     likedSongs?: string[]
     dislikedSongs?: string[]
-    removed?: Array<{ kind: string; key: string; aux: string }>
-  }>(`/api/users/${userId}/sync-to-mobile${qs}`).catch(() => null)
+  }>(`/api/users/${userId}/sync-to-mobile`).catch(() => null)
   if (!snap) return null
   try {
     const detailed = snap.bannedArtistsDetailed
@@ -287,18 +291,12 @@ export async function pullServerTaste(): Promise<ServerTastePull | null> {
     const ml = useMLStore.getState()
     ml.mergeServerBans(entries.filter((e) => e.id || e.name))
     ml.mergeServerTaste(snap.likedSongs ?? [], snap.dislikedSongs ?? [])
-    const removed = Array.isArray(snap.removed) ? snap.removed : []
-    if (removed.length > 0) ml.applyServerRemovals(removed)
-    const store = useBrainStore.getState()
-    if (snap.server_now) store.setTasteCursor(snap.server_now)
     const res = {
       bans: entries.length,
       liked: (snap.likedSongs ?? []).length,
       disliked: (snap.dislikedSongs ?? []).length,
-      removed: removed.length,
     }
-    store.setLastSyncStats({ at: new Date().toISOString(), ...res })
-    console.log(`[BrainSync] pulled taste: bans+${res.bans} liked+${res.liked} disliked+${res.disliked} removed-${res.removed}`)
+    console.log(`[BrainSync] pulled taste: bans+${res.bans} liked+${res.liked} disliked+${res.disliked}`)
     return res
   } catch {
     return null

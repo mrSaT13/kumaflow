@@ -316,6 +316,16 @@ const CIRCLE_OF_FIFTHS: Record<string, string[]> = {
 }
 
 /**
+ * Относительные мажорные тональности для минорных из круга.
+ * Минорная тональность стоит на 3 полутона ниже своей относительной мажорной.
+ */
+const RELATIVE_MAJOR: Record<string, string> = {
+  Am: 'C', Cm: 'Eb', Dm: 'F', Em: 'G', Fm: 'Ab', Gm: 'Bb', Bm: 'D',
+  'A#m': 'C#', 'D#m': 'F#', 'F#m': 'A', 'G#m': 'B',
+  'Bbm': 'Db', 'Ebm': 'Gb',
+}
+
+/**
  * Проверить совместимость ключей (тональностей)
  * Возвращает true если ключи в пределах кварто-квинтового круга
  */
@@ -328,10 +338,15 @@ export function isKeyCompatible(key1?: number, scale1?: string, key2?: number, s
   const name2 = keyNames[key2 % 12] || 'C'
   
   // Добавляем мажор/минор
-  const fullKey1 = scale1?.toLowerCase() === 'minor' ? `${name1}m` : name1
+  const isMinor1 = scale1?.toLowerCase() === 'minor'
+  const fullKey1 = isMinor1 ? `${name1}m` : name1
   const fullKey2 = scale2?.toLowerCase() === 'minor' ? `${name2}m` : name2
   
-  const compatible = CIRCLE_OF_FIFTHS[name1] || []
+  // Круг задан для мажорных тональностей: если первая тональность минорная,
+  // ищем по её относительной мажорной, иначе по ней самой.
+  const rootKey = (isMinor1 && RELATIVE_MAJOR[fullKey1]) || name1
+  
+  const compatible = CIRCLE_OF_FIFTHS[rootKey] || []
   return compatible.includes(fullKey2)
 }
 
@@ -384,7 +399,7 @@ export function findSimilarTracksWithVibe(
   targetTrack: any,
   allTracks: any[],
   limit: number = 10,
-  minSimilarity: number = 0.7,
+  minSimilarity: number = 0.65,
   options: {
     enableMoodFilter?: boolean
     enableBpmFilter?: boolean
@@ -398,8 +413,11 @@ export function findSimilarTracksWithVibe(
     enableBpmFilter = true,
     enableKeyFilter = true,
     minMoodConfidence,
-    vibeScoreThreshold = 0.65
+    vibeScoreThreshold,
   } = options
+
+  // Явный порог в options приоритетнее, иначе берём переданный minSimilarity
+  const scoreThreshold = vibeScoreThreshold ?? minSimilarity
 
   // Веса для формулы
   const weights = {
@@ -473,11 +491,11 @@ export function findSimilarTracksWithVibe(
         }
       }
     })
-    .filter(({ vibeScore }) => vibeScore >= vibeScoreThreshold)
+    .filter(({ vibeScore }) => vibeScore >= scoreThreshold)
     .sort((a, b) => b.vibeScore - a.vibeScore)
     .slice(0, limit)
 
-  console.log(`[Vibe Similarity v2] 🎵 Found ${scoredTracks.length} tracks (threshold: ${vibeScoreThreshold})`)
+  console.log(`[Vibe Similarity v2] 🎵 Found ${scoredTracks.length} tracks (threshold: ${scoreThreshold})`)
   console.log(`[Vibe Similarity v2] 🎵 Target: MOOD=${targetMood.mood} (${targetMood.confidence}), BPM=${targetFeatures.bpm.toFixed(0)}, Key=${targetTrack.key}`)
   
   if (scoredTracks.length > 0) {
@@ -525,7 +543,7 @@ export function findSimilarTracks(
     enableMoodFilter: true,
     enableBpmFilter: true,
     enableKeyFilter: true,
-    vibeScoreThreshold: 0.65
+    vibeScoreThreshold: minSimilarity
   })
 }
 
@@ -753,13 +771,9 @@ export function optimizeTrackSequence(
     }
 
     // Оптимизируем каждый сегмент
-    const optimizedSegments = segments.map((segment, idx) => {
+    const optimizedSegments = segments.map((segment) => {
       if (segment.length <= 1) return segment
 
-      // Ожидаемый диапазон энергии для этого сегмента
-      const expectedEnergyStart = sequence[0] ? analyzeTrack(sequence[0]).energy : 0.5
-      const expectedEnergyEnd = expectedEnergyStart + (idx * energyTrendPerSegment)
-      
       // Сортируем внутри сегмента по expected energy trend
       return segment.sort((a, b) => {
         const eA = analyzeTrack(a).energy

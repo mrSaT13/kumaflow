@@ -8,12 +8,32 @@ import { Label } from '@/app/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Separator } from '@/app/components/ui/separator'
 import { toast } from 'react-toastify'
-import { Wifi, Copy, Check, Smartphone, Plus, Globe, Settings2, Monitor, Lock } from 'lucide-react'
+import { Copy, Check, Smartphone, Plus, Globe, Settings2, Monitor, Lock, X } from 'lucide-react'
 import { useAppStore } from '@/store/app.store'
+import { useAccountsStore } from '@/store/accounts.store'
+
+/** Реальные данные подключения: приоритет — текущий аккаунт, запас — app.store */
+function getServerCredentials(manualPassword: string): { url?: string; username?: string; password?: string; authType: 'token' | 'password' } {
+  const acct = useAccountsStore.getState().getCurrentAccount()
+  const appState = useAppStore.getState().data
+  const passwordToUse = manualPassword || acct?.password || appState?.password
+  let authTypeToUse: 'token' | 'password' = manualPassword ? 'password' : (appState?.authType || 'password')
+  // MD5-хэш (32 hex) — это token-авторизация
+  if (passwordToUse && passwordToUse.length === 32 && /^[0-9a-f]+$/i.test(passwordToUse)) {
+    authTypeToUse = 'token'
+  }
+  return {
+    url: acct?.serverUrl || appState?.url,
+    username: acct?.username || appState?.username,
+    password: passwordToUse,
+    authType: authTypeToUse,
+  }
+}
 
 interface RemoteStatus {
   enabled: boolean
   port: number
+  hasPin?: boolean
   clientCount: number
   clients: { ip: string; userAgent: string; connectedAt: number }[]
 }
@@ -21,6 +41,7 @@ interface RemoteStatus {
 interface NetworkIp {
   ip: string
   iface: string
+  internal?: boolean
 }
 
 export function RemoteControlSettings() {
@@ -31,12 +52,13 @@ export function RemoteControlSettings() {
   const [copied, setCopied] = useState(false)
   const [subsonicPassword, setSubsonicPassword] = useState('')
   const [hasSavedPassword, setHasSavedPassword] = useState(false)
-  const [remotePin, setRemotePin] = useState('')
-  const [hasRemotePin, setHasRemotePin] = useState(false)
   const [availableIps, setAvailableIps] = useState<NetworkIp[]>([])
   const [selectedIp, setSelectedIp] = useState<string>('')
   const [manualIp, setManualIp] = useState('')
   const [showManualInput, setShowManualInput] = useState(false)
+  const [pin, setPin] = useState('')
+  const [hasPin, setHasPin] = useState(false)
+  const [allUrls, setAllUrls] = useState<{ ip: string; iface: string; url: string }[]>([])
 
   // Берём enabled из app.store вместо локального useState!
   const appStore = useAppStore()
@@ -77,13 +99,23 @@ export function RemoteControlSettings() {
       } catch {
         // API ещё не доступен
       }
-      // Проверяем задан ли PIN доступа
+
       try {
-        const pinSet = await window.api.remoteControl.hasPin()
-        setHasRemotePin(!!pinSet)
-      } catch {
-        // API ещё не доступен
-      }
+        const pinSet = await (window.api.remoteControl as any).hasPin?.()
+        setHasPin(!!pinSet)
+      } catch { /* старый preload без PIN */ }
+
+      // Сначала грузим сохранённые настройки, чтобы не сбрасывать выбор VPN-адреса
+      let savedIp: string | undefined
+      try {
+        const saved = await window.api.remoteControl.loadSettings()
+        savedIp = saved?.ip
+        if (saved?.port) {
+          setPort(saved.port)
+          setCustomPort(String(saved.port))
+        }
+        if (typeof saved?.hasPin === 'boolean') setHasPin(saved.hasPin)
+      } catch { /* ignore */ }
 
       const portResult = await window.api.remoteControl.getPort()
       const urlResult = await window.api.remoteControl.getUrl()
@@ -92,12 +124,33 @@ export function RemoteControlSettings() {
       setCustomPort(String(portResult || 4333))
       setConnectionUrl(urlResult)
 
+      try {
+        const urls = await (window.api.remoteControl as any).getAllUrls?.()
+        if (urls) setAllUrls(urls)
+      } catch { /* ignore */ }
+
       // Пробуем получить все IP (может быть недоступно без перезапуска Electron)
+      let wantIp = ''
       try {
         const ipsResult = await window.api.remoteControl.getAllIps()
         setAvailableIps(ipsResult || [])
         if (ipsResult && ipsResult.length > 0) {
-          setSelectedIp(ipsResult[0].ip)
+          // Не затираем сохранённый VPN-адрес первым в списке
+          const want = savedIp && ipsResult.some((x: NetworkIp) => x.ip === savedIp)
+            ? savedIp
+            : (ipsResult.find((x: NetworkIp) => !x.internal)?.ip || ipsResult[0].ip)
+          wantIp = want
+          setSelectedIp(want)
+          // Если URL ещё пустой/с localhost — пересоберём под выбранный IP
+          if (!urlResult || urlResult.includes('localhost') || urlResult.includes('127.0.0.1')) {
+            try {
+              if (savedIp && (window.api.remoteControl as any).setIp) {
+                await (window.api.remoteControl as any).setIp(savedIp)
+                const u2 = await window.api.remoteControl.getUrl()
+                setConnectionUrl(u2)
+              }
+            } catch { /* ignore */ }
+          }
         }
       } catch (ipError) {
         console.warn('[Remote] getAllIps not available (требуется перезапуск Electron):', ipError)
@@ -106,25 +159,31 @@ export function RemoteControlSettings() {
         setSelectedIp('localhost')
       }
 
-      // Устанавливаем Subsonic URL при загрузке
-      const appState = useAppStore.getState().data
-      let passwordToUse = subsonicPassword || appState?.password
-      let authTypeToUse = subsonicPassword ? 'password' : (appState?.authType || 'password')
+      // Синхронизируем статус с реальным сервером:
+      // - запущен → показываем QR/URL сразу (а не только после тумблера);
+      // - тумблер включён, а сервер стоит (перезапуск плеера) → поднимаем тихо.
+      try {
+        const st = await window.api.remoteControl.getStatus()
+        if (st?.enabled) {
+          setStatus(st)
+        } else if (useAppStore.getState().remoteControl?.enabled) {
+          console.log('[Remote] Сервер остановлен, а тумблер включён — автозапуск...')
+          const ok = await prepareAndStart(true, wantIp || savedIp)
+          if (!ok) {
+            // Поднять не вышло (нет пароля/сервера) — честно гасим тумблер
+            setRemoteEnabled(false)
+            toast.warn('Remote Control не запустился: проверь пароль и сервер', { autoClose: 5000 })
+          }
+        }
+      } catch { /* ignore */ }
 
-      // Если пароль выглядит как MD5 хэш (32 hex символа) — используем token auth
-      if (passwordToUse && passwordToUse.length === 32 && /^[0-9a-f]+$/i.test(passwordToUse)) {
-        authTypeToUse = 'token'
-      }
+      // Устанавливаем Subsonic URL при загрузке (реальные данные — из аккаунта!)
+      const { url: srvUrl0, username: srvUser0, password: passwordToUse0, authType: authTypeToUse0 } = getServerCredentials(subsonicPassword)
 
-      if (appState?.url && appState?.username && passwordToUse) {
+      if (srvUrl0 && srvUser0 && passwordToUse0) {
         try {
-          await window.api.remoteControl.setSubsonicUrl(
-            appState.url,
-            appState.username,
-            passwordToUse,
-            authTypeToUse
-          )
-          console.log('[Remote] Subsonic URL set on load with auth:', authTypeToUse)
+          await window.api.remoteControl.setSubsonicUrl(srvUrl0, srvUser0, passwordToUse0, authTypeToUse0)
+          console.log('[Remote] Subsonic URL set on load with auth:', authTypeToUse0)
         } catch (urlError) {
           console.warn('[Remote] setSubsonicUrl not available on load:', urlError)
         }
@@ -164,110 +223,74 @@ export function RemoteControlSettings() {
     toast.success(`Установлен IP: ${ip}`, { autoClose: 2000 })
   }
 
-  const handleSavePin = async () => {
+  // Общая процедура запуска: порт + IP + Subsonic + start + обновление URL.
+  // quiet=true — тихий режим для автозапуска при открытии настроек (без лишних тостов).
+  const prepareAndStart = async (quiet: boolean, ipOverride?: string): Promise<boolean> => {
+    const portNum = parseInt(customPort) || 4333
     try {
-      const r = await window.api.remoteControl.setPin(remotePin)
-      if (r?.ok) {
-        setHasRemotePin(true)
-        setRemotePin('')
-        toast.success('PIN сохранён — телефон спросит его при подключении', { autoClose: 3000 })
-      } else {
-        toast.error(r?.error || 'Не удалось сохранить PIN', { autoClose: 3000 })
+      await window.api.remoteControl.setPort(portNum)
+    } catch { /* уже запущен — просто продолжаем */ }
+
+    // Устанавливаем IP (если доступно)
+    const ipToUse = ipOverride || selectedIp || manualIp
+    if (ipToUse && window.api.remoteControl.setIp) {
+      try {
+        await window.api.remoteControl.setIp(ipToUse)
+      } catch { /* ignore */ }
+    }
+
+    // Subsonic credentials — РУЧНОЙ пароль, пароль аккаунта или сохранённый ранее.
+    // Реальный пароль живёт в accounts.store (в app.store — заглушка)!
+    const { url: srvUrl, username: srvUser, password: passwordToUse, authType: credAuthType } = getServerCredentials(subsonicPassword)
+    let savedCreds = hasSavedPassword
+    try {
+      savedCreds = await window.api.remoteControl.hasSavedCredentials()
+      setHasSavedPassword(savedCreds)
+    } catch { /* ignore */ }
+
+    if (!passwordToUse && !savedCreds) {
+      if (!quiet) toast.warn('Введите пароль Subsonic в поле выше!', { autoClose: 5000 })
+      return false
+    }
+
+    if (srvUrl && srvUser && passwordToUse) {
+      try {
+        await window.api.remoteControl.setSubsonicUrl(srvUrl, srvUser, passwordToUse, credAuthType)
+      } catch (urlError) {
+        console.warn('[Remote] setSubsonicUrl error:', urlError)
       }
+    } else if (!savedCreds) {
+      if (!quiet) toast.warn('Не настроен сервер! Проверь настройки аккаунта.', { autoClose: 5000 })
+      return false
+    }
+    // Если есть сохранённые credentials, а аккаунт не заполнен — сервер сам подхватит их из файла.
+
+    try {
+      const result = await window.api.remoteControl.start()
+      setStatus(result)
+      try {
+        const url = await window.api.remoteControl.getUrl()
+        setConnectionUrl(url)
+        const urls = await (window.api.remoteControl as any).getAllUrls?.()
+        if (urls) setAllUrls(urls)
+      } catch { /* ignore */ }
+      return true
     } catch (error) {
-      console.error('[Remote] setPin error:', error)
-      toast.error('Ошибка сохранения PIN', { autoClose: 3000 })
+      console.error('[Remote] Start error:', error)
+      return false
     }
   }
 
   const handleToggle = async (checked: boolean) => {
     try {
       if (checked) {
-        // PIN обязателен: без него remote в LAN открыт всем
-        if (!remotePin && !hasRemotePin) {
-          toast.warn('⚠️ Задай PIN доступа ниже — без него не включаем!', { autoClose: 5000 })
-          return
-        }
-        if (remotePin) {
-          const r = await window.api.remoteControl.setPin(remotePin)
-          if (!r?.ok) {
-            toast.error(r?.error || 'Не удалось сохранить PIN', { autoClose: 4000 })
-            return
-          }
-          setHasRemotePin(true)
-          setRemotePin('')
-        }
-        const portNum = parseInt(customPort) || 4333
-        await window.api.remoteControl.setPort(portNum)
-
-        // Устанавливаем IP (если доступно)
-        const ipToUse = selectedIp || manualIp
-        if (ipToUse && window.api.remoteControl.setIp) {
-          await window.api.remoteControl.setIp(ipToUse)
-        }
-
-        // Subsonic credentials — используем РУЧНОЙ пароль или из аккаунта
-        const appState = useAppStore.getState().data
-        // Приоритет: 1) Ручной пароль 2) Пароль из аккаунта (saved credentials на сервере)
-        const passwordToUse = subsonicPassword || appState?.password
-
-        console.log('[Remote] Subsonic credentials:', {
-          manualPasswordProvided: !!subsonicPassword,
-          manualPasswordLength: subsonicPassword?.length || 0,
-          appPasswordLength: appState?.password?.length || 0,
-          hasSavedPassword,
-          authType: appState?.authType,
-        })
-
-        if (!passwordToUse && !hasSavedPassword) {
-          console.warn('[Remote] No password provided')
-          toast.warn('⚠️ Введите пароль Subsonic в поле выше!', { autoClose: 5000 })
-          return // Не включаем без пароля!
-        }
-
-        if (appState?.url && appState?.username) {
-          try {
-            // Если введён ручной пароль — используем password auth
-            // Если из аккаунта и это token auth — пробуем token
-            // Если сохранённый пароль — используем его authType
-            const authTypeToUse = subsonicPassword ? 'password' : (appState?.authType || 'password')
-
-            await window.api.remoteControl.setSubsonicUrl(
-              appState.url,
-              appState.username,
-              passwordToUse,
-              authTypeToUse
-            )
-            console.log('[Remote] Subsonic URL set with auth type:', authTypeToUse)
-          } catch (urlError) {
-            console.warn('[Remote] setSubsonicUrl error:', urlError)
-          }
-        } else {
-          console.warn('[Remote] Missing server URL or username')
-          toast.warn('⚠️ Не настроен сервер! Проверь настройки аккаунта.', { autoClose: 5000 })
-          return
-        }
-
-        const result = await window.api.remoteControl.start()
-        setStatus(result)
-
-        // Получаем актуальный URL от main process
-        try {
-          const url = await window.api.remoteControl.getUrl()
-          setConnectionUrl(url)
-          console.log('[Remote] Connection URL after start:', url)
-        } catch {
-          const fallbackUrl = `http://${ipToUse || 'localhost'}:${portNum}`
-          setConnectionUrl(fallbackUrl)
-          console.warn('[Remote] Failed to get URL from main, using fallback:', fallbackUrl)
-        }
-
-        // ✅ ВАЖНО: Сохраняем enabled в app.store!
+        const ok = await prepareAndStart(false)
+        if (!ok) return // Не включаем без пароля/сервера!
         setRemoteEnabled(true)
 
         toast.success(
           hasSavedPassword && !subsonicPassword
-            ? `Remote Control включён (🔒 сохранённый пароль)`
+            ? `Remote Control включён (сохранённый пароль)`
             : `Remote Control включён`,
           { autoClose: 3000 }
         )
@@ -303,6 +326,63 @@ export function RemoteControlSettings() {
     }
   }
 
+  const handlePinSave = async () => {
+    try {
+      const api = window.api.remoteControl as any
+      if (!api.setPin) {
+        toast.error('Обновите приложение: PIN поддерживается с 1.7.0', { autoClose: 3000 })
+        return
+      }
+      const clean = pin.trim()
+      if (clean && !/^\d{4,12}$/.test(clean)) {
+        toast.error('PIN: 4–12 цифр', { autoClose: 3000 })
+        return
+      }
+      const ok = await api.setPin(clean)
+      if (ok) {
+        setHasPin(!!clean)
+        setPin('')
+        try {
+          const u = await window.api.remoteControl.getUrl()
+          setConnectionUrl(u)
+          const urls = await api.getAllUrls?.()
+          if (urls) setAllUrls(urls)
+        } catch { /* ignore */ }
+        toast.success(clean ? 'PIN установлен' : 'PIN снят', { autoClose: 2500 })
+      } else {
+        toast.error('Не удалось сохранить PIN', { autoClose: 3000 })
+      }
+    } catch (error) {
+      console.error('[Remote] PIN save error:', error)
+      toast.error('Ошибка сохранения PIN', { autoClose: 3000 })
+    }
+  }
+
+  const handlePinClear = async () => {
+    try {
+      const api = window.api.remoteControl as any
+      if (!api.setPin) {
+        toast.error('Обновите приложение: PIN поддерживается с 1.7.0', { autoClose: 3000 })
+        return
+      }
+      const ok = await api.setPin('')
+      if (ok) {
+        setHasPin(false)
+        setPin('')
+        try {
+          const u = await window.api.remoteControl.getUrl()
+          setConnectionUrl(u)
+          const urls = await api.getAllUrls?.()
+          if (urls) setAllUrls(urls)
+        } catch { /* ignore */ }
+        toast.success('PIN снят', { autoClose: 2500 })
+      }
+    } catch (error) {
+      console.error('[Remote] PIN clear error:', error)
+      toast.error('Ошибка снятия PIN', { autoClose: 3000 })
+    }
+  }
+
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(connectionUrl)
     setCopied(true)
@@ -310,24 +390,30 @@ export function RemoteControlSettings() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const getInterfaceLabel = (iface: string) => {
+  const getInterfaceLabel = (iface: string, ip?: string, internal?: boolean) => {
+    if (internal || ip === '127.0.0.1') return `LAN loopback (${iface})`
+    const low = iface.toLowerCase()
+    if (/tailscale/.test(low)) return `Tailscale (${iface})`
+    if (/wireguard|^wg|wg-/.test(low)) return `WireGuard (${iface})`
+    if (/zerotier/.test(low)) return `ZeroTier (${iface})`
+    if (/tun|tap|vpn|ppp/.test(low)) return `VPN (${iface})`
     const labels: Record<string, string> = {
-      'Ethernet': '🔌 Ethernet',
-      'Wi-Fi': '📶 Wi-Fi',
-      'WLAN': '📶 Wi-Fi',
-      'en0': '📶 Wi-Fi',
-      'en1': '🔌 Ethernet',
-      'eth0': '🔌 Ethernet',
-      'wlan0': '📶 Wi-Fi',
+      'Ethernet': 'Ethernet',
+      'Wi-Fi': 'Wi-Fi',
+      'WLAN': 'Wi-Fi',
+      'en0': 'Wi-Fi',
+      'en1': 'Ethernet',
+      'eth0': 'Ethernet',
+      'wlan0': 'Wi-Fi',
     }
-    return labels[iface] || `🌐 ${iface}`
+    return labels[iface] || `${iface}`
   }
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          📱 Remote Control
+          <Smartphone className="w-5 h-5" /> Remote Control
         </CardTitle>
         <CardDescription>
           Управление плеером с телефона через WiFi
@@ -348,10 +434,10 @@ export function RemoteControlSettings() {
                 <SelectValue placeholder="Выберите IP адрес..." />
               </SelectTrigger>
               <SelectContent>
-                {availableIps.map(({ ip, iface }) => (
-                  <SelectItem key={ip} value={ip}>
+                {availableIps.map(({ ip, iface, internal }) => (
+                  <SelectItem key={`${iface}-${ip}`} value={ip}>
                     <div className="flex items-center gap-2">
-                      <span>{getInterfaceLabel(iface)}</span>
+                      <span>{getInterfaceLabel(iface, ip, internal)}</span>
                       <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{ip}</code>
                     </div>
                   </SelectItem>
@@ -361,6 +447,9 @@ export function RemoteControlSettings() {
           ) : (
             <p className="text-xs text-muted-foreground">Не найдены сетевые интерфейсы</p>
           )}
+          <p className="text-xs text-muted-foreground">
+            Сервер слушает на всех интерфейсах (LAN + VPN). Здесь выбирается только адрес для QR/ссылки. Для VPN выберите адрес Tailscale/WireGuard из списка или введите вручную.
+          </p>
 
           {/* Ручной ввод IP */}
           {showManualInput ? (
@@ -373,7 +462,7 @@ export function RemoteControlSettings() {
                 onKeyDown={(e) => e.key === 'Enter' && handleManualIpSubmit()}
               />
               <Button size="sm" onClick={handleManualIpSubmit}>OK</Button>
-              <Button variant="ghost" size="sm" onClick={() => setShowManualInput(false)}>✕</Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowManualInput(false)}><X className="w-4 h-4" /></Button>
             </div>
           ) : (
             <Button
@@ -423,7 +512,7 @@ export function RemoteControlSettings() {
         {/* Пароль для Subsonic */}
         <div className="space-y-2">
           <Label htmlFor="subsonic-password" className="flex items-center gap-2">
-            🔑 Пароль Subsonic
+            Пароль Subsonic
             {hasSavedPassword && !subsonicPassword && (
               <Badge variant="outline" className="text-xs">
                 <Lock className="w-3 h-3 mr-1" />
@@ -441,21 +530,21 @@ export function RemoteControlSettings() {
           />
           <p className="text-xs text-muted-foreground">
             {hasSavedPassword
-              ? "🔒 Пароль зашифрован и сохранён. Введи новый чтобы заменить."
+              ? "Пароль зашифрован и сохранён. Введи новый чтобы заменить."
               : "Нужен для загрузки обложек. Пароль шифруется и сохраняется."}
           </p>
         </div>
 
         <Separator />
 
-        {/* PIN доступа — обязателен: без него управлять может любой в LAN */}
+        {/* PIN-код для страницы управления */}
         <div className="space-y-2">
           <Label htmlFor="remote-pin" className="flex items-center gap-2">
-            🔐 PIN доступа
-            {hasRemotePin && !remotePin && (
+            PIN-код страницы
+            {hasPin && (
               <Badge variant="outline" className="text-xs">
                 <Lock className="w-3 h-3 mr-1" />
-                Задан
+                Установлен
               </Badge>
             )}
           </Label>
@@ -464,19 +553,23 @@ export function RemoteControlSettings() {
               id="remote-pin"
               type="password"
               inputMode="numeric"
-              value={remotePin}
-              onChange={(e) => setRemotePin(e.target.value)}
-              placeholder={hasRemotePin ? "Задан (введи новый чтобы сменить)" : "4–12 символов, спросит на телефоне"}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 12))}
+              placeholder={hasPin ? "Установлен — введи новый чтобы заменить" : "4–12 цифр; пусто — без защиты"}
               className="flex-1"
+              onKeyDown={(e) => e.key === 'Enter' && handlePinSave()}
             />
-            <Button variant="outline" size="sm" onClick={handleSavePin} disabled={!remotePin}>
+            <Button variant="outline" size="sm" onClick={handlePinSave}>
               Сохранить
             </Button>
+            {hasPin && (
+              <Button variant="ghost" size="sm" onClick={handlePinClear}>
+                Снять
+              </Button>
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
-            {hasRemotePin
-              ? "🔒 Телефон спрашивает PIN при каждом подключении. Смена — вводом нового."
-              : "Без PIN remote не включится: иначе плеером управляет любой в твоей сети."}
+            Этот PIN нужно будет ввести на странице Remote, иначе она не откроется. QR и ссылка включают PIN автоматически.
           </p>
         </div>
 
@@ -510,6 +603,7 @@ export function RemoteControlSettings() {
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Порт: {status.port}
+                  {status.hasPin && ' • PIN'}
                 </div>
               </div>
               <Badge variant={status.clientCount > 0 ? 'default' : 'secondary'}>
@@ -520,15 +614,15 @@ export function RemoteControlSettings() {
             {/* Список подключённых устройств */}
             {status.clients && status.clients.length > 0 && (
               <div className="space-y-2">
-                <div className="text-sm font-medium">📱 Подключённые устройства:</div>
+                <div className="text-sm font-medium">Подключённые устройства:</div>
                 <div className="space-y-1">
                   {status.clients.map((client: any, i: number) => {
                     const connectedTime = new Date(client.connectedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-                    const deviceName = client.userAgent?.includes('Chrome') ? '🌐 Chrome' :
-                                      client.userAgent?.includes('Safari') ? '🧭 Safari' :
-                                      client.userAgent?.includes('Firefox') ? '🦊 Firefox' :
-                                      client.userAgent?.includes('Mobile') || client.userAgent?.includes('Android') || client.userAgent?.includes('iPhone') ? '📱 Мобильный' :
-                                      '💻 Компьютер'
+                    const deviceName = client.userAgent?.includes('Chrome') ? 'Chrome' :
+                                      client.userAgent?.includes('Safari') ? 'Safari' :
+                                      client.userAgent?.includes('Firefox') ? 'Firefox' :
+                                      client.userAgent?.includes('Mobile') || client.userAgent?.includes('Android') || client.userAgent?.includes('iPhone') ? 'Мобильный' :
+                                      'Компьютер'
                     return (
                       <div key={i} className="flex items-center justify-between p-2 bg-muted/50 rounded text-xs">
                         <div className="flex items-center gap-2">

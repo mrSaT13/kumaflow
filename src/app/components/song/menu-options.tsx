@@ -47,7 +47,7 @@ export function SongMenuOptions({
     try {
       const playlist = await generateTrackRadio(song.id, 25)
       if (playlist.songs.length > 0) {
-        setSongList([song, ...playlist.songs], 0)
+        setSongList([song, ...playlist.songs], 0, false, undefined, `Радио трека · ${song.title}`)
         toast(`▶️ Запущено радио: ${song.title}`, { type: 'success' })
       } else {
         toast('Не удалось сгенерировать радио', { type: 'error' })
@@ -70,7 +70,7 @@ export function SongMenuOptions({
     try {
       const playlist = await generateArtistRadio(song.artistId, 50)
       if (playlist.songs.length > 0) {
-        setSongList(playlist.songs, 0)
+        setSongList(playlist.songs, 0, false, undefined, `Радио · ${song.artist}`)
         toast(`▶️ Запущено радио артиста: ${song.artist}`, { type: 'success' })
       } else {
         toast('Не удалось сгенерировать радио', { type: 'error' })

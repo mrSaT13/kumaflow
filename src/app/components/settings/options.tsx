@@ -5,6 +5,7 @@ import {
   FileText,
   Globe,
   Headphones,
+  Info,
   LaptopIcon,
   Music2,
   Paintbrush,
@@ -32,6 +33,7 @@ export type SettingsOptions =
   | 'account'
   | 'desktop'
   | 'privacy'
+  | 'about'
 
 interface OptionsData {
   id: SettingsOptions
@@ -51,6 +53,7 @@ const options: OptionsData[] = [
   { id: 'content', icon: FileText },
   ...(isDesktop() ? [localMusicOption, cacheOption, accountsOption, accountOption, desktopOption] : []),
   { id: 'privacy', icon: EarthLock },
+  { id: 'about', icon: Info },
 ]
 
 export function SettingsOptions() {

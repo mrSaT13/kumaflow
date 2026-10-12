@@ -9,13 +9,19 @@
  * - Фильтрует треки по жанрам/энергии/настроению праздника
  */
 
-import { getUpcomingHolidays, type Holiday } from '@/service/holidays'
+import { type Holiday } from '@/service/holidays'
 import { getAllHolidaysWithCustoms } from '@/service/ics-parser'  // 🆕
-import { getRandomSongs } from '@/service/subsonic-api'
+import { getRandomSongs, getSongsByGenre } from '@/service/subsonic-api'
 import { saveGeneratedPlaylist } from '@/store/generated-playlists.store'
 import type { ISong } from '@/types/responses/song'
 
 const STORAGE_KEY = 'holiday-playlists-generated'
+
+/**
+ * Минимум треков, при котором плейлист вообще имеет смысл.
+ * Ниже — молчаливый мусор в списке, поэтому просто не создаём.
+ */
+const MIN_TRACKS = 10
 
 interface GeneratedHolidayPlaylist {
   holidayId: string
@@ -74,27 +80,49 @@ function wasHolidayPlaylistGenerated(holidayId: string, year: number): boolean {
 }
 
 /**
- * Фильтровать треки по параметрам праздника
+ * Оценить, насколько трек подходит празднику.
+ *
+ * Раньше был жёсткий фильтр: жанр должен был совпасть, иначе трек выбрасывался.
+ * Из-за этого «Хэллоуин» (metal/rock/industrial) на библиотеке без таких жанров
+ * давал 0–9 треков, и плейлист всё равно сохранялся — пустой и без всяких
+ * сообщений. Теперь это скоринг: жанр, энергия и настроение складываются,
+ * а жёсткое правило одно — трек должен набрать хотя бы единицу.
+ *
+ * Фичи берём из трека (energy/valence). Если их нет — не штрафуем, а просто
+ * не учитываем: иначе на непроанализированной библиотеке отсев всё вырежет.
  */
-function filterTracksByHoliday(
-  tracks: ISong[],
-  holiday: Holiday
-): ISong[] {
-  return tracks.filter(track => {
-    // 1. Жанр
-    const trackGenre = (track.genre || '').toLowerCase()
-    const holidayGenres = holiday.genres.map(g => g.toLowerCase())
-    
-    const genreMatch = holidayGenres.some(hg => trackGenre.includes(hg))
-    
-    // 2. Если жанр не совпал — не включаем
-    if (!genreMatch) return false
-    
-    // 3. TODO: В будущем можно добавить фильтрацию по energy/valence
-    // когда будет audio analysis для всех треков
-    
-    return true
-  })
+function scoreTrackForHoliday(track: ISong, holiday: Holiday): number {
+  let score = 0
+
+  // 1. Жанр — совпадение по подстроке, как было раньше
+  const trackGenre = (track.genre || '').toLowerCase()
+  if (trackGenre) {
+    const hit = holiday.genres.some((hg) => trackGenre.includes(hg.toLowerCase()))
+    if (hit) score += 2
+  }
+
+  // 2. Энергия
+  const en = track.energy
+  if (typeof en === 'number' && holiday.energy) {
+    if (en >= holiday.energy.min && en <= holiday.energy.max) score += 1
+  }
+
+  // 3. Настроение (valence)
+  const va = track.valence
+  if (typeof va === 'number' && holiday.valence) {
+    if (va >= holiday.valence.min && va <= holiday.valence.max) score += 1
+  }
+
+  return score
+}
+
+/** Собрать кандидатов и отсортировать по убыванию оценки. */
+function filterTracksByHoliday(tracks: ISong[], holiday: Holiday): ISong[] {
+  return tracks
+    .map((t) => ({ t, s: scoreTrackForHoliday(t, holiday) }))
+    .filter((x) => x.s > 0)
+    .sort((a, b) => b.s - a.s)
+    .map((x) => x.t)
 }
 
 /**
@@ -169,7 +197,7 @@ export async function checkAndGenerateHolidayPlaylists(): Promise<void> {
     console.log(`[HolidayPlaylist] Total holidays: ${allHolidays.length}`)
 
     // 🆕 Получаем праздники которые активны СЕГОДНЯ
-    const { isHolidayActive, getUpcomingHolidays } = await import('@/service/holidays')
+    const { isHolidayActive } = await import('@/service/holidays')
 
     const activeHolidays = allHolidays.filter(h => {
       const isActive = isHolidayActive(h)
@@ -230,23 +258,61 @@ export async function checkAndGenerateHolidayPlaylists(): Promise<void> {
       // Генерируем плейлист!
       console.log(`[HolidayPlaylist] 🎵 Generating playlist for ${holiday.name}...`)
       
-      // 1. Загружаем случайные треки (много чтобы было из чего фильтровать)
-      const allTracks = await getRandomSongs(200)
-      
-      if (!allTracks || allTracks.length === 0) {
-        console.warn('[HolidayPlaylist] ⚠️ No tracks available')
+      // Кандидаты. Раньше было getRandomSongs(200) — на библиотеке в 79k
+      // это 0,25%, и жанровый фильтр почти всегда давал пусто. Теперь берём
+      // много больше случайных И отдельно добираем по жанрам праздника.
+      const candidates = new Map<string, ISong>()
+      const addAll = (rows: ISong[]) => {
+        for (const r of rows || []) if (r?.id) candidates.set(r.id, r)
+      }
+
+      try {
+        addAll(await getRandomSongs(2000))
+      } catch (e) {
+        console.warn(`[HolidayPlaylist] random songs failed for ${holiday.name}`, e)
+      }
+
+      let genreAdded = 0
+      for (const g of holiday.genres || []) {
+        try {
+          const rows = await getSongsByGenre(g, 200)
+          const before = candidates.size
+          addAll(rows as ISong[])
+          genreAdded += candidates.size - before
+        } catch {
+          /* жанр мог не существовать в библиотеке — не повод падать */
+        }
+      }
+      console.log(
+        `[HolidayPlaylist] ${holiday.name}: кандидатов ${candidates.size} ` +
+        `(из них по жанрам праздника +${genreAdded})`,
+      )
+
+      const allTracks = [...candidates.values()]
+      if (allTracks.length === 0) {
+        console.warn(`[HolidayPlaylist] ⚠️ ${holiday.name}: нет кандидатов вообще`)
         continue
       }
-      
-      // 2. Фильтруем по жанрам праздника
+
+      // 2. Сортируем по совпадению с праздником
       const filteredTracks = filterTracksByHoliday(allTracks, holiday)
-      
-      if (filteredTracks.length < 10) {
-        console.warn(`[HolidayPlaylist] ⚠️ Not enough tracks for ${holiday.name}: ${filteredTracks.length}`)
-        // Всё равно создаём если хоть что-то есть
+
+      console.log(
+        `[HolidayPlaylist] ${holiday.name}: подошло ${filteredTracks.length} из ${allTracks.length}`,
+      )
+
+      // 3. Пустой плейлист не сохраняем. Раньше он всё равно создавался —
+      //    пользователь видел карточку без треков и без объяснений.
+      if (filteredTracks.length < MIN_TRACKS) {
+        console.warn(
+          `[HolidayPlaylist] ⏭ ${holiday.name}: подошло только ` +
+          `${filteredTracks.length} треков (нужно ${MIN_TRACKS}) — ` +
+          `плейлист НЕ создан, уведомления не будет`,
+        )
+        continue
       }
-      
-      // 3. Берём 25-30 треков
+
+      // 4. Берём 30 треков
       const selectedTracks = filteredTracks.slice(0, 30)
       
       // 4. Генерируем название и описание
@@ -254,7 +320,9 @@ export async function checkAndGenerateHolidayPlaylists(): Promise<void> {
       const description = generateHolidayPlaylistDescription(holiday)
       
       // 5. Сохраняем плейлист
-      const savedPlaylist = saveGeneratedPlaylist({
+      // await обязателен: saveGeneratedPlaylist async, и без него
+      // savedPlaylist — промис, а savedPlaylist.id был всегда undefined.
+      const savedPlaylist = await saveGeneratedPlaylist({
         type: 'genre-cluster',
         name,
         description,
@@ -269,13 +337,27 @@ export async function checkAndGenerateHolidayPlaylists(): Promise<void> {
       })
       
       // 6. Запоминаем что сгенерировали
-      saveGeneratedHolidayPlaylist(holiday.id, savedPlaylist.id, currentYear)
+      saveGeneratedHolidayPlaylist(holiday.id, savedPlaylist?.id, currentYear)
       
       console.log(`[HolidayPlaylist] ✅ Generated: ${name} (${selectedTracks.length} tracks)`)
+
+      // 🆕 Сообщение пользователю. Раньше генерация была полностью молчаливой:
+      // плейлист появлялся в списке без объяснений, а если подходящих треков
+      // не нашлось — не появлялось ничего, и непонятно, работает ли фича.
+      try {
+        const { toast } = await import('react-toastify')
+        toast(
+          `${holiday.icon || '🎉'} ${holiday.name}: собрали плейлист, ` +
+          `${selectedTracks.length} треков — «${name}»`,
+          { type: 'success', autoClose: 8000 },
+        )
+      } catch (e) {
+        console.warn('[HolidayPlaylist] toast не показался', e)
+      }
       
       // 🆕 Отправляем событие чтобы UI обновился
       window.dispatchEvent(new CustomEvent('holiday-playlist-generated', { 
-        detail: { holidayId: holiday.id, playlistId: savedPlaylist.id }
+        detail: { holidayId: holiday.id, playlistId: savedPlaylist?.id }
       }))
     }
     

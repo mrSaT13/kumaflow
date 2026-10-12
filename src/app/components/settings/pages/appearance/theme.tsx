@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { Check, Minus } from 'lucide-react'
+import { Check, Minus, Sun, Moon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ContentItemTitle } from '@/app/components/settings/section'
 import { appThemes } from '@/app/observers/theme-observer'
@@ -7,6 +7,13 @@ import { useTheme } from '@/store/theme.store'
 import { Theme } from '@/types/themeContext'
 
 const { APP_HIDE_THEMES } = window
+
+/** Быстрые пилюли: светлая / тёмная. Список из 44 тем длинный,
+ *  самые ходовые темы нельзя терять в его хвосте. */
+const QUICK_THEMES: { theme: Theme; label: string; icon: typeof Sun }[] = [
+  { theme: Theme.Light, label: 'Светлая', icon: Sun },
+  { theme: Theme.Dark, label: 'Тёмная', icon: Moon },
+]
 
 export function ThemeSettingsPicker() {
   const { t } = useTranslation()
@@ -19,7 +26,32 @@ export function ThemeSettingsPicker() {
   return (
     <div className="h-full space-y-4">
       <ContentItemTitle>{t('theme.label')}</ContentItemTitle>
-      <div className="w-full h-full grid grid-cols-4 gap-3">
+
+      {/* Две пилюли быстрого переключения */}
+      <div className="flex gap-2">
+        {QUICK_THEMES.map(({ theme, label, icon: Icon }) => {
+          const isActive = theme === currentTheme
+          return (
+            <button
+              key={theme}
+              type="button"
+              onClick={() => setTheme(theme)}
+              className={clsx(
+                'flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors',
+                isActive
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-secondary text-secondary-foreground hover:border-primary/60',
+              )}
+            >
+              <Icon size={16} className="shrink-0" />
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Остальные темы — в прокручиваемой сетке, чтобы модалка не разрасталась */}
+      <div className="w-full max-h-[420px] overflow-y-auto pr-1 grid grid-cols-4 gap-3">
         {appThemes.map((theme) => {
           const isActive = theme === currentTheme
 

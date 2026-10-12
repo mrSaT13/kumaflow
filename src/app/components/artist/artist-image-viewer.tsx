@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { X, ChevronLeft, ChevronRight, Loader2, ImageOff } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, ImageOff } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -21,10 +21,8 @@ import {
 import { Button } from '@/app/components/ui/button'
 import { cn } from '@/lib/utils'
 import { appleMusicService } from '@/service/apple-music-api'
-import { lastFmService } from '@/service/lastfm-api'
 import { fanartService } from '@/service/fanart-api'
 import { discogsService } from '@/service/discogs-api'
-import { useExternalApi } from '@/store/external-api.store'
 import { trackViewArtistImages } from '@/service/ml-event-tracker'
 
 interface ArtistImageViewerProps {
@@ -115,10 +113,8 @@ export function ArtistImageViewer({
     try {
       const artists = await appleMusicService.searchArtist(artistName, 1)
       if (artists && artists.length > 0) {
-        const imageUrl = artists[0].artwork?.url
-          ?.replace('{w}', '1000')
-          ?.replace('{h}', '1000')
-        
+        const imageUrl = artists[0].artworkUrl100
+
         setSources(prev => prev.map(s => 
           s.id === 'appleMusic' 
             ? { ...s, loading: false, url: imageUrl, error: !imageUrl }

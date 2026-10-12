@@ -5,7 +5,6 @@
 
 import {
   ArrowLeft,
-  Clock,
   Heart,
   Music,
   Play,
@@ -34,7 +33,6 @@ import { Input } from '@/app/components/ui/input'
 import { subsonic } from '@/service/subsonic'
 import { llmService } from '@/service/llm-service'
 import {
-  useMLPlaylistsState,
   useMLPlaylistsStateActions,
 } from '@/store/ml-playlists-state.store'
 import { usePlayerActions, usePlayerStore } from '@/store/player.store'
@@ -62,7 +60,7 @@ export default function MLPlaylistViewPage() {
 
   const { setSongList } = usePlayerActions()
   const { getPlaylist, removePlaylist, updatePlaylist, addPlaylist } = useMLPlaylistsStateActions()
-  const { currentList } = usePlayerStore()
+  const currentList = usePlayerStore((state) => state.songlist.currentList)
   const { removeSongFromQueue } = usePlayerActions()
 
   // 🆕 Состояние рейтинга плейлиста

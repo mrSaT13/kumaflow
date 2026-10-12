@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
-import { explainRecommendation, fetchBrainSimilarExplanation, type Explanation } from '@/service/explainable-ai'
+import { useMemo } from 'react'
+import { explainRecommendation, type Explanation } from '@/service/explainable-ai'
 import { useML } from '@/store/ml.store'
-import { usePlayerStore } from '@/store/player.store'
+import { usePlayerStore, selectCurrentSong,
+} from '@/store/player.store'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
 import { Info, Music, User, Tag, Activity, Zap, Compass } from 'lucide-react'
@@ -15,6 +16,7 @@ const explanationIcons: Record<Explanation['type'], React.ReactNode> = {
   'genre-match': <Tag className="w-4 h-4" />,
   'bpm-match': <Activity className="w-4 h-4" />,
   'energy-match': <Zap className="w-4 h-4" />,
+  'time-of-day': <Activity className="w-4 h-4" />,
   'new-discovery': <Compass className="w-4 h-4" />,
 }
 
@@ -24,41 +26,21 @@ const explanationColors: Record<Explanation['type'], string> = {
   'genre-match': 'text-purple-400',
   'bpm-match': 'text-orange-400',
   'energy-match': 'text-yellow-400',
+  'time-of-day': 'text-cyan-400',
   'new-discovery': 'text-pink-400',
 }
 
 export function FullscreenExplanation() {
   const navigate = useNavigate()
-  const currentSong = usePlayerStore((state) => state.songlist.currentSong)
+  const currentSong = usePlayerStore(selectCurrentSong)
   const { getProfile, ratings } = useML()
   const { getArtistAllSongs } = useSongList()
   
-  const localExplanations = useMemo(() => {
+  const explanations = useMemo(() => {
     if (!currentSong) return []
     const profile = getProfile()
     return explainRecommendation(currentSong, profile, ratings)
   }, [currentSong, getProfile, ratings])
-
-  // Апгрейд с мозга: настоящий sonic-анализ вместо жанрового фолбэка.
-  const [brainExp, setBrainExp] = useState<Explanation | null>(null)
-  useEffect(() => {
-    if (!currentSong) {
-      setBrainExp(null)
-      return
-    }
-    let cancelled = false
-    setBrainExp(null)
-    void fetchBrainSimilarExplanation(currentSong).then((exp) => {
-      if (!cancelled) setBrainExp(exp)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [currentSong?.id])
-
-  const explanations = brainExp
-    ? [brainExp, ...localExplanations.filter((e) => e.type !== 'similar-track')]
-    : localExplanations
   
   if (!currentSong || explanations.length === 0) {
     return null
@@ -67,11 +49,25 @@ export function FullscreenExplanation() {
   const handleNavigateToArtist = async (artistName: string) => {
     try {
       const songs = await getArtistAllSongs(artistName)
-      if (songs && songs.length > 0) {
-        navigate(ROUTES.ARTIST.PAGE(songs[0].artistId))
+      const artistId = songs?.[0]?.artistId
+      if (artistId) {
+        navigate(ROUTES.ARTIST.PAGE(artistId))
       }
     } catch (error) {
       console.error('Failed to navigate to artist:', error)
+    }
+  }
+
+  const handleNavigateToTrack = async (trackId: string) => {
+    try {
+      // Отдельной страницы трека нет — открываем альбом, где он лежит
+      const { subsonic } = await import('@/service/subsonic')
+      const song = await subsonic.songs.getSong(trackId)
+      if (song?.albumId) {
+        navigate(ROUTES.ALBUM.PAGE(song.albumId))
+      }
+    } catch (error) {
+      console.error('Failed to navigate to track:', error)
     }
   }
   

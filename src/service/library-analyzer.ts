@@ -12,7 +12,6 @@
  * - Повторный запуск → пропускает обработанных
  */
 
-import { subsonic } from '@/service/subsonic'
 import { getLimitedArtists, getTopSongs } from '@/service/subsonic-api'
 import { analyzeTrack, detectMood } from '@/service/vibe-similarity'
 

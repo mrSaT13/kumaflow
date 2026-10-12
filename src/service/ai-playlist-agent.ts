@@ -212,7 +212,7 @@ ${context}
   /**
    * Решение по умолчанию если LLM не ответил
    */
-  private getDefaultDecision(context: string): AIPlaylistDecision {
+  private getDefaultDecision(_context: string): AIPlaylistDecision {
     const hour = new Date().getHours()
     const season = this.getSeason()
 
@@ -318,8 +318,12 @@ ${context}
     // Поиск по запросу
     if (query.searchQuery) {
       try {
-        const searchResult = await search3({ query: query.searchQuery, songCount: 20 })
-        songs.push(...(searchResult.song || []))
+        const searchResult = await search3(query.searchQuery, {
+          songCount: 20,
+          artistCount: 0,
+          albumCount: 0,
+        })
+        songs.push(...(searchResult.songs || []))
       } catch (error) {
         console.error('[AI Agent] Search failed:', query.searchQuery, error)
       }

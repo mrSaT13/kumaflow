@@ -1,8 +1,22 @@
 import { httpClient } from '@/api/httpClient'
-import { SubsonicResponse } from '@/types/responses/subsonicResponse'
+import type { ISong } from '@/types/responses/song'
+
+/**
+ * httpClient<T> уже разворачивает обёртку 'subsonic-response', поэтому T —
+ * это внутренняя полезная нагрузка. Раньше сюда передавался SubsonicResponse
+ * (это база с status/version), из-за чего starred2 не находился и список
+ * избранного всегда приходил пустым.
+ */
+interface Starred2Payload {
+  starred2?: {
+    song?: ISong[]
+    album?: unknown[]
+    artist?: unknown[]
+  }
+}
 
 async function starItem(id: string) {
-  await httpClient<SubsonicResponse>('/star', {
+  await httpClient<Record<string, never>>('/star', {
     method: 'GET',
     query: {
       id,
@@ -11,7 +25,7 @@ async function starItem(id: string) {
 }
 
 async function unstarItem(id: string) {
-  await httpClient<SubsonicResponse>('/unstar', {
+  await httpClient<Record<string, never>>('/unstar', {
     method: 'GET',
     query: {
       id,
@@ -35,7 +49,7 @@ async function handleStarItem({ id, starred }: HandleStarItem) {
 // 🆕 Получить избранные треки, альбомы, артисты
 async function getStarred() {
   try {
-    const response = await httpClient<SubsonicResponse>('/getStarred2', {
+    const response = await httpClient<Starred2Payload>('/getStarred2', {
       method: 'GET',
     })
     // getStarred2 возвращает { starred2: { song: [], album: [], artist: [] } }

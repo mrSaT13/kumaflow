@@ -61,7 +61,7 @@ export function useTrayEvents() {
         const result = await generateArtistRadio(artistId, 25)
 
         if (result.songs.length > 0) {
-          setSongList(result.songs, 0)
+          setSongList(result.songs, 0, false, undefined, 'Радио · любимый артист')
           toast.success('▶️ Радио артиста запущено!', { autoClose: 2000 })
         } else {
           toast.error('Не удалось сгенерировать радио')

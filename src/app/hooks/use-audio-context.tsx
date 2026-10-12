@@ -1,117 +1,63 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, type RefObject } from 'react'
 import {
-  AudioContext,
-  type IAudioContext,
-  type IGainNode,
-  type IMediaElementAudioSourceNode,
-} from 'standardized-audio-context'
-import { usePlayerMediaType, useReplayGainState } from '@/store/player.store'
-import { logger } from '@/utils/logger'
-import { ReplayGainParams } from '@/utils/replayGain'
+  applyGain,
+  getAudioGraph,
+  resumeAudioGraph,
+} from '@/features/player/audio-graph'
+import type { ReplayGainParams } from '@/utils/replayGain'
+import { usePlayerMediaType } from '@/store/player.store'
 
-type IAudioSource = IMediaElementAudioSourceNode<IAudioContext>
-
-export function useAudioContext(audio: HTMLAudioElement | null) {
+/**
+ * Тонкая React-обёртка над общим графом из features/player/audio-graph.
+ *
+ * Раньше здесь жил собственный AudioContext + MediaElementSource и resetRefs()
+ * на unmount, который рвал ref'ы, но НЕ разрывал ассоциацию
+ * element<->source в браузере. После первого replayGainError повторный
+ * createMediaElementSource на том же элементе бросал InvalidStateError до
+ * конца сессии — тишина или треск вместо музыки.
+ *
+ * Теперь жизненным циклом графа владеет синглтон: хук ничего не разрушает.
+ *
+ * Принимаем САМ ref, а не audioRef.current. React присваивает ref только
+ * после коммита, поэтому на этапе рендера .current ещё null. Если замкнуть
+ * колбэки на это значение, они навсегда останутся no-op: resumeContext не
+ * возобновит AudioContext (состояние suspended → весь звук через граф уходит
+ * в никуда, элемент «играет» молча), а setupGain не применит громкость.
+ * Читаем .current в момент вызова.
+ */
+export function useAudioContext(audioRef: RefObject<HTMLAudioElement>) {
   const { isSong } = usePlayerMediaType()
-  const { replayGainError, replayGainEnabled } = useReplayGainState()
-
-  const audioContextRef = useRef<IAudioContext | null>(null)
-  const sourceNodeRef = useRef<IAudioSource | null>(null)
-  const gainNodeRef = useRef<IGainNode<IAudioContext> | null>(null)
-
-  const setupAudioContext = useCallback(() => {
-    if (!audio || !isSong || replayGainError) return
-
-    if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContext()
-    }
-
-    const audioContext = audioContextRef.current
-
-    if (!sourceNodeRef.current) {
-      sourceNodeRef.current = audioContext.createMediaElementSource(audio)
-    }
-
-    if (!gainNodeRef.current) {
-      gainNodeRef.current = audioContext.createGain()
-      // First we need to connect the sourceNode to the gainNode
-      sourceNodeRef.current.connect(gainNodeRef.current)
-      // And then we can connect the gainNode to the destination
-      gainNodeRef.current.connect(audioContext.destination)
-    }
-  }, [audio, isSong, replayGainError])
-
-  const resumeContext = useCallback(async () => {
-    const audioContext = audioContextRef.current
-    if (!audioContext || !isSong) return
-
-    logger.info('AudioContext State', { state: audioContext.state })
-
-    if (audioContext.state === 'suspended') {
-      await audioContext.resume()
-    }
-    if (audioContext.state === 'closed') {
-      setupAudioContext()
-    }
-  }, [isSong, setupAudioContext])
 
   const setupGain = useCallback(
-    (gainValue: number, replayGain?: ReplayGainParams) => {
-      setupAudioContext()
+    (gainValue: number, _replayGain?: ReplayGainParams) => {
+      const audio = audioRef.current
+      if (!audio) return
 
-      if (!audioContextRef.current || !gainNodeRef.current) {
+      if (!isSong) {
+        // Радио/подкаст: Web Audio не нужен, громкость идёт в элемент.
+        applyGain(audio, gainValue, 0)
         return
       }
 
-      if (!gainValue || Number.isNaN(gainValue)) {
-        logger.error('Invalid gain value', { gainValue })
-        return
-      }
-
-      const currentTime = audioContextRef.current.currentTime
-
-      logger.info('Replay Gain Status', {
-        enabled: replayGainEnabled,
-        gainValue,
-        ...replayGain,
-      })
-
-      gainNodeRef.current.gain.setValueAtTime(gainValue, currentTime)
+      applyGain(audio, gainValue)
     },
-    [replayGainEnabled, setupAudioContext],
+    [audioRef, isSong],
   )
 
-  const resetRefs = useCallback(() => {
-    if (sourceNodeRef.current) {
-      sourceNodeRef.current.disconnect()
-      sourceNodeRef.current = null
-    }
-    if (gainNodeRef.current) {
-      gainNodeRef.current.disconnect()
-      gainNodeRef.current = null
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close()
-      audioContextRef.current = null
-    }
-  }, [])
+  const resumeContext = useCallback(async () => {
+    const audio = audioRef.current
+    if (!audio || !isSong) return
+    await resumeAudioGraph(audio)
+  }, [audioRef, isSong])
 
-  useEffect(() => {
-    if (replayGainError) resetRefs()
-  }, [replayGainError, resetRefs])
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: clear state after unmount
-  useEffect(() => {
-    return () => resetRefs()
-  }, [])
+  const hasGraph = useCallback(
+    () => getAudioGraph(audioRef.current) !== null,
+    [audioRef],
+  )
 
   return {
-    audioContextRef,
-    sourceNodeRef,
-    gainNodeRef,
-    setupAudioContext,
-    resumeContext,
     setupGain,
-    resetRefs,
+    resumeContext,
+    hasGraph,
   }
 }

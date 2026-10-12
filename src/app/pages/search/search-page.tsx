@@ -5,7 +5,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { subsonic } from '@/service/subsonic'
 import { search3 } from '@/service/subsonic-api'
 import { usePlayerActions } from '@/store/player.store'
 import type { ISong } from '@/types/responses/song'
@@ -22,8 +21,6 @@ import {
   X,
   Loader2,
 } from 'lucide-react'
-import { useThemeStore } from '@/store/theme.store'
-import { Theme } from '@/types/themeContext'
 
 function useThemeClasses() {
   // Используем CSS переменные из темы вместо проверки Theme.Dark
@@ -110,7 +107,7 @@ export default function SearchPage() {
     try {
       const result = await generateArtistRadio(artistId, 25)
       if (result.songs.length > 0) {
-        setSongList(result.songs, 0, false)
+        setSongList(result.songs, 0, false, undefined, `Радио · ${artistName}`)
         toast.success(`▶️ Радио: ${artistName}`, { autoClose: 2000 })
       }
     } catch (error) {

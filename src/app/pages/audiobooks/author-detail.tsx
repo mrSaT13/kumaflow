@@ -9,6 +9,7 @@ import { getAudiobookshelfApi, type Audiobook } from '@/service/audiobookshelf-a
 import { useAudiobookshelf } from '@/store/audiobookshelf.store'
 import { toast } from 'react-toastify'
 import { ArrowLeft, BookOpen, User } from 'lucide-react'
+import type { ISong } from '@/types/responses/song'
 import styles from './author-detail.module.css'
 
 export default function AudiobookAuthor() {
@@ -75,21 +76,50 @@ export default function AudiobookAuthor() {
         return
       }
 
-      // Очищаем очередь и запускаем книгу
-      const { clearPlayerState, setSongList, setIsPlaying } = await import('@/store/player.store')
+      // Очищаем очередь и запускаем книгу. Действия лежат в .actions, а сам стор
+      // надо доставать через getState() — раньше здесь destructuring прямо с
+      // модуля давал undefined, и клик по книге падал.
+      const { usePlayerStore } = await import('@/store/player.store')
+      const { clearPlayerState, setSongList, setPlayingState } =
+        usePlayerStore.getState().actions
       clearPlayerState()
       
-      const bookAsTrack = {
+      const bookAsTrack: ISong = {
         id: book.id,
         title: book.title,
         artist: book.author,
+        album: book.title,
         url: session.mediaPlaybackUrl,
         isAudiobook: true,
-        coverArtUrl: book.coverUrl,
+        coverArt: book.id,
+        // ISong описывает трек Subsonic целиком; у аудиокниги половина полей
+        // бессмысленна, но они обязательны в типе — заполняем заглушками.
+        parent: book.id,
+        isDir: false,
+        track: 0,
+        year: 0,
+        size: 0,
+        contentType: 'audio/mpeg',
+        suffix: 'mp3',
+        duration: book.duration ?? 0,
+        bitRate: 0,
+        path: '',
+        discNumber: 0,
+        created: new Date().toISOString(),
+        albumId: book.id,
+        type: 'audiobook',
+        isVideo: false,
+        bpm: 0,
+        comment: '',
+        sortName: book.title,
+        mediaType: 'song',
+        musicBrainzId: '',
+        genres: [],
+        replayGain: { trackGain: 0, trackPeak: 0, albumGain: 0, albumPeak: 0 },
       }
 
       setSongList([bookAsTrack], 0)
-      setIsPlaying(true)
+      setPlayingState(true)
       toast.success(`▶️ ${book.title}`)
     } catch (error) {
       console.error('[AudiobookAuthor] Play error:', error)
