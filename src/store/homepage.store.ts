@@ -19,9 +19,63 @@ export interface HomepageSection {
   order: number
 }
 
+export type WaveHeroLayout = 'kuma' | 'yandex'
+
+export type WaveMoodKey =
+  | 'fire'
+  | 'warp'
+  | 'sparkle'
+  | 'bounce'
+  | 'smoke'
+  | 'breath'
+  | 'dust'
+  | 'sun'
+  | 'fireflies'
+  | 'mist'
+
+export interface WaveHeroSettings {
+  /** Раскладка hero-карточки: наша или центрированная как у Яндекса */
+  layout: WaveHeroLayout
+  /** Живая CSS-анимация пятна (transform only). false = статика */
+  alive: boolean
+  /** Танцующие полоски поверх капли */
+  lines: boolean
+  /** Ховер-секция на весь экран (виджеты поверх анимации) */
+  expanded: boolean
+  /** Эффекты по жанрам. Для слабых ПК гасятся по одному */
+  effects: Record<WaveMoodKey, boolean>
+}
+
+export const DEFAULT_WAVE_EFFECTS: Record<WaveMoodKey, boolean> = {
+  fire: true,
+  warp: true,
+  sparkle: true,
+  bounce: true,
+  smoke: true,
+  breath: true,
+  dust: true,
+  sun: true,
+  fireflies: true,
+  mist: true,
+}
+
+/** Мерж поверх старых persisted-настроек, где новых полей может не быть. */
+export function withWaveDefaults(partial?: Partial<WaveHeroSettings>): WaveHeroSettings {
+  const { effects, ...rest } = partial ?? {}
+  return {
+    layout: 'kuma',
+    alive: true,
+    lines: true,
+    expanded: false,
+    ...rest,
+    effects: { ...DEFAULT_WAVE_EFFECTS, ...effects },
+  }
+}
+
 export interface HomepageSettings {
   sections: HomepageSection[]
   newDesignEnabled: boolean  // 🆕 Feature Flag для нового дизайна
+  waveHero: WaveHeroSettings  // 🌊 Hero «Моя волна»: раскладка + анимация
 }
 
 interface HomepageSettingsStore {
@@ -31,6 +85,11 @@ interface HomepageSettingsStore {
   setSectionEnabled: (id: SectionType, enabled: boolean) => void
   setSectionOrder: (ids: SectionType[]) => void  // Передаём массив ID в новом порядке
   setNewDesignEnabled: (enabled: boolean) => void  // 🆕 Переключатель нового дизайна
+  setWaveHeroLayout: (layout: WaveHeroLayout) => void  // 🌊 Раскладка hero
+  setWaveHeroAlive: (alive: boolean) => void  // 🌊 Живая анимация
+  setWaveLines: (enabled: boolean) => void  // 🌊 Танцующие полоски
+  setWaveExpanded: (expanded: boolean) => void  // 🌊 Секция на весь экран
+  setWaveEffect: (mood: WaveMoodKey, enabled: boolean) => void  // 🌊 Эффект жанра
   resetToDefaults: () => void
 }
 
@@ -48,6 +107,7 @@ const defaultSections: HomepageSection[] = [
 const defaultSettings: HomepageSettings = {
   sections: defaultSections,
   newDesignEnabled: false,  // 🆕 По умолчанию старый дизайн
+  waveHero: { layout: 'kuma', alive: true, lines: true, expanded: false, effects: { ...DEFAULT_WAVE_EFFECTS } },
 }
 
 export const useHomepageSettingsStore = createWithEqualityFn<HomepageSettingsStore>()(
@@ -97,6 +157,38 @@ export const useHomepageSettingsStore = createWithEqualityFn<HomepageSettingsSto
               state.settings.newDesignEnabled = enabled
             })
           },
+
+          // 🌊 Hero «Моя волна»
+          setWaveHeroLayout: (layout) => {
+            set((state) => {
+              state.settings.waveHero = withWaveDefaults(state.settings.waveHero)
+              state.settings.waveHero.layout = layout
+            })
+          },
+          setWaveHeroAlive: (alive) => {
+            set((state) => {
+              state.settings.waveHero = withWaveDefaults(state.settings.waveHero)
+              state.settings.waveHero.alive = alive
+            })
+          },
+          setWaveLines: (enabled) => {
+            set((state) => {
+              state.settings.waveHero = withWaveDefaults(state.settings.waveHero)
+              state.settings.waveHero.lines = enabled
+            })
+          },
+          setWaveExpanded: (expanded) => {
+            set((state) => {
+              state.settings.waveHero = withWaveDefaults(state.settings.waveHero)
+              state.settings.waveHero.expanded = expanded
+            })
+          },
+          setWaveEffect: (mood, enabled) => {
+            set((state) => {
+              state.settings.waveHero = withWaveDefaults(state.settings.waveHero)
+              state.settings.waveHero.effects[mood] = enabled
+            })
+          },
         })),
         {
           name: 'homepage_settings_store',
@@ -126,5 +218,10 @@ export const useHomepageSettingsActions = () => useHomepageSettingsStore((state)
   setSectionEnabled: state.setSectionEnabled,
   setSectionOrder: state.setSectionOrder,
   setNewDesignEnabled: state.setNewDesignEnabled,  // 🆕
+  setWaveHeroLayout: state.setWaveHeroLayout,  // 🌊
+  setWaveHeroAlive: state.setWaveHeroAlive,  // 🌊
+  setWaveLines: state.setWaveLines,  // 🌊
+  setWaveExpanded: state.setWaveExpanded,  // 🌊
+  setWaveEffect: state.setWaveEffect,  // 🌊
   resetToDefaults: state.resetToDefaults,
 }))

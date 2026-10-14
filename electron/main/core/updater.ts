@@ -142,13 +142,9 @@ export function initAutoUpdater() {
     })
   })
   
-  // Установка обновления при закрытии приложения
-  app.on('before-quit', () => {
-    if (updateDownloaded) {
-      console.log('[Updater] Installing update on quit')
-      autoUpdater.quitAndInstall()
-    }
-  })
+  // Установка обновления при закрытии: autoInstallOnAppQuit=true выше
+  // (см. строку 80) — отдельный app.on('before-quit') здесь не нужен,
+  // он гонялся с сейвом в main/index.ts и ломал выход.
 }
 
 export function isUpdateDownloaded(): boolean {

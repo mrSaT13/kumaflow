@@ -4,6 +4,8 @@ import {
   BellOff,
   Globe,
   Loader2,
+  Pin,
+  PinOff,
   Radio,
   Share2,
   ThumbsDown,
@@ -54,6 +56,7 @@ import { applyWaveSeed } from '@/service/wave-seed'
 import { wikipediaService } from '@/service/wikipedia-api'
 import { useArtistSubscriptions } from '@/store/artist-subscriptions.store'
 import { useExternalApi } from '@/store/external-api.store'
+import { usePinnedArtistsActions } from '@/store/pinned-artists.store'
 import { useML, useMLActions } from '@/store/ml.store'
 import { usePageDesignSettings } from '@/store/page-design.store'
 import { usePlayerActions } from '@/store/player.store'
@@ -66,6 +69,7 @@ export default function Artist() {
   const { artistId } = useParams() as { artistId: string }
   const { setSongList } = usePlayerActions()
   const { subscribe, unsubscribe, isSubscribed } = useArtistSubscriptions()
+  const { pin, unpin, isPinned } = usePinnedArtistsActions()
   const { settings } = useExternalApi()
   const { profile } = useML()
   const mlActions = useMLActions()
@@ -83,6 +87,7 @@ export default function Artist() {
   const [wikiUrl, setWikiUrl] = useState<string | undefined>(undefined)
 
   const subscribed = isSubscribed(artistId)
+  const pinned = isPinned(artistId)
   const isBanned = profile.bannedArtists?.includes(artistId) || false
 
   const {
@@ -506,6 +511,46 @@ export default function Artist() {
                 {subscribed
                   ? 'Отписаться от новых треков'
                   : 'Подписаться на новые треки'}
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Закрепить на боковую панель */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => {
+                    if (pinned) {
+                      unpin(artistId)
+                      toast.info('Откреплён с боковой панели')
+                    } else if (artist) {
+                      pin({
+                        artistId,
+                        artistName: artist.name,
+                        coverArt: artist.coverArt,
+                      })
+                      toast.success('Закреплён на боковую панель')
+                    }
+                  }}
+                  variant="ghost"
+                  size="icon"
+                  className={clsx(
+                    'h-10 w-10 rounded-full',
+                    pinned
+                      ? 'bg-primary/20 hover:bg-primary/30 text-primary'
+                      : 'hover:bg-primary/20 text-muted-foreground hover:text-primary',
+                  )}
+                >
+                  {pinned ? (
+                    <PinOff className="h-5 w-5" />
+                  ) : (
+                    <Pin className="h-5 w-5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {pinned
+                  ? 'Открепить с боковой панели'
+                  : 'Закрепить на боковую панель'}
               </TooltipContent>
             </Tooltip>
 

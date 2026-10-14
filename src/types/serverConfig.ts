@@ -43,6 +43,8 @@ interface IAppPages {
   setHideGenresSection: (value: boolean) => void
   hidePodcastsSection: boolean
   setHidePodcastsSection: (value: boolean) => void
+  hideMlSection: boolean
+  setHideMlSection: (value: boolean) => void
   sidebarSectionOrder: string[]
   setSidebarSectionOrder: (order: string[]) => void
   showCachePage: boolean

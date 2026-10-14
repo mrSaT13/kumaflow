@@ -24,6 +24,7 @@ import {
 } from '@/service/ml-wave-service'
 import { getRandomSongs } from '@/service/subsonic-api'
 import { generateNameFromSongs } from '@/service/playlist-naming'
+import { isBrainActive } from '@/store/brain.store'
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000 // 5 минут
 const SERVICE_NAME = '[MLAutoUpdate]'
@@ -288,6 +289,12 @@ class MLPlaylistAutoUpdateService {
       lastUpdated: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       autoUpdateHours,
+    }
+
+    // При включённой интеграции с мозгом дейли-микс — это KumaFlow Mix.
+    if (type === 'daily-mix' && isBrainActive()) {
+      newPlaylist.name = 'KumaFlow Mix'
+      newPlaylist.description = `KumaFlow Mix • ${playlistSongs.length} треков`
     }
 
     console.log(`${SERVICE_NAME} Calling addPlaylist with:`, newPlaylist)

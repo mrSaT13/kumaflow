@@ -1,11 +1,12 @@
 import randomCSSHexColor from '@chriscodesthings/random-css-hex-color'
 import { AudioLines, Expand, Shrink } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { Fragment } from 'react/jsx-runtime'
 import { useTranslation } from 'react-i18next'
 import { LazyLoadImage } from 'react-lazy-load-image-component'
 import { Link } from 'react-router-dom'
 
+import { ArtistsModal } from '@/app/components/artist/artists-modal'
 import { MarqueeTitle } from '@/app/components/fullscreen/marquee-title'
 import { ImageLoader } from '@/app/components/image-loader'
 import { cn } from '@/lib/utils'
@@ -13,6 +14,7 @@ import { ROUTES } from '@/routes/routesList'
 import { usePlayerFullscreen, useSongColor } from '@/store/player.store'
 import { ISong } from '@/types/responses/song'
 import { getAverageColor } from '@/utils/getAverageColor'
+import { resolveSongArtists } from '@/utils/splitArtists'
 import { logger } from '@/utils/logger'
 import { ALBUM_ARTISTS_MAX_NUMBER } from '@/utils/multipleArtists'
 import { Button } from '@/app/components/ui/button'
@@ -160,6 +162,31 @@ type TrackInfoArtistsLinksProps = {
 
 function TrackInfoArtistsLinks({ song }: TrackInfoArtistsLinksProps) {
   const { artists, artistId, artist } = song
+  const [modalOpen, setModalOpen] = useState(false)
+
+  const resolved = resolveSongArtists(song)
+
+  // Несколько исполнителей — тап по строке открывает модалку как в мобилке.
+  if (resolved.length > 1) {
+    return (
+      <>
+        <button
+          onClick={() => setModalOpen(true)}
+          title="Показать исполнителей"
+          className="w-fit inline-flex max-w-full text-xs text-muted-foreground hover:text-foreground hover:underline transition-colors"
+        >
+          <span className="truncate">
+            {resolved.map((a) => a.name).join(', ')}
+          </span>
+        </button>
+        <ArtistsModal
+          open={modalOpen}
+          onOpenChange={setModalOpen}
+          artists={resolved}
+        />
+      </>
+    )
+  }
 
   if (artists && artists.length > 1) {
     const reducedArtists = artists.slice(0, ALBUM_ARTISTS_MAX_NUMBER)

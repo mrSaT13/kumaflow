@@ -29,6 +29,8 @@ import {
   Loader2,
   Mic2,
   Music2,
+  Pin,
+  PinOff,
   Play,
   Plus,
   Radio,
@@ -81,6 +83,7 @@ import { getRandomSongs, search3 } from '@/service/subsonic-api'
 import { applyWaveSeed } from '@/service/wave-seed'
 import { wikipediaService } from '@/service/wikipedia-api'
 import { useArtistSubscriptions } from '@/store/artist-subscriptions.store'
+import { usePinnedArtistsActions } from '@/store/pinned-artists.store'
 import { useExternalApi } from '@/store/external-api.store'
 import { useML, useMLActions } from '@/store/ml.store'
 import { usePlayerActions } from '@/store/player.store'
@@ -637,6 +640,7 @@ export default function NewArtistPage() {
   const { artistId } = useParams() as { artistId: string }
   const { setSongList, setNextOnQueue, setLastOnQueue } = usePlayerActions()
   const { subscribe, unsubscribe, isSubscribed } = useArtistSubscriptions()
+  const { pin, unpin, isPinned } = usePinnedArtistsActions()
   const { settings } = useExternalApi()
   const { profile, ratings } = useML()
   const mlActions = useMLActions()
@@ -675,6 +679,7 @@ export default function NewArtistPage() {
   const [isLoadingLikedSongs, setIsLoadingLikedSongs] = useState(true) // 🆕 Состояние загрузки
 
   const subscribed = isSubscribed(artistId)
+  const pinned = isPinned(artistId)
   const isBanned = profile?.bannedArtists?.includes(artistId) || false
 
   const { data: artist, isLoading: artistIsLoading } = useGetArtist(artistId)
@@ -1102,6 +1107,21 @@ export default function NewArtistPage() {
     }
   }
 
+  const handleTogglePin = () => {
+    if (!artistId || !artist) return
+    if (pinned) {
+      unpin(artistId)
+      toast.info('Откреплён с боковой панели', { autoClose: 1500 })
+    } else {
+      pin({
+        artistId,
+        artistName: artist.name,
+        coverArt: artist.coverArt,
+      })
+      toast.success('Закреплён на боковую панель', { autoClose: 1500 })
+    }
+  }
+
   const handleToggleBan = () => {
     if (!artistId) return
     if (isBanned) {
@@ -1501,6 +1521,22 @@ export default function NewArtistPage() {
                     <BellOff className="w-5 h-5" />
                   ) : (
                     <Bell className="w-5 h-5" />
+                  )}
+                </button>
+                <button
+                  onClick={handleTogglePin}
+                  className="p-2.5 rounded-lg transition-all hover:scale-110"
+                  style={{
+                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    color: pinned ? 'var(--theme-accent)' : 'white',
+                    backdropFilter: 'blur(10px)',
+                  }}
+                  title={pinned ? 'Открепить с боковой панели' : 'Закрепить на боковую панель'}
+                >
+                  {pinned ? (
+                    <PinOff className="w-5 h-5" />
+                  ) : (
+                    <Pin className="w-5 h-5" />
                   )}
                 </button>
                 <button

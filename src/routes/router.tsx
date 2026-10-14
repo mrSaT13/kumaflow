@@ -59,6 +59,7 @@ const LatestEpisodes = lazy(
   () => import('@/app/pages/podcasts/latest-episodes'),
 )
 const LocalLibrary = lazy(() => import('@/app/pages/local-library'))
+const LibraryPage = lazy(() => import('@/app/pages/library-page'))
 const CachePage = lazy(() => import('@/app/pages/cache'))
 
 export const router = createHashRouter([
@@ -74,6 +75,16 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={<HomeFallback />}>
             <Home />
+          </Suspense>
+        ),
+      },
+      {
+        id: 'library',
+        path: ROUTES.LIBRARY.ROOT,
+        errorElement: <ErrorPage />,
+        element: (
+          <Suspense fallback={<HomeFallback />}>
+            <LibraryPage />
           </Suspense>
         ),
       },

@@ -111,6 +111,8 @@ export function SidebarAppearanceSettings() {
     setHidePodcastsSection,
     hideLocalSection,
     setHideLocalSection,
+    hideMlSection,
+    setHideMlSection,
     showCachePage,
     setShowCachePage,
     sidebarSectionOrder,
@@ -231,6 +233,14 @@ export function SidebarAppearanceSettings() {
     },
   ]
 
+  // «Для вас» — отдельная настройка (не часть сортируемого списка Библиотеки)
+  const mlSection = {
+    id: 'ml-for-you',
+    title: 'Показать раздел "Для вас"',
+    checked: !hideMlSection,
+    onCheckedChange: (checked: boolean) => setHideMlSection(!checked),
+  }
+
   // Кеш - отдельная настройка (не часть сортируемого списка)
   const cacheSection = {
     id: 'cache',
@@ -251,7 +261,8 @@ export function SidebarAppearanceSettings() {
       <Header>
         <HeaderTitle>Сайдбар</HeaderTitle>
         <HeaderDescription>
-          Настройте какие разделы отображать в боковом меню и измените их порядок перетаскиванием
+          По умолчанию разделы Библиотеки скрыты — всё доступно на странице «Библиотека».
+          Включите нужные вкладки тут и измените их порядок перетаскиванием
         </HeaderDescription>
       </Header>
       <Content>
@@ -276,8 +287,14 @@ export function SidebarAppearanceSettings() {
           </SortableContext>
         </DndContext>
 
-        {/* Кеш - отдельная настройка вне сортировки */}
+        {/* «Для вас» и кеш - отдельные настройки вне сортировки */}
         <div className="mt-4 pt-4 border-t">
+          <SortableSectionItem
+            id={mlSection.id}
+            title={mlSection.title}
+            checked={mlSection.checked}
+            onCheckedChange={mlSection.onCheckedChange}
+          />
           <SortableSectionItem
             id={cacheSection.id}
             title={cacheSection.title}

@@ -3,6 +3,7 @@ import { AlbumsFilters, YearFilter } from '@/utils/albumsFilter'
 
 const LIBRARY = {
   HOME: '/',
+  ROOT: '/library',
   ARTISTS: '/library/artists',
   SONGS: '/library/songs',
   ALBUMS: '/library/albums',

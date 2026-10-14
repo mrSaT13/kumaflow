@@ -393,12 +393,6 @@ if (!instanceLock) {
       updateRemoteState(state)
     })
 
-    // Остановка remote сервера при перезапуске приложения
-    app.on('before-quit', async () => {
-      console.log('[Remote] Shutting down remote server on app quit...')
-      await stopRemoteServer()
-    })
-
     // Yandex Music Auth IPC
     ipcMain.handle('yandex-music:auth', async (_, { login, password }) => {
       console.log('[YandexAuth] Starting auth for:', login)
@@ -672,21 +666,21 @@ if (!instanceLock) {
     })
   })
 
-  let isSaving = false
+  // Единый before-quit поток (сейв → стоп пульта → выход).
+  // Обнова ставится сама через autoInstallOnAppQuit в updater.ts —
+  // отдельных хендлеров здесь и там больше нет, иначе они гоняются
+  // друг с другом и выход может зациклиться.
+  let isQuitFlowRunning = false
 
   app.on('before-quit', async (e) => {
-    // Если уже сохраняем — выходим
-    if (isSaving) {
-      console.log('[App] Save complete, quitting...')
-      isQuitting = true
+    // Повторный вход (из app.quit() ниже) — выходим сразу
+    if (isQuitting || isQuitFlowRunning) {
       return
     }
 
     e.preventDefault()
+    isQuitFlowRunning = true
     console.log('[App] before-quit triggered — saving all data...')
-
-    // Принудительно сохраняем все данные перед выходом
-    isSaving = true
     if (mainWindow && !mainWindow.isDestroyed()) {
       try {
         await mainWindow.webContents.executeJavaScript(`
@@ -720,8 +714,15 @@ if (!instanceLock) {
       }
     }
 
+    // Остановка remote сервера (раньше был отдельным хендлером)
+    try {
+      console.log('[Remote] Shutting down remote server on app quit...')
+      await stopRemoteServer()
+    } catch (err) {
+      console.error('[Remote] Stop error (continuing quit):', err)
+    }
+
     isQuitting = true
-    isSaving = false
     app.quit()
   })
 

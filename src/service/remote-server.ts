@@ -256,6 +256,56 @@ let currentHost = '0.0.0.0'
 // Папка, откуда отдали remote.html — там же лежат иконки для PWA/favicon
 let remoteAssetDir: string | null = null
 
+// mDNS-анонс `_kumaflow-remote._tcp` для мобильного пульта
+// (mDNS discovery в мобайле + скан подсети как фолбек).
+// bonjour-service — опциональный: без него просто нет анонса, сервер работает.
+let bonjourInstance: any = null
+
+function startMdnsAdvertise(port: number) {
+  stopMdnsAdvertise()
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Bonjour = require('bonjour-service')
+    const BonjourCtor = Bonjour.Bonjour || Bonjour.default || Bonjour
+    bonjourInstance = new BonjourCtor()
+    const os = require('os')
+    const hostName = (() => {
+      try {
+        return os.hostname() || 'KumaFlow'
+      } catch {
+        return 'KumaFlow'
+      }
+    })()
+    let version = ''
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      version = require('../../package.json').version || ''
+    } catch {
+      // ignore
+    }
+    bonjourInstance.publish({
+      name: `KumaFlow ${hostName}`,
+      type: 'kumaflow-remote',
+      port,
+      txt: { name: hostName, pin: currentPin ? '1' : '0', version },
+    })
+    console.log(`[Remote] mDNS announced as _kumaflow-remote._tcp on port ${port}`)
+  } catch (error) {
+    console.log('[Remote] mDNS unavailable (bonjour-service not installed?), skip:', (error as Error)?.message)
+    bonjourInstance = null
+  }
+}
+
+function stopMdnsAdvertise() {
+  try {
+    bonjourInstance?.unpublishAll?.()
+    bonjourInstance?.destroy?.()
+  } catch (_) {
+    // ignore
+  }
+  bonjourInstance = null
+}
+
 let currentState: any = {}
 
 /**
@@ -683,6 +733,7 @@ export async function startRemoteServer(config: RemoteConfig): Promise<void> {
       server.listen(settings.port, currentHost, () => {
         console.log(`[Remote] Server started on ${currentHost}:${settings.port}${currentPin ? ' (PIN защищён)' : ''}`)
         console.log(`[Remote] Open http://localhost:${settings.port}`)
+        startMdnsAdvertise(settings.port)
         resolve()
       })
 
@@ -705,6 +756,7 @@ export async function startRemoteServer(config: RemoteConfig): Promise<void> {
  */
 export function stopRemoteServer() {
   return new Promise<void>((resolve) => {
+    stopMdnsAdvertise()
     if (wsServer) {
       wsServer.clients.forEach((client) => client.close())
       wsServer.close(() => {

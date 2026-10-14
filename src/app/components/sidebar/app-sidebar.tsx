@@ -10,6 +10,7 @@ import { SidebarMiniSeparator } from './mini-separator'
 import { MobileCloseButton } from './mobile-close-button'
 import { NavLibrary } from './nav-library'
 import { NavMain } from './nav-main'
+import { NavPinnedArtists } from './nav-pinned-artists'
 import { NavPlaylists } from './nav-playlists'
 
 export function AppSidebar({
@@ -26,6 +27,7 @@ export function AppSidebar({
       <SidebarMiniSeparator />
       <MainSidebarContent className="flex-1 overflow-y-auto">
         <NavLibrary />
+        <NavPinnedArtists />
       </MainSidebarContent>
       <NavPlaylists />
       <MainSidebarRail />

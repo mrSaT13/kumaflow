@@ -71,10 +71,19 @@ import {
   selectCurrentSong,
   usePlayerActions,
   usePlayerStore,
+  useSongColor,
 } from '@/store/player.store'
 import { useThemeStore } from '@/store/theme.store'
+import { useHomepageSettings, withWaveDefaults } from '@/store/homepage.store'
+import { WaveBlob } from '@/app/components/home/wave-blob'
+import {
+  buildWaveTrio,
+  KumaWaveBackground,
+  type WaveTrio,
+} from '@/app/components/home/kuma-wave-background'
+import { KumaWaveHero } from '@/app/components/home/kuma-wave-hero'
 import type { ISong } from '@/types/responses/song'
-import { generateCSSGradient } from '@/utils/genreColors'
+import { generateCSSGradient, getGenreColor } from '@/utils/genreColors'
 import { isDarkTheme } from '@/utils/theme'
 
 // ==================== ХУКИ ====================
@@ -780,6 +789,13 @@ export default function NewHomepage() {
   const { setSongList, setQueueTail, togglePlayPause } = usePlayerActions()
   // Handoff с другого устройства («Продолжить с …») — живой слот мозга.
   const brainHandoff = useBrainHandoff()
+  // 🌊 Hero «Моя волна»: раскладка kuma/yandex + живая анимация (тумблеры во «Внешнем виде»).
+  // Старым persisted-настройкам поля может не хватать — дефолт через ??.
+  const homepageSettings = useHomepageSettings()
+  const waveLayout = homepageSettings.waveHero?.layout ?? 'kuma'
+  const waveAlive = homepageSettings.waveHero?.alive ?? true
+  // Мерж со значениями по умолчанию (у старых сохранений новых полей нет).
+  const waveHeroSettings = withWaveDefaults(homepageSettings.waveHero)
   // Треки последней сгенерированной Волны — чтобы кнопка знала, играет ли сейчас Волна
   const waveSongIds = useRef<Set<string>>(new Set())
   // После рестарта ref пуст, а очередь персистится — восстанавливаем контекст
@@ -851,6 +867,16 @@ export default function NewHomepage() {
     topGenres,
     profile.preferredGenres || {},
   )
+
+  // 🌊 Цвета капли: акцент играющего трека → жанр трека → топ-жанр → дефолт.
+  const { currentSongColor } = useSongColor()
+  const isWaveDark = themeClasses.isDark
+  const waveColors: WaveTrio | undefined =
+    buildWaveTrio(currentSongColor, isWaveDark) ??
+    buildWaveTrio(
+      currentSong?.genre ? getGenreColor(currentSong.genre) : topGenres[0] ? getGenreColor(topGenres[0]) : null,
+      isWaveDark,
+    )
 
   // Приветствие по времени суток + имя пользователя
   const hour = new Date().getHours()
@@ -1285,22 +1311,67 @@ export default function NewHomepage() {
           {/* Карточка "Моя волна" */}
           <div
             className="relative rounded-3xl overflow-hidden shadow-xl group"
-            style={{
-              background: myWaveGradient,
-              backgroundSize: '200% 200%',
-              animation: 'gradientShift 15s ease infinite',
-            }}
+            style={
+              waveLayout === 'yandex'
+                ? { background: isWaveDark ? '#141A26' : '#F1F2F6' }
+                : {
+                    background: myWaveGradient,
+                    backgroundSize: '200% 200%',
+                    animation: waveAlive ? 'gradientShift 15s ease infinite' : 'none',
+                  }
+            }
           >
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              <div className="absolute -top-20 -left-20 w-80 h-80 bg-white/20 rounded-full blur-3xl" />
-              <div className="absolute top-1/2 -right-20 w-96 h-96 bg-white/15 rounded-full blur-3xl" />
-            </div>
-            {/* Матовое стекло на ховер + блик (заметное: сильнее блюр и белый слой) */}
-            <div className="absolute inset-0 pointer-events-none bg-white/25 backdrop-blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]" />
-            <div className="absolute inset-0 pointer-events-none overflow-hidden">
-              <div className="absolute -top-1/2 -bottom-1/2 -left-1/4 w-1/4 rotate-12 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-[200%] group-hover:translate-x-[600%] transition-transform duration-1000 ease-out" />
-            </div>
+            {waveLayout === 'yandex' ? (
+              <KumaWaveBackground
+                alive={waveAlive}
+                playing={isWaveActive && isPlaying}
+                dark={isWaveDark}
+                colors={waveColors}
+                genre={currentSong?.genre}
+                effects={waveHeroSettings.effects}
+                lines={waveHeroSettings.lines}
+              />
+            ) : (
+              <>
+                <WaveBlob alive={waveAlive} />
+                {/* Матовое стекло на ховер: светлое в светлой теме, тёмное в тёмной */}
+                <div
+                  className={
+                    isWaveDark
+                      ? 'absolute inset-0 pointer-events-none bg-black/40 backdrop-blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]'
+                      : 'absolute inset-0 pointer-events-none bg-white/25 backdrop-blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]'
+                  }
+                />
+                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                  <div className="absolute -top-1/2 -bottom-1/2 -left-1/4 w-1/4 rotate-12 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-[200%] group-hover:translate-x-[600%] transition-transform duration-1000 ease-out" />
+                </div>
+              </>
+            )}
 
+            {waveLayout === 'yandex' ? (
+              <KumaWaveHero
+                onPlay={handleWaveButton}
+                onOpenSettings={() => setIsWaveSettingsOpen(true)}
+                onOpenStats={() => navigate('/ml/stats')}
+                isGenerating={isGenerating === 'mywave'}
+                isWaveActive={isWaveActive}
+                isPlaying={isPlaying}
+                waveHint={waveSeedHint ? seedLabel(waveSeedHint) : waveHint}
+                onClearHint={clearWaveHint}
+                dark={isWaveDark}
+                handoffSlot={
+                  brainHandoff.devices.length > 0 ? (
+                    <div className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 group-hover:grid-rows-[1fr] focus-within:grid-rows-[1fr]">
+                      <div className="overflow-hidden">
+                        <div className="flex justify-center pt-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100 focus-within:opacity-100">
+                          <BrainHandoffPanel handoff={brainHandoff} />
+                        </div>
+                      </div>
+                    </div>
+                  ) : undefined
+                }
+              />
+            ) : (
             <div className="relative z-10 p-8 sm:p-10 flex flex-col sm:flex-row items-center sm:items-start gap-8">
               {/* Левая колонка: иконка волны + стрик под ней.
                   Раньше стрик стоял в ряду кнопок и при нехватке ширины
@@ -1403,6 +1474,7 @@ export default function NewHomepage() {
                 )}
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>

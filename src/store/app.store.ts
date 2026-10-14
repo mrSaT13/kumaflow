@@ -225,64 +225,74 @@ export const useAppStore = createWithEqualityFn<IAppContext>()(
                 state.pages.showInfoPanel = !showInfoPanel
               })
             },
-            hideRadiosSection: HIDE_RADIOS_SECTION ?? false,
+            // Разделы Библиотеки в сайдбаре по умолчанию СКРЫТЫ:
+            // всё живёт в /library, а в сайдбар вкладки включают вручную
+            // (Настройки → Внешний вид → Сайдбар).
+            hideRadiosSection: HIDE_RADIOS_SECTION ?? true,
             setHideRadiosSection: (value) => {
               set((state) => {
                 state.pages.hideRadiosSection = value
               })
             },
-            hideAudiobooksSection: HIDE_AUDIOBOOKS_SECTION ?? false,
+            hideAudiobooksSection: HIDE_AUDIOBOOKS_SECTION ?? true,
             setHideAudiobooksSection: (value) => {
               set((state) => {
                 state.pages.hideAudiobooksSection = value
               })
             },
-            hideLocalSection: false,
+            hideLocalSection: true,
             setHideLocalSection: (value) => {
               set((state) => {
                 state.pages.hideLocalSection = value
               })
             },
-            hidePlaylistsSection: HIDE_PLAYLISTS_SECTION ?? false,
+            hidePlaylistsSection: HIDE_PLAYLISTS_SECTION ?? true,
             setHidePlaylistsSection: (value) => {
               set((state) => {
                 state.pages.hidePlaylistsSection = value
               })
             },
-            hideArtistsSection: false,
+            hideArtistsSection: true,
             setHideArtistsSection: (value) => {
               set((state) => {
                 state.pages.hideArtistsSection = value
               })
             },
-            hideTracksSection: false,
+            hideTracksSection: true,
             setHideTracksSection: (value) => {
               set((state) => {
                 state.pages.hideTracksSection = value
               })
             },
-            hideAlbumsSection: false,
+            hideAlbumsSection: true,
             setHideAlbumsSection: (value) => {
               set((state) => {
                 state.pages.hideAlbumsSection = value
               })
             },
-            hideFavoritesSection: false,
+            hideFavoritesSection: true,
             setHideFavoritesSection: (value) => {
               set((state) => {
                 state.pages.hideFavoritesSection = value
               })
             },
-            hideGenresSection: false,
+            hideGenresSection: true,
             setHideGenresSection: (value) => {
               set((state) => {
                 state.pages.hideGenresSection = value
               })
             },
-            hidePodcastsSection: false,
+            hidePodcastsSection: true,
             setHidePodcastsSection: (value) => {
               set((state) => {
                 state.pages.hidePodcastsSection = value
+              })
+            },
+            // Секция «Для вас» тоже живёт в /library — в сайдбаре по умолчанию скрыта.
+            hideMlSection: true,
+            setHideMlSection: (value) => {
+              set((state) => {
+                state.pages.hideMlSection = value
               })
             },
             sidebarSectionOrder: [
@@ -484,7 +494,7 @@ export const useAppStore = createWithEqualityFn<IAppContext>()(
                 state.data.songCount = null
                 state.data.extensionsSupported = {}
                 state.pages.showInfoPanel = true
-                state.pages.hideRadiosSection = HIDE_RADIOS_SECTION ?? false
+                state.pages.hideRadiosSection = HIDE_RADIOS_SECTION ?? true
                 state.pages.artistsPageViewType = 'table'
                 state.podcasts.active = false
                 state.podcasts.serviceUrl = ''
@@ -506,16 +516,43 @@ export const useAppStore = createWithEqualityFn<IAppContext>()(
       ),
     {
       name: 'app_store',
-      version: 1,
+      version: 3,
+        migrate: (persistedState, version) => {
+          // v1 → v2: разделы Библиотеки по умолчанию скрыты.
+          // v2 → v3: секция «Для вас» тоже по умолчанию скрыта.
+          // Существующим пользователям один раз прячем всё в сайдбаре —
+          // вернуть можно в Настройках → Внешний вид → Сайдбар.
+          try {
+            const state = persistedState as Record<string, any> | undefined
+            if (state && version < 2 && state.pages) {
+              state.pages.hideArtistsSection = true
+              state.pages.hideTracksSection = true
+              state.pages.hideAlbumsSection = true
+              state.pages.hideFavoritesSection = true
+              state.pages.hidePlaylistsSection = true
+              state.pages.hidePodcastsSection = true
+              state.pages.hideRadiosSection = true
+              state.pages.hideGenresSection = true
+              state.pages.hideAudiobooksSection = true
+              state.pages.hideLocalSection = true
+            }
+            if (state && version < 3 && state.pages) {
+              state.pages.hideMlSection = true
+            }
+          } catch {
+            /* ignore */
+          }
+          return persistedState as IAppContext
+        },
         merge: (persistedState, currentState) => {
           try {
             const persisted = persistedState as Partial<IAppContext> | undefined
 
-            let hideRadiosSection = false
+            let hideRadiosSection = true
             let enableImageCache = false
 
             if (persisted && persisted.pages) {
-              hideRadiosSection = persisted.pages.hideRadiosSection ?? false
+              hideRadiosSection = persisted.pages.hideRadiosSection ?? true
               enableImageCache =
                 persisted.pages.imagesCacheLayerEnabled ?? false
             }

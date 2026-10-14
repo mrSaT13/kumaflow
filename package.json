@@ -1,7 +1,7 @@
 {
   "name": "kumaflow",
   "private": true,
-  "version": "1.11.5",
+  "version": "1.12.0",
   "license": "MIT",
   "description": "KumaFlow - умный музыкальный плеер с ML Engine 2.0, Mood Drift Detection, Time-Aware Recommendations и Vibe Similarity",
   "author": {
@@ -82,6 +82,7 @@
     "crypto-js": "^4.2.0",
     "dayjs": "^1.11.13",
     "ws": "^8.18.0",
+    "bonjour-service": "^1.3.0",
     "discord-rpc": "^4.0.1",
     "electron-dl": "^4.0.0",
     "electron-store": "^11.0.2",

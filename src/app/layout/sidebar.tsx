@@ -59,6 +59,12 @@ export const mainNavItems = [
     route: ROUTES.LIBRARY.HOME,
     icon: Home,
   },
+  {
+    id: 'library',
+    title: 'Библиотека',
+    route: ROUTES.LIBRARY.ROOT,
+    icon: Library,
+  },
 ]
 
 export const libraryItems = [

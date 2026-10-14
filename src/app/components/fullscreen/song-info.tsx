@@ -1,13 +1,11 @@
-import { memo, useEffect, useState } from 'react'
-import { Music2 } from 'lucide-react'
+import { memo } from 'react'
 import { Dot } from '@/app/components/dot'
 import { MarqueeTitle } from '@/app/components/fullscreen/marquee-title'
-import { ImageLoader } from '@/app/components/image-loader'
+import { ArtistAvatar } from '@/app/components/fullscreen/artist-avatar'
 import { SongQualityBadge } from '@/app/components/song/quality-badge'
 import { Badge } from '@/app/components/ui/badge'
 import { usePlayerStore, selectCurrentSong,
 } from '@/store/player.store'
-import { search3 } from '@/service/subsonic-api'
 import { ISong } from '@/types/responses/song'
 import { ALBUM_ARTISTS_MAX_NUMBER } from '@/utils/multipleArtists'
 import { FullscreenSongImage } from './song-image'
@@ -32,7 +30,7 @@ export function SongInfo() {
 
       {/* Ряд как мобильный _SongInfo: кружок артиста + название/артист + действия */}
       <div className="flex items-center gap-3 w-full">
-        <ArtistAvatar song={currentSong} />
+        <ArtistAvatar song={currentSong} clickable={false} />
         <div className="flex-1 min-w-0 text-left">
           <MarqueeTitle gap="mr-2">
             <h2 className="scroll-m-20 text-xl 2xl:text-2xl font-bold tracking-tight py-1 text-shadow-md truncate">
@@ -73,62 +71,6 @@ export function SongInfo() {
         )}
         <SongQualityBadge song={currentSong} variant="neutral" />
       </div>
-    </div>
-  )
-}
-
-/**
- * Круглое фото артиста как в мобайле (_SongInfo):
- * поиск по имени артиста → обложка первого альбома.
- * Нет фото — плейсхолдер с нотой.
- */
-function ArtistAvatar({ song }: { song: ISong }) {
-  const [albumCover, setAlbumCover] = useState<string | null>(null)
-  const artist = song.artist
-
-  useEffect(() => {
-    let cancelled = false
-    setAlbumCover(null)
-    if (!artist) return
-    search3(artist, { artistCount: 0, albumCount: 1 })
-      .then((res) => {
-        if (!cancelled) setAlbumCover(res.albums?.[0]?.coverArt ?? null)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [artist])
-
-  return (
-    <div className="w-12 h-12 2xl:w-[52px] 2xl:h-[52px] rounded-full overflow-hidden bg-foreground/10 shrink-0">
-      {albumCover ? (
-        <ImageLoader id={albumCover} type="album" size={100}>
-          {(src) =>
-            src ? (
-              <img
-                src={src}
-                alt={artist}
-                className="w-full h-full object-cover"
-                width="52"
-                height="52"
-              />
-            ) : (
-              <AvatarPlaceholder />
-            )
-          }
-        </ImageLoader>
-      ) : (
-        <AvatarPlaceholder />
-      )}
-    </div>
-  )
-}
-
-function AvatarPlaceholder() {
-  return (
-    <div className="w-full h-full flex items-center justify-center bg-foreground/10">
-      <Music2 className="w-5 h-5 text-foreground/30" />
     </div>
   )
 }

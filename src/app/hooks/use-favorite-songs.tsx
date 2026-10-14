@@ -6,5 +6,11 @@ export function useFavoriteSongs() {
   return useQuery({
     queryKey: [queryKeys.favorites.songs],
     queryFn: getFavoriteSongs,
+    // Мгновенно из кэша + автообновление в фоне.
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 60 * 24,
+    refetchInterval: 1000 * 60 * 5,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   })
 }
