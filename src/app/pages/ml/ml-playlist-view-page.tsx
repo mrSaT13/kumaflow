@@ -59,8 +59,7 @@ export default function MLPlaylistViewPage() {
   const { playlistId } = useParams<{ playlistId: string }>()
 
   const { setSongList } = usePlayerActions()
-  const { getPlaylist, removePlaylist, updatePlaylist, addPlaylist } = useMLPlaylistsStateActions()
-  const currentList = usePlayerStore((state) => state.songlist.currentList)
+  const { getPlaylist, updatePlaylist, addPlaylist } = useMLPlaylistsStateActions()
   const { removeSongFromQueue } = usePlayerActions()
 
   // 🆕 Состояние рейтинга плейлиста
@@ -166,7 +165,7 @@ export default function MLPlaylistViewPage() {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
   const [llmComment, setLlmComment] = useState<string | null>(null)
   const [commentGenerated, setCommentGenerated] = useState(false) // Флаг чтобы генерировать только один раз
-  const [isLoading, setIsLoading] = useState(true)
+  const [, setIsLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
   // Drag-and-drop сенсоры
@@ -196,7 +195,7 @@ export default function MLPlaylistViewPage() {
   }
 
   // Удаление трека из плейлиста с синхронизацией
-  const handleRemoveSong = (songId: string, songIndex: number) => {
+  const handleRemoveSong = (songId: string, _songIndex: number) => {
     if (!playlist) return
 
     // 1. Проверяем играет ли этот плейлист СЕЙЧАС (до удаления!)

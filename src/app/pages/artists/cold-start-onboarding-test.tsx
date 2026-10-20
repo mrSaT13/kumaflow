@@ -1,10 +1,7 @@
-import { useTranslation } from 'react-i18next'
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 
 export default function ColdStartOnboarding() {
-  const { t } = useTranslation()
-
   const handleComplete = () => {
     window.location.hash = '/library/artists'
   }

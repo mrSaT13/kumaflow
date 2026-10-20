@@ -1,29 +1,6 @@
-// Очередь запросов для rate limiting
-const requestQueue: Array<() => Promise<Response>> = []
-let isProcessingQueue = false
-const REQUEST_DELAY = 50 // 50ms между запросами (быстрее)
+// Очередь запросов для rate limiting (пока не используется — прямые запросы с retry ниже)
 const MAX_RETRIES = 5
 const MAX_CACHE_SIZE_MB = 500 // Максимальный размер кеша 500MB
-
-async function processQueue(): Promise<void> {
-  if (isProcessingQueue || requestQueue.length === 0) return
-
-  isProcessingQueue = true
-
-  while (requestQueue.length > 0) {
-    const request = requestQueue.shift()
-    if (request) {
-      try {
-        await request()
-      } catch (error) {
-        console.error('Queue request failed:', error)
-      }
-    }
-    await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY))
-  }
-
-  isProcessingQueue = false
-}
 
 /**
  * Проверить размер кеша и очистить старые записи если превышен лимит

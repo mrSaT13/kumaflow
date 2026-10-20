@@ -47,7 +47,6 @@ export function useAlbumsListModel() {
   )
   const genre = getSearchParam<string>(AlbumsSearchParams.Genre, '')
   const artistId = locationGetSearchParam<string>(AlbumsSearchParams.ArtistId, '')
-  const artistName = locationGetSearchParam<string>(AlbumsSearchParams.ArtistName, '')
   const query = getSearchParam<string>(AlbumsSearchParams.Query, '')
 
   const finalArtistId = artistId

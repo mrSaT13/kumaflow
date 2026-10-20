@@ -146,14 +146,6 @@ export default function AudiobooksPage() {
     navigate(`/audiobooks/${book.id}`)
   }
 
-  const handleProgressUpdate = async (bookId: string, currentTime: number) => {
-    try {
-      await api.updateProgress(bookId, currentTime)
-    } catch (error) {
-      console.error('[Audiobooks] Failed to update progress:', error)
-    }
-  }
-
   const filteredBooks = books.filter(book => {
     const progress = book.progress?.percentage || 0
     const isFinished = book.progress?.isFinished || false
@@ -310,7 +302,6 @@ export default function AudiobooksPage() {
               {filteredBooks.map((book) => {
                 const progress = book.progress?.percentage || 0
                 const isFinished = book.progress?.isFinished || false
-                const currentTime = book.progress?.currentTime || 0
                 const isPlaying = playingBookId === book.id
 
                 return (

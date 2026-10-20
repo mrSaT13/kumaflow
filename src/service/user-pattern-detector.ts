@@ -54,13 +54,10 @@ interface Cluster {
 }
 
 export class UserPatternDetector {
-  private signals: UserSignal[] = []
-  
   /**
    * Анализируем историю и находим кластеры
    */
   async detectPatterns(signals: UserSignal[]): Promise<ListeningPattern[]> {
-    this.signals = signals
     console.log('[PatternDetector] Analyzing', signals.length, 'signals')
     
     const patterns: ListeningPattern[] = []

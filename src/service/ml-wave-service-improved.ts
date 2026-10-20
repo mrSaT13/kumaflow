@@ -88,10 +88,10 @@ const DECADE_CONFIG: Record<string, {
  * - BPM/MOOD фильтр
  */
 export async function generateDailyMixV2(
-  likedSongIds: string[],
+  _likedSongIds: string[],
   ratings: Record<string, any>,
-  preferredGenres: Record<string, number>,
-  preferredArtists: Record<string, number>,
+  _preferredGenres: Record<string, number>,
+  _preferredArtists: Record<string, number>,
   limit: number = 30
 ): Promise<{ playlist: MLWavePlaylist; metadata: MLPlaylistMetadata }> {
   const songs: ISong[] = []
@@ -117,7 +117,7 @@ export async function generateDailyMixV2(
   const forgottenCount = Math.floor(limit * 0.50)
 
   const forgottenTrackIds = Object.entries(ratings || {})
-    .filter(([id, rating]: [string, any]) => {
+    .filter(([, rating]: [string, any]) => {
       if (!rating.playCount || rating.playCount < 5) return false
       if (!rating.lastPlayed) return false
       const lastPlayed = new Date(rating.lastPlayed).getTime()
@@ -128,8 +128,6 @@ export async function generateDailyMixV2(
   console.log(`[DailyMixV2] 🕰️ Found ${forgottenTrackIds.length} forgotten tracks`)
 
   if (forgottenTrackIds.length > 0) {
-    const { analyzeTrack } = await import('./vibe-similarity')
-
     const shuffledForgotten = forgottenTrackIds.sort(() => Math.random() - 0.5).slice(0, forgottenCount + 20)
     const forgottenSongsResults = await Promise.all(
       shuffledForgotten.map(id => subsonic.songs.getSong(id).catch(() => null))
@@ -265,7 +263,6 @@ export async function generateDiscoverWeeklyV2(
   // 0. АНАЛИЗ АУДИО-ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ
   // ============================================
   console.log(`[DiscoverWeeklyV2] 🎵 Building user audio profile...`)
-  const { analyzeTrack } = await import('./vibe-similarity')
 
   let userAvgEnergy = 0.5
   let userAvgBPM = 100

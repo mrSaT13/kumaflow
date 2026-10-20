@@ -4,7 +4,6 @@
  */
 
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { usePlayerActions } from '@/store/player.store'
 import { useML } from '@/store/ml.store'
 import { generateDailyMix, generateDiscoverWeekly } from '@/service/ml-wave-service'
@@ -22,9 +21,8 @@ interface CuratedPlaylist {
 }
 
 export default function CuratedPlaylists() {
-  const navigate = useNavigate()
   const { setSongList } = usePlayerActions()
-  const { profile, ratings } = useML()
+  const { profile } = useML()
   const [isLoading, setIsLoading] = useState<string | null>(null)
 
   const curatedPlaylists: CuratedPlaylist[] = [

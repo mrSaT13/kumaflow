@@ -44,7 +44,6 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useTranslation } from 'react-i18next'
 import { LazyLoadImage } from 'react-lazy-load-image-component'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'react-toastify'
@@ -293,7 +292,6 @@ function SongRow({
   navigate,
   onRatingChange,
   onToggleLike,
-  artistId: parentArtistId,
 }: SongRowProps) {
   const [hovered, setHovered] = useState(false)
   const duration = song.duration || 0
@@ -635,7 +633,6 @@ function PlaylistGrid({
 // ==================== НОВАЯ СТРАНИЦА АРТИСТА ====================
 
 export default function NewArtistPage() {
-  const { t } = useTranslation()
   const navigate = useNavigate()
   const { artistId } = useParams() as { artistId: string }
   const { setSongList, setNextOnQueue, setLastOnQueue } = usePlayerActions()
@@ -650,7 +647,7 @@ export default function NewArtistPage() {
   const [isVibeGenerating, setIsVibeGenerating] = useState(false)
   const [isSubscribing, setIsSubscribing] = useState(false)
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false)
-  const [artistBannerUrl, setArtistBannerUrl] = useState<string | undefined>(
+  const [, setArtistBannerUrl] = useState<string | undefined>(
     undefined,
   )
   const [artistLogoUrl, setArtistLogoUrl] = useState<string | undefined>(
@@ -964,7 +961,6 @@ export default function NewArtistPage() {
     if (!albums || albums.length === 0) return {}
     const grouped: Record<string, any[]> = {}
     const appearsOn: any[] = []
-    const owned: any[] = []
 
     albums.forEach((album: any) => {
       // Проверяем является ли артист основным для альбома
@@ -1031,14 +1027,6 @@ export default function NewArtistPage() {
 
     return grouped
   }, [albums, artistId])
-
-  const releaseTypeLabels: Record<string, { title: string; icon: any }> = {
-    'appears-on': { title: 'Участвует в', icon: Users },
-    compilation: { title: 'Сборники', icon: Disc },
-    album: { title: 'Альбомы', icon: Disc },
-    single: { title: 'Синглы', icon: Music2 },
-    ep: { title: 'EP', icon: Disc },
-  }
 
   // ==================== FANART.TV ====================
   useEffect(() => {

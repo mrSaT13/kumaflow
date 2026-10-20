@@ -10,7 +10,7 @@ import { toast } from 'react-toastify'
  * Компонент авторизации Last.fm
  */
 export function LastFmAuth() {
-  const { settings, setLastFmApiKey, setLastFmApiSecret } = useExternalApi()
+  const { settings, setLastFmApiSecret } = useExternalApi()
   const [isAuthorizing, setIsAuthorizing] = useState(false)  // Получение токена
   const [isAuthorized, setIsAuthorized] = useState(false)   // Session key получен
   const [tokenReceived, setTokenReceived] = useState(false) // Токен получен, ждём авторизации

@@ -13,7 +13,6 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
 import {
   ChevronDown,
   ChevronUp,
@@ -141,7 +140,7 @@ interface SongRowProps {
   albumId?: string  // 🆕 Для бана артиста
 }
 
-function SongRow({ song, index, playCount, onPlay, onPlayNext, onAddToEnd, onToggleLike, isLiked, onPlayTrackRadio, isTrackRadioGenerating, navigate, albumId }: SongRowProps) {
+function SongRow({ song, index, playCount, onPlay, onPlayNext, onAddToEnd, onToggleLike, isLiked, onPlayTrackRadio, isTrackRadioGenerating, navigate }: SongRowProps) {
   const [hovered, setHovered] = useState(false)
   const duration = song.duration || 0
   const mins = Math.floor(duration / 60)
@@ -319,12 +318,10 @@ function AlbumGrid({ albums, navigate }: { albums: any[], navigate: any }) {
 // ==================== НОВАЯ СТРАНИЦА АЛЬБОМА ====================
 
 export default function NewAlbumPage() {
-  const { t } = useTranslation()
   const navigate = useNavigate()
   const { albumId } = useParams() as { albumId: string }
   const { setSongList, playNextSong, addSongToEnd } = usePlayerActions()
 
-  const [isGeneratingRadio, setIsGeneratingRadio] = useState(false)
   const [isTrackRadioGenerating, setIsTrackRadioGenerating] = useState(false)
   const [showStickyPlay, setShowStickyPlay] = useState(false)
   const [isFavorite, setIsFavorite] = useState(false)
@@ -351,7 +348,7 @@ export default function NewAlbumPage() {
       refetchArtist()
     }
   }, [album?.artistId, artist, refetchArtist])
-  const { data: randomAlbums, isLoading: randomAlbumsIsLoading } = useGetGenreAlbums(album?.genre || '')
+  const { data: randomAlbums } = useGetGenreAlbums(album?.genre || '')
 
   // Debug: логируем загрузку дискографии
   useEffect(() => {
@@ -535,20 +532,10 @@ export default function NewAlbumPage() {
     if (artistId) navigate(`/library/artists/${artistId}`)
   }
 
-  const getPlayCount = (songId: string) => {
+  const getPlayCount = (_songId: string) => {
     // Можно подключить ratings если нужно
     return 0
   }
-
-  // Колонки для заголовка таблицы
-  const tableHeaderColumns = [
-    { label: '#', width: '40px', align: 'center' as const },
-    { label: 'Название', flex: '1fr' },
-    { label: 'Диск', flex: '1fr' },
-    { label: 'Время', width: '80px', align: 'center' as const },
-    { label: 'Play', width: '80px', align: 'center' as const },
-    { label: 'Битрейт', width: '50px', align: 'center' as const },
-  ]
 
   return (
     <div

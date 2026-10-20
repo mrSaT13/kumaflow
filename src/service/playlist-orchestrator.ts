@@ -95,8 +95,6 @@ export function orchestratePlaylist(
 
   const {
     startWith = 'energetic',
-    endWith = 'random',
-    groupByMood = false,
   } = orchestrationOptions
 
   console.log('[Orchestrator] Starting playlist orchestration...', {

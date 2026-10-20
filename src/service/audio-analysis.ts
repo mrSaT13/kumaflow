@@ -137,7 +137,7 @@ class AudioAnalysisService {
    * Сохранить результаты в Navidrome
    * Navidrome API не поддерживает updateSong, поэтому пропускаем
    */
-  private async saveToNavidrome(songId: string, features: AudioFeatures): Promise<void> {
+  private async saveToNavidrome(songId: string, _features: AudioFeatures): Promise<void> {
     // Navidrome не имеет API для обновления BPM/comment у трека
     // Данные сохраняем только в ML Store
     console.log('[AudioAnalysis] Navidrome update skipped (not supported):', songId)

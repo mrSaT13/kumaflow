@@ -140,7 +140,7 @@ export class MoodDriftDetector {
   /**
    * Записать прослушивание/лайк (сбрасывает счётчик пропусков)
    */
-  logPositiveInteraction(trackId: string): void {
+  logPositiveInteraction(_trackId: string): void {
     // Положительное действие сбрасывает consecutive skips
     if (this.currentState) {
       console.log(`[MoodDrift] Positive interaction, resetting skip counter (was ${this.currentState.count})`)
@@ -283,8 +283,6 @@ export class MoodDriftDetector {
    * Получить дефолтный профиль для контекста
    */
   private getDefaultProfile(timeContext: string, isWeekend: boolean): MoodProfile {
-    const hour = new Date().getHours()
-
     switch (timeContext) {
       case 'morning':
         return {

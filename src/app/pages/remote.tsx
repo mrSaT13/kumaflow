@@ -55,7 +55,6 @@ export default function RemoteControlPage() {
   })
 
   const wsRef = useRef<WebSocket | null>(null)
-  const seekTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     connect()

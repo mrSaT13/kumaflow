@@ -39,6 +39,7 @@ import {
   TooltipTrigger,
 } from '@/app/components/ui/tooltip'
 import { getGeneratedPlaylistById, deleteGeneratedPlaylist, saveGeneratedPlaylist } from '@/store/generated-playlists.store'
+import type { GeneratedPlaylist } from '@/store/generated-playlists.store'
 import { usePlayerActions } from '@/store/player.store'
 import { DndContext, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
@@ -93,22 +94,21 @@ function getTimeOfDayMixDescription(): string {
   return 'Спокойные звуки для ночного отдыха'
 }
 
-interface PlaylistParams {
-  playlistType: string
-  playlistId: string
+type PlaylistParams = {
+  playlistType?: string
+  playlistId?: string
 }
 
 interface SortableTrackProps {
   song: ISong
   index: number
-  playlist: any
   onPlay: (index: number) => void
   onRemove: (index: number) => void
   onToggleLike: (song: ISong) => void
   isLiked: (songId: string) => boolean
 }
 
-function SortableTrack({ song, index, playlist, onPlay, onRemove, onToggleLike, isLiked }: SortableTrackProps) {
+function SortableTrack({ song, index, onPlay, onRemove, onToggleLike, isLiked }: SortableTrackProps) {
   const {
     attributes,
     listeners,
@@ -241,12 +241,12 @@ function SortableTrack({ song, index, playlist, onPlay, onRemove, onToggleLike, 
 
 export default function SavedPlaylistPage() {
   const navigate = useNavigate()
-  const { playlistType, playlistId } = useParams<PlaylistParams>()
+  const { playlistId } = useParams<PlaylistParams>()
   const { setSongList, clearPlayerState } = usePlayerActions()
-  
-  // Получаем лайкнутые треки
+
+  // Получаем лайкнутые треки (useStarredSongs возвращает SubsonicSong[])
   const { data: starredData, isLoading: starredLoading } = useStarredSongs()
-  const starredSongIds = new Set(starredData?.songs?.map(s => s.id) || [])
+  const starredSongIds = useMemo(() => new Set((starredData ?? []).map((s) => s.id)), [starredData])
   
   // Отладка
   useEffect(() => {
@@ -255,19 +255,7 @@ export default function SavedPlaylistPage() {
     console.log('[SavedPlaylist] Loading:', starredLoading)
   }, [starredData, starredLoading])
 
-  const [playlist, setPlaylist] = useState<{
-    id: string
-    type: string
-    name: string
-    description: string
-    songs: ISong[]
-    createdAt: number
-    expiresAt: number
-    metadata?: {
-      accountsCount?: number
-      genres?: string[]
-    }
-  } | null>(null)
+  const [playlist, setPlaylist] = useState<GeneratedPlaylist | null>(null)
 
   const [coverImages, setCoverImages] = useState<string[]>([])
   const [isShareOpen, setIsShareOpen] = useState(false)
@@ -276,38 +264,62 @@ export default function SavedPlaylistPage() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [exportName, setExportName] = useState('')
 
-  // Загружаем плейлист из localStorage
+  // Загружаем плейлист из IndexedDB (getGeneratedPlaylistById — async)
   useEffect(() => {
-    if (playlistId) {
-      const saved = getGeneratedPlaylistById(playlistId)
-      if (saved) {
-        // Обновляем название для time-of-day миксов
-        let name = saved.name
-        let description = saved.description
-        
-        if (saved.type === 'time-of-day') {
-          name = getTimeOfDayMixName()
-          description = getTimeOfDayMixDescription()
-          // Обновляем в localStorage
-          const updated = { ...saved, name, description }
-          setPlaylist(updated)
-          saveGeneratedPlaylist({
-            type: updated.type,
-            name: updated.name,
-            description: updated.description,
-            songs: updated.songs,
-            metadata: updated.metadata,
-          })
+    if (!playlistId) {
+      toast.error('Плейлист не найден или устарел')
+      navigate('/ml/for-you')
+      return
+    }
+
+    let cancelled = false
+
+    const load = async () => {
+      try {
+        const saved = await getGeneratedPlaylistById(playlistId)
+        if (cancelled) return
+
+        if (saved) {
+          // Обновляем название для time-of-day миксов
+          let name = saved.name
+          let description = saved.description
+
+          // 'time-of-day' — legacy-тип, которого нет в union GeneratedPlaylist['type']
+          if ((saved.type as string) === 'time-of-day') {
+            name = getTimeOfDayMixName()
+            description = getTimeOfDayMixDescription()
+            // Обновляем в хранилище
+            const updated: GeneratedPlaylist = { ...saved, name, description }
+            setPlaylist(updated)
+            await saveGeneratedPlaylist({
+              type: updated.type,
+              name: updated.name,
+              description: updated.description,
+              songs: updated.songs,
+              metadata: updated.metadata,
+            })
+          } else {
+            setPlaylist(saved)
+          }
+          setExportName(saved.name)
         } else {
-          setPlaylist(saved)
+          toast.error('Плейлист не найден или устарел')
+          navigate('/ml/for-you')
         }
-        setExportName(saved.name)
-      } else {
-        toast.error('Плейлист не найден или устарел')
+      } catch (error) {
+        if (cancelled) return
+        console.error('[SavedPlaylist] Load error:', error)
+        toast.error('Не удалось загрузить плейлист')
         navigate('/ml/for-you')
       }
     }
-  }, [playlistId])
+
+    void load()
+
+    return () => {
+      cancelled = true
+    }
+  }, [playlistId, navigate])
 
   // Загружаем обложки для коллажа - СЛУЧАЙНЫЙ ВЫБОР при каждом открытии!
   useEffect(() => {
@@ -414,18 +426,23 @@ export default function SavedPlaylistPage() {
   }
 
   // Удалить плейлист
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!playlist) return
 
     if (confirm('Удалить этот плейлист?')) {
-      deleteGeneratedPlaylist(playlist.id)
-      toast.success('Плейлист удалён')
+      try {
+        await deleteGeneratedPlaylist(playlist.id)
+        toast.success('Плейлист удалён')
+      } catch (error) {
+        console.error('[SavedPlaylist] Delete error:', error)
+        toast.error('Ошибка удаления плейлиста')
+      }
       navigate('/ml/for-you')
     }
   }
 
   // Удалить трек из плейлиста
-  const handleRemoveTrack = useCallback((index: number) => {
+  const handleRemoveTrack = useCallback(async (index: number) => {
     if (!playlist) return
 
     const updatedSongs = playlist.songs.filter((_, i) => i !== index)
@@ -436,21 +453,26 @@ export default function SavedPlaylistPage() {
 
     const updatedPlaylist = { ...playlist, songs: updatedSongs }
     setPlaylist(updatedPlaylist)
-    
-    // Обновляем в localStorage
-    saveGeneratedPlaylist({
-      type: updatedPlaylist.type,
-      name: updatedPlaylist.name,
-      description: updatedPlaylist.description,
-      songs: updatedPlaylist.songs,
-      metadata: updatedPlaylist.metadata,
-    })
+
+    // Обновляем в хранилище
+    try {
+      await saveGeneratedPlaylist({
+        type: updatedPlaylist.type,
+        name: updatedPlaylist.name,
+        description: updatedPlaylist.description,
+        songs: updatedPlaylist.songs,
+        metadata: updatedPlaylist.metadata,
+      })
+    } catch (error) {
+      console.error('[SavedPlaylist] Save error:', error)
+      toast.error('Ошибка сохранения плейлиста')
+    }
 
     toast.success('Трек удалён из плейлиста')
   }, [playlist])
 
   // Drag-and-drop окончание
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     if (!playlist) return
 
     const { active, over } = event
@@ -463,19 +485,24 @@ export default function SavedPlaylistPage() {
       if (oldIndex !== -1 && newIndex !== -1) {
         const updatedSongs = [...playlist.songs]
         const [removed] = updatedSongs.splice(oldIndex, 1)
-        updatedSongs.splice(newIndex, 0, removed)
+        updatedSongs.splice(newIndex, 0, removed!)
 
         const updatedPlaylist = { ...playlist, songs: updatedSongs }
         setPlaylist(updatedPlaylist)
 
-        // Обновляем в localStorage
-        saveGeneratedPlaylist({
-          type: updatedPlaylist.type,
-          name: updatedPlaylist.name,
-          description: updatedPlaylist.description,
-          songs: updatedPlaylist.songs,
-          metadata: updatedPlaylist.metadata,
-        })
+        // Обновляем в хранилище
+        try {
+          await saveGeneratedPlaylist({
+            type: updatedPlaylist.type,
+            name: updatedPlaylist.name,
+            description: updatedPlaylist.description,
+            songs: updatedPlaylist.songs,
+            metadata: updatedPlaylist.metadata,
+          })
+        } catch (error) {
+          console.error('[SavedPlaylist] Save error:', error)
+          toast.error('Ошибка сохранения плейлиста')
+        }
 
         toast.success('Порядок треков изменён')
       }
@@ -689,7 +716,6 @@ export default function SavedPlaylistPage() {
                       key={song.id}
                       song={song}
                       index={index}
-                      playlist={playlist}
                       onPlay={handlePlayTrack}
                       onRemove={handleRemoveTrack}
                       onToggleLike={toggleLike}

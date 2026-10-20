@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next'
 import { useEffect, useState, useMemo } from 'react'
 import { useML } from '@/store/ml.store'
 import { useMLStore } from '@/store/ml.store'
@@ -35,7 +34,6 @@ function AchievementIcon({ name }: { name: string }) {
 
 
 export default function MLStats() {
-  const { t } = useTranslation()
   const navigate = useNavigate()
   const { ratings, profile } = useML()
   const { achievements, checkAll, getUnlockedCount, getTotalCount } = useAchievements()

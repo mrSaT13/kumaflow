@@ -58,19 +58,6 @@ export function FullscreenExplanation() {
     }
   }
 
-  const handleNavigateToTrack = async (trackId: string) => {
-    try {
-      // Отдельной страницы трека нет — открываем альбом, где он лежит
-      const { subsonic } = await import('@/service/subsonic')
-      const song = await subsonic.songs.getSong(trackId)
-      if (song?.albumId) {
-        navigate(ROUTES.ALBUM.PAGE(song.albumId))
-      }
-    } catch (error) {
-      console.error('Failed to navigate to track:', error)
-    }
-  }
-  
   return (
     <Card className="bg-background/50 backdrop-blur-sm border-white/10">
       <CardHeader className="pb-2">

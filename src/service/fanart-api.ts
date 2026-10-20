@@ -278,18 +278,6 @@ class FanartService {
   }
 
   /**
-   * Получить лучшее изображение (с наибольшим количеством лайков)
-   */
-  private getBestImage(images: FanartImage[]): FanartImageItem | null {
-    if (!images || images.length === 0) {
-      return null
-    }
-
-    const extracted = this.extractImages(images)
-    return extracted[0] || null
-  }
-
-  /**
    * Получить лучший логотип артиста
    */
   async getBestArtistLogo(mbid: string): Promise<FanartImageItem | null> {

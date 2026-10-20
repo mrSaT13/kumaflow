@@ -140,8 +140,6 @@ export class TimeAwareHistory {
    */
   getTimeBonus(trackId: string, currentTime: number = Date.now()): TimeAwareScore {
     const currentHour = new Date(currentTime).getHours()
-    const currentTimeContext = this.getTimeContext(currentHour)
-    
     // Собираем данные из текущего и соседних временных слотов
     let totalPlayCount = 0
     let totalLikeCount = 0

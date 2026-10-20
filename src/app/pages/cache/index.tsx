@@ -9,7 +9,6 @@ import {
   BarChart3, Heart, Clock, Disc3
 } from 'lucide-react'
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import { toast } from 'react-toastify'
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card'
@@ -64,7 +63,7 @@ interface SortableTrackRowProps {
   formatBytes: (bytes: number) => string
 }
 
-function SortableTrackRow({ track, index, onPlay, onRemove, formatDuration, formatBytes }: SortableTrackRowProps) {
+function SortableTrackRow({ track, onPlay, onRemove, formatDuration }: SortableTrackRowProps) {
   const {
     attributes,
     listeners,
@@ -158,7 +157,6 @@ function SortableTrackRow({ track, index, onPlay, onRemove, formatDuration, form
 }
 
 export default function CachePage() {
-  const { t } = useTranslation()
   const { setSongList, play } = usePlayerActions()
   
   const [stats, setStats] = useState({
@@ -169,7 +167,7 @@ export default function CachePage() {
   })
   const [cachedTracks, setCachedTracks] = useState<ISong[]>([])
   const [cachedArtists, setCachedArtists] = useState<IArtist[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [cachingProgress, setCachingProgress] = useState<{
     isCaching: boolean

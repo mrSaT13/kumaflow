@@ -10,7 +10,6 @@
  */
 
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Label } from '@/app/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
@@ -44,7 +43,6 @@ const ICON_PRESETS = [
 ]
 
 export function ProgressBarSettings() {
-  const { t } = useTranslation()
   const settings = usePlayerCustomization()
   const actions = usePlayerCustomizationActions()
   // Тип прогресс-бара фулскрина («Сейчас играет»): line | dot | spectrogram

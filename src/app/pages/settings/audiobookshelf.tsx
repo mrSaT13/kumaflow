@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Switch } from '@/app/components/ui/switch'
@@ -8,7 +7,6 @@ import { Input } from '@/app/components/ui/input'
 import { Stack } from '@/shared/components/stack/stack'
 
 export default function AudiobookshelfSettings() {
-  const { t } = useTranslation()
   const [enabled, setEnabled] = useState(false)
   const [serverUrl, setServerUrl] = useState('')
   const [username, setUsername] = useState('')

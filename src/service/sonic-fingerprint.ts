@@ -57,8 +57,8 @@ function saveSonicFingerprint(fingerprint: SonicFingerprint): void {
  * Вызывается автоматически из use-auto-scrobble
  */
 export async function updateSonicFingerprint(
-  trackId: string,
-  trackFeatures: {
+  _trackId: string,
+  _trackFeatures: {
     energy?: number
     danceability?: number
     valence?: number

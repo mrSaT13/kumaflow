@@ -20,7 +20,6 @@ export default function ExternalApiSettings() {
     setFanartEnabled,
     setFanartShowBanner,
     resetSettings,
-    initializeServices,
   } = useExternalApi()
 
   const [lastFmInput, setLastFmInput] = useState(settings.lastFmApiKey)

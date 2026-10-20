@@ -83,9 +83,13 @@ export function getAudioGraph(
     // скачок. Ниже элемент принудительно уходит в 1.
     gain.gain.value = element.volume
 
-    source.connect(gain)
-    gain.connect(analyser)
-    analyser.connect(context.destination)
+    // Analyser стоит ДО gain: громкость не должна влиять на визуализацию.
+    // Раньше было source → gain(=volume) → analyser: тихий звук давал
+    // глухой анализатор, и волна вяла не от музыки, а от ручки громкости.
+    // AnalyserNode прозрачен для звука — на тракт не влияет.
+    source.connect(analyser)
+    analyser.connect(gain)
+    gain.connect(context.destination)
 
     const graph: AudioGraph = {
       element,

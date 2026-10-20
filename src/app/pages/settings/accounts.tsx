@@ -5,13 +5,10 @@
  * - Dual URL (резервный сервер)
  */
 
-import { useTranslation } from 'react-i18next'
 import { SharedListensSettings } from './accounts/shared-listens-settings'
 import { DualUrlSettings } from './content/dual-url-settings'
 
 export function AccountsSettings() {
-  const { t } = useTranslation()
-
   return (
     <div className="space-y-6">
       <div className="space-y-2">

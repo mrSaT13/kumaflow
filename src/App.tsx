@@ -138,6 +138,34 @@ function App() {
     return () => unsubBrainQueue()
   }, [initializeServices, initializeListenBrainz])
 
+  // Remote Control: тихий автозапуск пульта при старте приложения.
+  // Раньше сервер поднимался только при открытии страницы настроек
+  // (тихий рестарт в RemoteControlSettings.loadStatus), поэтому после
+  // перезапуска плеера телефон не подключался, хотя тумблер включён.
+  // Main-процесс тоже пробует автостарт, но порт может быть занят —
+  // этот эффект добивает запуск из рендера, один раз за сессию.
+  useEffect(() => {
+    let cancelled = false
+    const t = setTimeout(async () => {
+      try {
+        const api = (window as any)?.api?.remoteControl
+        if (!api?.getStatus || !api?.start) return
+        if (!useAppStore.getState().remoteControl?.enabled) return
+        const st = await api.getStatus().catch(() => null)
+        if (!st?.enabled && !cancelled) {
+          console.log('[App] Remote server down but toggle is ON — quiet autostart...')
+          await api.start().catch((e: unknown) => console.warn('[App] Remote quiet autostart failed:', e))
+        }
+      } catch {
+        /* ignore — поднимется при открытии настроек */
+      }
+    }, 4000)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [])
+
   // Функция синхронизации лайкнутых артистов
   async function syncFavoriteArtists() {
     try {

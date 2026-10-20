@@ -70,7 +70,6 @@ export interface YandexLikedTracks {
 }
 
 class YandexMusicService {
-  private baseUrl: string = 'https://api.music.yandex.net'
   private token: string = ''
   private cache: Map<string, { data: any; expires: number }> = new Map()
   private readonly CACHE_TTL: number = 24 * 60 * 60 * 1000 // 24 часа

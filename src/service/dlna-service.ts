@@ -170,7 +170,6 @@ class DLNAService {
    */
   private handleRequest(req: any, res: any): void {
     const url = req.url
-    const method = req.method
 
     if (url?.startsWith('/stream/')) {
       this.streamTrack(req, res)
@@ -359,7 +358,7 @@ class DLNAService {
     const name = this.extractNameFromServer(serverMatch?.[1]) || 'Unknown Device'
 
     // Определяем тип устройства
-    const type = this.detectDeviceType(response, serverMatch?.[1])
+    const type = this.detectDeviceType(response)
 
     // Извлекаем URLs для управления
     const controlUrl = locationMatch[1].trim()
@@ -390,9 +389,8 @@ class DLNAService {
   /**
    * Определение типа устройства
    */
-  private detectDeviceType(response: string, serverHeader?: string): DLNADevice['type'] {
+  private detectDeviceType(response: string): DLNADevice['type'] {
     const lowerResponse = response.toLowerCase()
-    const lowerServer = (serverHeader || '').toLowerCase()
 
     // TV устройства
     if (lowerResponse.includes('tv') || lowerResponse.includes('samsung') || 

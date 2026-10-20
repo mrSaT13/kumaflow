@@ -84,13 +84,21 @@ function hslToHex(h: number, s: number, l: number): string {
   return `#${to(r)}${to(g)}${to(b)}`
 }
 
-/** Из акцентного hex — тройка для капли. Мусор на входе → null (будет дефолт). */
+/**
+ * Из акцентного hex — тройка для капли. Мусор на входе → null (будет дефолт).
+ * Ахромат: чёрная обложка (l<30) даёт тёмную сланец-тройку вместо дефолта —
+ * иначе у чёрных обложек волна всегда ярко-синяя. Белая/серая — как раньше
+ * дефолт: белое пятно слепит и на светлой, и на тёмной теме.
+ */
 export function buildWaveTrio(base: string | null | undefined, dark: boolean): WaveTrio | undefined {
   if (!base) return undefined
   const hsl = hexToHsl(base)
   if (!hsl) return undefined
   const [h, s, l] = hsl
-  if (s < 8) return undefined // серый/белый акцент — не красим
+  if (s < 8) {
+    if (l < 30) return dark ? (['#3b4a5e', '#2c3644', '#202833'] as WaveTrio) : (['#3a4452', '#2b333f', '#1f2630'] as WaveTrio)
+    return undefined // серый/белый акцент — не красим
+  }
   const sat = Math.max(s, 62)
   const light = dark ? 60 : Math.min(62, Math.max(l, 52))
   return [hslToHex(h, sat, light), hslToHex(h + 35, sat, light), hslToHex(h - 35, Math.max(sat - 5, 55), light + 6)]

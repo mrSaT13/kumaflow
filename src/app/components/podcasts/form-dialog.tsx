@@ -74,7 +74,6 @@ const defaultValues = {
 export function PodcastFormDialog({ open, setOpen }: PodcastFormDialogProps) {
   const { t } = useTranslation()
   const { addPodcast: addLocalPodcast } = useLocalPodcastsStore()
-  const { podcasts: podcastsSettings } = useAppStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const form = useForm<PodcastSchema>({

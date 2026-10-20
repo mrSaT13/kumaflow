@@ -12,7 +12,7 @@ import React, { useState } from 'react'
 import { Fragment } from 'react/jsx-runtime'
 import { AboutDialog } from '@/app/components/about/dialog'
 import { ShortcutsDialog } from '@/app/components/shortcuts/dialog'
-import { useAvatar, useAvatarActions } from '@/store/avatar.store'
+import { useAvatar } from '@/store/avatar.store'
 import { useAppData, useAppStore } from '@/store/app.store'
 import { cn } from '@/lib/utils'
 import {
@@ -34,7 +34,7 @@ import {
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
-import { useAccounts, useAccountsActions, useCurrentAccount } from '@/store/accounts.store'
+import { useAccounts, useAccountsActions } from '@/store/accounts.store'
 import { useAppSettings } from '@/store/app.store'
 import { isMacOS } from '@/utils/desktop'
 
@@ -66,9 +66,7 @@ export function UserAvatar({ size = 32, className }: UserAvatarProps) {
   
   const currentImage = settings.avatarData
   const accounts = useAccounts()
-  const currentAccount = useCurrentAccount()
   const { addAccount, switchAccount } = useAccountsActions()
-  const avatarActions = useAvatarActions()
   
   const alignPosition = isMacOS ? 'end' : 'center'
   

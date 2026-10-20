@@ -25,12 +25,6 @@ interface WikipediaPage {
   }
 }
 
-interface WikidataSitelinks {
-  enwiki?: { title: string }
-  ruwiki?: { title: string }
-  commonswiki?: { title: string }
-}
-
 interface SocialLinks {
   instagram?: string
   twitter?: string
@@ -54,14 +48,6 @@ class WikipediaService {
   private ruBaseUrl: string = 'https://ru.wikipedia.org/w/api.php'
   private wikidataUrl: string = 'https://www.wikidata.org/w/api.php'
   private commonsUrl: string = 'https://commons.wikimedia.org/w/api.php'  // Wikimedia Commons
-  
-  /**
-   * Получить текущий язык интерфейса
-   */
-  private getCurrentLanguage(): 'ru' | 'en' {
-    const savedLang = localStorage.getItem('i18nextLng') || 'ru'
-    return savedLang.startsWith('ru') ? 'ru' : 'en'
-  }
   
   /**
    * Поиск статьи об артисте

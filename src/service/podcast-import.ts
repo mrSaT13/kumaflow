@@ -18,26 +18,6 @@ function readFileAsText(file: File): Promise<string> {
 }
 
 /**
- * Извлечь RSS URL из OPML файла
- */
-function extractRSSFromOPML(opmlText: string): string[] {
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(opmlText, 'text/xml')
-  
-  const outlines = doc.querySelectorAll('outline[xmlUrl]')
-  const rssUrls: string[] = []
-  
-  outlines.forEach((outline) => {
-    const xmlUrl = outline.getAttribute('xmlUrl')
-    if (xmlUrl && (xmlUrl.includes('rss') || xmlUrl.includes('feed') || xmlUrl.endsWith('.xml'))) {
-      rssUrls.push(xmlUrl)
-    }
-  })
-  
-  return rssUrls
-}
-
-/**
  * Проверить тип файла (RSS или OPML)
  */
 function detectFileType(content: string): 'rss' | 'opml' | 'unknown' {

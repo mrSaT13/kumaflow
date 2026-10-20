@@ -3,7 +3,6 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { toast } from 'react-toastify'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
@@ -15,8 +14,7 @@ import { useAppData, useAppActions } from '@/store/app.store'
 import { fetchWithCorsProxy } from '@/utils/cors-proxy'
 
 export function DualUrlSettings() {
-  const { t } = useTranslation()
-  const { url: currentUrl, username, password } = useAppData()
+  const { url: currentUrl } = useAppData()
   const { setUrl } = useAppActions()
 
   const [enabled, setEnabled] = useState(false)

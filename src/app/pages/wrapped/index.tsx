@@ -11,8 +11,8 @@ import { ArrowLeft, Music, Headphones, Clock, Calendar, Trophy } from 'lucide-re
 
 export default function WrappedPage() {
   const navigate = useNavigate()
-  const { currentYear, setYear, getYearData, years } = useWrapped()
-  const { achievements, getUnlockedCount } = useAchievements()
+  const { currentYear, setYear, getYearData } = useWrapped()
+  const { achievements } = useAchievements()
   const [yearData, setYearData] = useState<any>(null)
 
   useEffect(() => {

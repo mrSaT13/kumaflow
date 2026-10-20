@@ -3,7 +3,6 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { TrendingUp, Music, Loader2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent } from '@/app/components/ui/card'
@@ -21,7 +20,6 @@ interface LastFmTrack {
 }
 
 export function GlobalChartsCard() {
-  const { t } = useTranslation()
   const { setSongList } = usePlayerActions()
   const [topTracks, setTopTracks] = useState<LastFmTrack[]>([])
   const [isLoading, setIsLoading] = useState(true)

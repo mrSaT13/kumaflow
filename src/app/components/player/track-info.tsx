@@ -1,4 +1,3 @@
-import randomCSSHexColor from '@chriscodesthings/random-css-hex-color'
 import { AudioLines, Expand, Shrink } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { Fragment } from 'react/jsx-runtime'
@@ -33,19 +32,18 @@ export function TrackInfo({ song }: { song: ISong | undefined }) {
     const img = getImageElement()
     if (!img) return
 
-    let color = randomCSSHexColor(true)
-
     try {
-      color = (await getAverageColor(img)).hex
+      const color = (await getAverageColor(img)).hex
       logger.info('[TrackInfo] - Getting Image Average Color', {
         color,
       })
+      if (color !== currentSongColor) {
+        setCurrentSongColor(color)
+      }
     } catch {
+      // Не ставим случайный цвет: волна и прогресс прыгнули бы в мусор.
+      // Оставляем предыдущий — hero сам откатится на цвет жанра.
       logger.error('[TrackInfo] - Unable to get image average color.')
-    }
-
-    if (color !== currentSongColor) {
-      setCurrentSongColor(color)
     }
   }, [currentSongColor, setCurrentSongColor, getImageElement])
 

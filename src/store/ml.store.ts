@@ -115,7 +115,6 @@ export const useMLStore = createWithEqualityFn<MLStore>()(
             set((state) => {
               const existingRating = state.ratings[songId]
               const today = new Date().toISOString().split('T')[0]
-              const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
 
               // Считаем daysSinceLastPlay
               let daysSinceLastPlay = existingRating?.daysSinceLastPlay || 0
@@ -555,7 +554,6 @@ export const useMLStore = createWithEqualityFn<MLStore>()(
           // Применить Decay factor к весам жанров и артистов
           applyDecayFactor: () => {
             set((state) => {
-              const now = new Date()
               const decayRate = 0.995 // 0.5% затухания в день
               const minWeight = 0.1 // Минимальный вес
 

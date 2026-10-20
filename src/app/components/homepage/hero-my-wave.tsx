@@ -7,7 +7,7 @@ import { Pause, Play, RefreshCw, Settings } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'react-toastify'
 import { generateMyWavePlaylist } from '@/service/ml-wave-service'
-import { clearWaveSeed } from '@/service/wave-identity'
+import { clearWaveSeedPlaylist } from '@/service/wave-seed'
 import { readLocalWaveSettings } from '@/service/wave-settings-local'
 import { useML } from '@/store/ml.store'
 import { usePlayerActions, usePlayerStore } from '@/store/player.store'
@@ -35,8 +35,9 @@ export default function HeroMyWave() {
   const handlePlayMyWave = async () => {
     // Волна уже идёт — не генерируем новую, а продолжаем текущую.
     // Обычный запуск волны — сид («В стиле: …») сбрасывается, иначе капсула
-    // на главной продолжит врать, что лента посажена на артиста.
-    clearWaveSeed()
+    // на главной продолжит врать, что лента посажена на артиста. Сброс идёт
+    // и на сервер: там сид — якорь волны.
+    clearWaveSeedPlaylist()
     if (isWaveActive && !isGenerating) {
       const st = usePlayerStore.getState()
       if (!st.playerState.isPlaying) {

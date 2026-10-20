@@ -29,7 +29,7 @@ export const useYandexMusicStore = createWithEqualityFn<YandexMusicStore>()(
   persist(
     subscribeWithSelector(
       devtools(
-        immer((set, get) => ({
+        immer((set) => ({
           settings: defaultSettings,
 
           setYandexMusicEnabled: (enabled: boolean) => {

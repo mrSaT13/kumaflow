@@ -65,13 +65,15 @@ export function KumaWaveHero({
         </button>
 
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          {/* Все три пилюли — одно матовое стекло: в светлой теме был разнобой
+              (сплошная заливка у кнопок, прозрачка у хинта). */}
           <button
             onClick={onOpenSettings}
             className={cn(
-              'flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium shadow-sm transition-colors',
+              'flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium shadow-sm transition-colors backdrop-blur-md border',
               dark
-                ? 'bg-white/10 text-white backdrop-blur-sm hover:bg-white/20'
-                : 'bg-[#DCE7F8]/90 text-[#1A2B4A] hover:bg-[#CBDDF5]',
+                ? 'bg-white/10 text-white hover:bg-white/20 border-white/10'
+                : 'bg-white/55 text-[#1A2B4A] hover:bg-white/70 border-white/50',
             )}
           >
             <Settings2 className="h-4 w-4" />
@@ -83,10 +85,10 @@ export function KumaWaveHero({
             onClick={onOpenStats}
             title="Статистика прослушиваний"
             className={cn(
-              'flex h-9 w-9 items-center justify-center rounded-full shadow-sm transition-colors',
+              'flex h-9 w-9 items-center justify-center rounded-full shadow-sm transition-colors backdrop-blur-md border',
               dark
-                ? 'bg-white/10 text-white backdrop-blur-sm hover:bg-white/20'
-                : 'bg-[#DCE7F8]/90 text-[#1A2B4A] hover:bg-[#CBDDF5]',
+                ? 'bg-white/10 text-white hover:bg-white/20 border-white/10'
+                : 'bg-white/55 text-[#1A2B4A] hover:bg-white/70 border-white/50',
             )}
           >
             <BarChart3 className="h-4 w-4" />
@@ -97,10 +99,10 @@ export function KumaWaveHero({
               onClick={onClearHint}
               title="Сбросить настройку волны"
               className={cn(
-                'flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium backdrop-blur-sm transition-colors',
+                'flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors border shadow-sm',
                 dark
-                  ? 'bg-white/10 text-white hover:bg-white/20'
-                  : 'bg-black/[0.07] text-[#1A2B4A] hover:bg-black/[0.12]',
+                  ? 'bg-white/10 text-white hover:bg-white/20 border-white/10'
+                  : 'bg-white/40 text-[#1A2B4A] hover:bg-white/60 border-white/40',
               )}
             >
               {waveHint}

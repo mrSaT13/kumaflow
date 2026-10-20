@@ -65,7 +65,7 @@ export async function enrichTrackMetadata(
 export async function enrichAlbumMetadata(
   artist: string,
   albumTitle: string,
-  year?: number
+  _year?: number
 ): Promise<EnrichedMetadata | null> {
   const { settings } = useExternalApiStore.getState()
   const result: EnrichedMetadata = {}
@@ -217,7 +217,7 @@ const CACHE_TTL = 7 * 24 * 60 * 60 * 1000 // 7 дней
  * Обогатить с кэшированием
  */
 export async function enrichWithCache(
-  type: 'track' | 'album' | 'artist',
+  _type: 'track' | 'album' | 'artist',
   key: string,
   enrichFn: () => Promise<EnrichedMetadata | null>
 ): Promise<EnrichedMetadata | null> {

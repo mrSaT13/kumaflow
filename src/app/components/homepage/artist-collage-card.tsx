@@ -23,7 +23,6 @@ interface ArtistCollageCardProps {
 export function ArtistCollageCard({
   artistId,
   artistName,
-  onCoverClick,
 }: ArtistCollageCardProps) {
   const { setSongList } = usePlayerActions()
   const [albumCovers, setAlbumCovers] = useState<string[]>([])

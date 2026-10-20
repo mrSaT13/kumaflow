@@ -17,6 +17,7 @@
  */
 import { usePlayerStore } from '@/store/player.store'
 import type { ISong } from '@/types/responses/song'
+import { waveSeedClear } from './brain-wave'
 import {
   clearWaveSeed,
   saveWaveContext,
@@ -43,7 +44,14 @@ export function applyWaveSeed(
   return name
 }
 
-/** Сорвать сид: лента возвращается в обычную волну с пилюлями. */
+/**
+ * Сорвать сид: лента возвращается в обычную волну с пилюлями.
+ *
+ * Гасим сид И на сервере: с 0.3.23 сохранённый сид — якорь волны, и
+ * локальный сброс без DELETE /api/wave/seed оставлял бы стиль сида рулить
+ * волной. Ошибка сети не критична: сервер протухнет сид через 12 ч.
+ */
 export function clearWaveSeedPlaylist(): void {
   clearWaveSeed()
+  void waveSeedClear().catch(() => undefined)
 }

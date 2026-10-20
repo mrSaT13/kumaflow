@@ -30,6 +30,7 @@ import {
   selectCurrentSong,
 } from '@/store/player.store'
 import { isBrainActive } from '@/store/brain.store'
+import { useMLStore } from '@/store/ml.store'
 import { wavePublish } from '@/service/brain-wave'
 import { isWavePlaylistName } from '@/service/wave-identity'
 import { StreakWidget } from '@/app/components/streak/streak-widget'
@@ -58,6 +59,38 @@ const MemoRadioInfo = memo(RadioInfo)
 const MemoPodcastInfo = memo(PodcastInfo)
 const MemoPlayerControls = memo(PlayerControls)
 const MemoPlayerProgress = memo(PlayerProgress)
+
+/**
+ * Лайк трека для пульта: флаг userFavorite в объекте очереди может быть
+ * stale (трек лайкнут раньше или с другого клиента), поэтому добиваем
+ * рейтингом ML-профиля. Чисто синхронно — безопасно для sendState.
+ */
+function resolveRemoteLiked(song: any): boolean {
+  try {
+    if (song?.userFavorite) return true
+    const id = song?.id
+    if (id === undefined || id === null || id === '') return false
+    const liked: string[] =
+      useMLStore.getState()?.profile?.likedSongs ?? []
+    return liked.includes(String(id))
+  } catch {
+    return !!song?.userFavorite
+  }
+}
+
+/**
+ * Громкость для пульта: читаем стор (единственный источник истины),
+ * а НЕ audio.volume — при живом WebAudio-графе элемент навсегда прибит
+ * к 1 (звук идёт через gain-узел), и пульт вечно видел 100.
+ * Заодно лечит `0 || 50`: мут теперь честно 0, а не 50.
+ */
+function resolveRemoteVolume(storeVolume: unknown): number {
+  const v =
+    typeof storeVolume === 'number' && Number.isFinite(storeVolume)
+      ? Math.round(storeVolume)
+      : 50
+  return Math.max(0, Math.min(100, v))
+}
 const MemoPlayerQueueButton = memo(PlayerQueueButton)
 const MemoPlayerClearQueueButton = memo(PlayerClearQueueButton)
 const MemoPlayerVolume = memo(PlayerVolume)
@@ -411,10 +444,10 @@ export function Player() {
         coverArt: getCoverArtUrl(currentSong?.coverArt || song?.coverArt),
         duration: Math.floor(audio.duration) || 0,
         progress: Math.floor(audio.currentTime) || 0,
-        volume: Math.floor(audio.volume * 100) || 50,
+        volume: resolveRemoteVolume(store.playerState.volume),
         isShuffle: store.playerState.isShuffleActive,
         repeatMode: loopStateToMode(store.playerState.loopState),
-        isLiked: currentSong?.userFavorite || false,
+        isLiked: resolveRemoteLiked(currentSong),
       }
 
       // console.log('[Remote] Отправляем состояние:', state)  // 🤫 Убрано из логов
@@ -638,7 +671,7 @@ export function Player() {
                       coverArt: updatedCurrentSong.coverArt ? `/getCoverArt?id=${encodeURIComponent(updatedCurrentSong.coverArt)}&size=300` : '',
                       duration: Math.floor(audio.duration) || 0,
                       progress: Math.floor(audio.currentTime) || 0,
-                      volume: Math.floor(audio.volume * 100) || 50,
+                      volume: resolveRemoteVolume(updatedStore.playerState.volume),
                       isShuffle: updatedStore.playerState.isShuffleActive,
                       repeatMode: updatedStore.playerState.loopState === 2 ? 'one' : updatedStore.playerState.loopState === 1 ? 'all' : 'off',
                       isLiked: newLikedStatus,
@@ -698,7 +731,7 @@ export function Player() {
                       coverArt: updatedSong.coverArt ? `/getCoverArt?id=${encodeURIComponent(updatedSong.coverArt)}&size=300` : '',
                       duration: Math.floor(audio.duration) || 0,
                       progress: Math.floor(audio.currentTime) || 0,
-                      volume: Math.floor(audio.volume * 100) || 50,
+                      volume: resolveRemoteVolume(updatedStore.playerState.volume),
                       isShuffle: updatedStore.playerState.isShuffleActive,
                       repeatMode: updatedStore.playerState.loopState === 2 ? 'one' : updatedStore.playerState.loopState === 1 ? 'all' : 'off',
                       isLiked: false,

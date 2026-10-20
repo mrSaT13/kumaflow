@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useListenBrainz } from '@/store/listenbrainz.store'
 import { listenBrainzApi } from '@/service/listenbrainz-api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
@@ -12,7 +11,6 @@ import { ExternalLink, Check, X, Loader2 } from 'lucide-react'
 import { toast } from 'react-toastify'
 
 export function ListenBrainzSettings() {
-  const { t } = useTranslation()
   const { enabled, token, userName, isAuthenticated, setEnabled, setToken, clearToken, validateToken } = useListenBrainz()
   
   const [inputToken, setInputToken] = useState('')

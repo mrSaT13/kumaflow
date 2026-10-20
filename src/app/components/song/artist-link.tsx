@@ -70,7 +70,7 @@ export function ArtistsLinks({ artists, onClickLink }: ArtistsLinksProps) {
   return (
     <div className="relative">
       <div className="flex items-center truncate">
-        {data.map(({ id, name, coverArt }, index) => (
+          {data.map(({ id, name }, index) => (
           <div
             key={id}
             className={clsx('flex items-center', index > 0 && 'truncate')}

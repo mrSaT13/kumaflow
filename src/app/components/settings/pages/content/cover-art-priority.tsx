@@ -53,7 +53,7 @@ const COVER_SOURCES: CoverPriority[] = [
 ]
 
 export function CoverArtPriorityCard() {
-  const { settings, setFanartEnabled, setAppleMusicEnabled } = useExternalApi()
+  const { settings } = useExternalApi()
   const [priority, setPriority] = useState<string[]>(() => {
     const saved = localStorage.getItem('coverArtPriority')
     return saved ? JSON.parse(saved) : ['navidrome', 'fanart', 'discogs', 'appleMusic', 'yandex', 'lastfm']

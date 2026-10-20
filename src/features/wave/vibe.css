@@ -1,0 +1,190 @@
+/**
+ * CSS-фолбэк фоновой анимации.
+ *
+ * Используется, когда WebGL недоступен (старый браузер, отключён GPU,
+ * headless, жёсткий `engine: 'css'`). Палитра и набор настроек те же,
+ * что у WebGL-версии, поэтому страница не меняется при переключении.
+ *
+ * Управление — через CSS-переменные на .vibe-css:
+ *   --vibe-hue      сдвиг оттенка, БЕЗ единиц (градусы). В hsl() канал hue
+ *                   принимает calc() только с unitless-числом: вариант
+ *                   calc(322deg + var(--vibe-hue)) браузер отбрасывает как
+ *                   невалидный, а calc(322 + var(--vibe-hue)) принимает.
+ *   --vibe-speed    множитель скорости (делитель длительности)
+ *   --vibe-opacity  общая непрозрачность
+ *   --vibe-blur     размытие краёв
+ *   --vibe-scale    масштаб блобов
+ *   --vibe-bg       цвет подложки
+ */
+
+.vibe-css,
+.vibe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.vibe--disabled {
+  display: none !important;
+}
+
+.vibe-css {
+  --vibe-hue: 0;
+  --vibe-speed: 1;
+  --vibe-opacity: 1;
+  --vibe-blur: 60px;
+  --vibe-scale: 1;
+  --vibe-bg: #ffffff;
+  --vibe-neon: 0.85;
+  --vibe-beat: 0;
+  --vibe-scream: 0;
+  --vibe-level: 0;
+
+  overflow: hidden;
+  background: var(--vibe-bg);
+  /* Музыка: уровень качает общую плотность, неон — насыщенность. */
+  opacity: min(1, calc(var(--vibe-opacity) * (1 + var(--vibe-level) * 0.15)));
+  filter: saturate(calc(1 + var(--vibe-neon) * 0.3))
+    brightness(calc(0.96 + var(--vibe-level) * 0.22));
+  /* Бит и скрим: лёгкий пульс всего слоя (композитор, без layout).
+     Берём максимум — качает и кик, и крик. */
+  transform: scale(calc(1 + max(var(--vibe-beat), var(--vibe-scream)) * 0.035));
+}
+
+.vibe-css__blob {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  will-change: transform;
+  transform-origin: 50% 50%;
+  filter: blur(var(--vibe-blur));
+  /* Неон в CSS: яркость блоба растёт с уровнем, иначе пауза/бит не видны. */
+  opacity: calc(0.72 + var(--vibe-level) * 0.28);
+}
+
+/* Розовый внешний слой */
+.vibe-css__blob--1 {
+  width: 82%;
+  height: 82%;
+  left: 4%;
+  top: 0%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    hsl(calc(322 + var(--vibe-hue)) 100% 74%) 0%,
+    hsl(calc(322 + var(--vibe-hue)) 100% 74% / 0.6) 44%,
+    transparent 70%
+  );
+  animation: vibe-drift-1 calc(26s / var(--vibe-speed)) ease-in-out infinite alternate;
+}
+
+/* Маджента */
+.vibe-css__blob--2 {
+  width: 66%;
+  height: 66%;
+  left: 12%;
+  top: 14%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    hsl(calc(296 + var(--vibe-hue)) 92% 62%) 0%,
+    hsl(calc(296 + var(--vibe-hue)) 92% 62% / 0.55) 45%,
+    transparent 72%
+  );
+  animation: vibe-drift-2 calc(21s / var(--vibe-speed)) ease-in-out infinite alternate;
+}
+
+/* Оранжевое ядро */
+.vibe-css__blob--3 {
+  width: 50%;
+  height: 50%;
+  left: 27%;
+  top: 20%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    hsl(calc(30 + var(--vibe-hue)) 100% 62%) 0%,
+    hsl(calc(30 + var(--vibe-hue)) 100% 62% / 0.55) 45%,
+    transparent 72%
+  );
+  animation: vibe-drift-3 calc(17s / var(--vibe-speed)) ease-in-out infinite alternate;
+}
+
+/* Жёлтое ядро */
+.vibe-css__blob--4 {
+  width: 36%;
+  height: 36%;
+  left: 35%;
+  top: 24%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    hsl(calc(50 + var(--vibe-hue)) 100% 70%) 0%,
+    hsl(calc(50 + var(--vibe-hue)) 100% 70% / 0.6) 40%,
+    transparent 70%
+  );
+  animation: vibe-drift-4 calc(13s / var(--vibe-speed)) ease-in-out infinite alternate;
+}
+
+/* Розовый акцент снизу */
+.vibe-css__blob--5 {
+  width: 56%;
+  height: 56%;
+  left: 8%;
+  top: 40%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    hsl(calc(310 + var(--vibe-hue)) 96% 70%) 0%,
+    hsl(calc(310 + var(--vibe-hue)) 96% 70% / 0.5) 45%,
+    transparent 70%
+  );
+  animation: vibe-drift-5 calc(23s / var(--vibe-speed)) ease-in-out infinite alternate;
+}
+
+/* Светлая подсветка снизу справа */
+.vibe-css__blob--6 {
+  width: 44%;
+  height: 44%;
+  left: 44%;
+  top: 52%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    hsl(calc(340 + var(--vibe-hue)) 100% 84%) 0%,
+    transparent 68%
+  );
+  animation: vibe-drift-6 calc(19s / var(--vibe-speed)) ease-in-out infinite alternate;
+}
+
+@keyframes vibe-drift-1 {
+  from { transform: translate3d(0, 0, 0) scale(var(--vibe-scale)); }
+  to   { transform: translate3d(6%, 5%, 0) scale(calc(var(--vibe-scale) * 1.12)); }
+}
+
+@keyframes vibe-drift-2 {
+  from { transform: translate3d(0, 0, 0) scale(var(--vibe-scale)); }
+  to   { transform: translate3d(-7%, 8%, 0) scale(calc(var(--vibe-scale) * 1.18)); }
+}
+
+@keyframes vibe-drift-3 {
+  from { transform: translate3d(0, 0, 0) scale(var(--vibe-scale)); }
+  to   { transform: translate3d(8%, -6%, 0) scale(calc(var(--vibe-scale) * 1.22)); }
+}
+
+@keyframes vibe-drift-4 {
+  from { transform: translate3d(0, 0, 0) scale(var(--vibe-scale)); }
+  to   { transform: translate3d(-5%, -9%, 0) scale(calc(var(--vibe-scale) * 1.26)); }
+}
+
+@keyframes vibe-drift-5 {
+  from { transform: translate3d(0, 0, 0) scale(var(--vibe-scale)); }
+  to   { transform: translate3d(10%, -4%, 0) scale(calc(var(--vibe-scale) * 1.14)); }
+}
+
+@keyframes vibe-drift-6 {
+  from { transform: translate3d(0, 0, 0) scale(var(--vibe-scale)); }
+  to   { transform: translate3d(-9%, -7%, 0) scale(calc(var(--vibe-scale) * 1.2)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vibe-css__blob { animation: none !important; }
+}

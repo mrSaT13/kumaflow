@@ -74,7 +74,7 @@ export class RemoteControlService {
       const fs = require('fs')
       const path = require('path')
       
-      this.httpServer = http.createServer((req: any, res: any) => {
+      this.httpServer = http.createServer((_req: any, res: any) => {
         // Раздаём remote страницу
         const remotePath = path.join(app.getAppPath(), 'electron', 'remote', 'index.html')
         
@@ -167,7 +167,7 @@ export class RemoteControlService {
   /**
    * Обработка нового подключения
    */
-  private handleConnection(ws: WebSocket, req: any) {
+  private handleConnection(ws: WebSocket, _req: any) {
     const clientId = this.generateClientId()
     const client: RemoteClient = {
       id: clientId,
@@ -319,16 +319,6 @@ export class RemoteControlService {
         event: 'state-update',
         state,
       })
-    })
-  }
-
-  /**
-   * Отправка очереди воспроизведения
-   */
-  private sendQueue(client: RemoteClient) {
-    this.mainWindow?.webContents.send('remote-control', { 
-      action: 'get-queue', 
-      clientId: client.id 
     })
   }
 

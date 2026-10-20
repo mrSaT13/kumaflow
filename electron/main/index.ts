@@ -5,7 +5,7 @@ import { initAutoUpdater } from './core/updater'
 import { createWindow, mainWindow, sendToRenderer } from './window'
 import { initAudiobookshelfIPC } from './core/audiobookshelf'
 import { setupLocalMusicHandlers } from './core/local-music-handler'
-import { startRemoteServer, stopRemoteServer, updateRemoteState, setRemoteMainWindow, getRemoteStatus, setRemotePort, setRemoteHost, getRemotePin, setRemotePin, setRemoteBaseAppUrl, setupRemoteQueueHandler, getConnectedClients } from '../../src/service/remote-server'
+import { startRemoteServer, stopRemoteServer, updateRemoteState, setRemoteMainWindow, getRemoteStatus, setRemotePort, setRemoteHost, getRemotePin, setRemotePin, setRemoteBaseAppUrl, setupRemoteQueueHandler, getConnectedClients, saveRemoteSettings } from '../../src/service/remote-server'
 // 🆕 DLNA - dynamic import чтобы не тянуть localStorage в main process
 // 🆕 DLNA - lazy getter чтобы не тянуть localStorage при старте
 let _dlnaService: any = null
@@ -181,11 +181,15 @@ if (!instanceLock) {
       const saved = await loadRemoteControlSettings().catch(() => ({} as any))
       if (saved?.ip && !selectedRemoteIp) selectedRemoteIp = saved.ip
       await startRemoteServer({ enabled: true, port: port || saved?.port || 4333, host: '0.0.0.0' })
+      // Запоминаем, что сервер включён — иначе после перезапуска main не знает,
+      // что нужно автозапускаться (раньше enabled вообще нигде не сохранялся).
+      await saveRemoteSettings({ enabled: true, port: port || saved?.port || 4333 })
       return getRemoteStatus()
     })
 
     ipcMain.handle('remote-control:stop', async () => {
       await stopRemoteServer()
+      await saveRemoteSettings({ enabled: false })
       return getRemoteStatus()
     })
 
@@ -297,6 +301,10 @@ if (!instanceLock) {
     })
 
     // Восстанавливаем выбранный IP при старте (чтобы VPN-адрес не сбрасывался на первый)
+    // и автозапускаем сервер, если он был включён. Раньше автозапуска в main не было
+    // вовсе — сервер поднимался только тихим рестартом при открытии настроек
+    // (RemoteControlSettings.loadStatus), отсюда и баг «после перезапуска remote
+    // оживает только когда открою настройки».
     import('../../src/service/remote-server').then(async ({ loadRemoteControlSettings }) => {
       try {
         const s = await loadRemoteControlSettings()
@@ -304,7 +312,26 @@ if (!instanceLock) {
           selectedRemoteIp = s.ip
           console.log(`[Remote] Restored saved IP: ${s.ip}`)
         }
-      } catch { /* ignore */ }
+        if (s?.enabled) {
+          console.log('[Remote] Autostarting server (was enabled before restart)...')
+          try {
+            await startRemoteServer({ enabled: true, port: s.port || 4333, host: '0.0.0.0' })
+            console.log('[Remote] Autostart OK, listening')
+          } catch (e1) {
+            // Частый кейс: старый процесс ещё держит порт (дев-рестарт).
+            // Один ретрай через 5с вместо молчаливого warn — иначе пульт
+            // молчит до первого открытия настроек.
+            console.warn('[Remote] Autostart attempt 1 failed, retry in 5s:', (e1 as Error)?.message)
+            await new Promise((r) => setTimeout(r, 5000))
+            await startRemoteServer({ enabled: true, port: s.port || 4333, host: '0.0.0.0' })
+            console.log('[Remote] Autostart OK on retry, listening')
+          }
+        }
+      } catch (e) {
+        // Не роняем старт приложения: порт может быть занят, сервер поднимется
+        // тихим рестартом при открытии настроек и корневым автостартом в App.
+        console.warn('[Remote] Autostart failed:', (e as Error)?.message)
+      }
     })
 
     // Получить список подключённых клиентов

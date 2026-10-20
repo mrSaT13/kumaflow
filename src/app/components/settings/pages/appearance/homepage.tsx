@@ -4,7 +4,6 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { GripVertical, RotateCcw } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Switch } from '@/app/components/ui/switch'
@@ -85,7 +84,6 @@ function SortableSection({ id, title, enabled, onToggle }: SortableSectionProps)
 }
 
 export function HomepageSettingsContent() {
-  const { t } = useTranslation()
   const settings = useHomepageSettings()
   const { setSectionEnabled, setSectionOrder, resetToDefaults } = useHomepageSettingsActions()
 

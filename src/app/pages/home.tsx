@@ -112,12 +112,6 @@ function OldHomepage() {
     gcTime: 1000 * 60 * 60, // 1 час в кэше
   })
 
-  // Персональные жанры (топ из ML + популярные из Navidrome)
-  const personalGenres = allGenres
-    .filter(g => g.songCount && g.songCount > 0)
-    .sort((a, b) => (b.songCount || 0) - (a.songCount || 0))
-    .slice(0, 8)
-
   const handleGenreClick = async (genreName: string) => {
     setIsGeneratingGenre(genreName)
     try {

@@ -52,7 +52,7 @@ export default function ColdStartOnboarding() {
   const [genres, setGenres] = useState<SubsonicGenre[]>([])
   const [allArtists, setAllArtists] = useState<ArtistWithGenres[]>([])
   const [artistsByGenre, setArtistsByGenre] = useState<Record<string, ArtistWithGenres[]>>({})
-  const [artistGenresCache, setArtistGenresCache] = useState<Record<string, string[]>>({})
+  const [artistGenresCache] = useState<Record<string, string[]>>({})
   const [artistImagesCache, setArtistImagesCache] = useState<Record<string, string>>({})
   const [selectedGenreFilter, setSelectedGenreFilter] = useState<string>('Микс')
   const [searchQuery, setSearchQuery] = useState('')
@@ -225,20 +225,6 @@ export default function ColdStartOnboarding() {
 
     loadData()
   }, [])
-
-  // Ленивая загрузка жанров для артистов
-  const loadArtistGenres = async (artistId: string) => {
-    if (artistGenresCache[artistId]) return artistGenresCache[artistId]
-
-    try {
-      const info = await getArtistInfo(artistId)
-      const artistGenres = info?.genres || []
-      setArtistGenresCache(prev => ({ ...prev, [artistId]: artistGenres }))
-      return artistGenres
-    } catch {
-      return []
-    }
-  }
 
   // Фильтрация артистов по жанру + поиск
   const filteredArtists = useMemo(() => {

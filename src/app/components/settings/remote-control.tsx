@@ -58,7 +58,7 @@ export function RemoteControlSettings() {
   const [showManualInput, setShowManualInput] = useState(false)
   const [pin, setPin] = useState('')
   const [hasPin, setHasPin] = useState(false)
-  const [allUrls, setAllUrls] = useState<{ ip: string; iface: string; url: string }[]>([])
+  const [, setAllUrls] = useState<{ ip: string; iface: string; url: string }[]>([])
 
   // Берём enabled из app.store вместо локального useState!
   const appStore = useAppStore()

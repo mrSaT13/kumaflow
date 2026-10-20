@@ -1,11 +1,8 @@
 import { Maximize2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { SimpleTooltip } from '@/app/components/ui/simple-tooltip'
-import { useTranslation } from 'react-i18next'
 
 export function MiniPlayerFullscreenButton() {
-  const { t } = useTranslation()
-
   const handleToggle = () => {
     const current = localStorage.getItem('miniPlayerFullscreen')
     const newValue = current !== 'true'

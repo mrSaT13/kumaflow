@@ -615,7 +615,7 @@ class LastFmService {
    * @param artistName - Имя артиста
    * @param limit - Количество результатов
    */
-  async getSimilarTracks(trackName: string, artistName: string, limit: number = 10): Promise<Array<{ name: string; artist: string; url: string }>> {
+  async getSimilarTracks(_trackName: string, artistName: string, limit: number = 10): Promise<Array<{ name: string; artist: string; url: string }>> {
     try {
       // 1. Получаем похожих артистов
       const similarArtists = await this.getSimilarArtists(artistName, 5)

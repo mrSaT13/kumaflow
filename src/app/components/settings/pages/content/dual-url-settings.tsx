@@ -5,7 +5,6 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { toast } from 'react-toastify'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
@@ -19,7 +18,6 @@ import { dualUrlService } from '@/service/dual-url-service'
 import { Activity, CheckCircle2, Wifi, XCircle } from 'lucide-react'
 
 export function DualUrlSettings() {
-  const { t } = useTranslation()
   const account = useCurrentAccount()
   const { updateAccount } = useAccountsActions()
 

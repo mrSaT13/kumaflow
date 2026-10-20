@@ -18,7 +18,6 @@ interface QueueItem {
 class PlaylistGenerationQueue {
   private queue: QueueItem[] = []
   private isProcessing = false
-  private readonly maxConcurrent = 1  // Только одна генерация одновременно
 
   /**
    * Добавить задачу в очередь

@@ -8,7 +8,7 @@ import { Label } from '@/app/components/ui/label'
 import { toast } from 'react-toastify'
 
 export default function AudiobookshelfSettings() {
-  const { config, setEnabled, setUrl, setApiKey, setConnected, testConnection, resetConfig } = useAudiobookshelf()
+  const { config, setEnabled, setUrl, setApiKey, testConnection, resetConfig } = useAudiobookshelf()
   
   const [urlInput, setUrlInput] = useState(config.url)
   const [apiKeyInput, setApiKeyInput] = useState(config.apiKey)

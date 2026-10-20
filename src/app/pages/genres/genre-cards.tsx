@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { getGenres, getSongsByGenre } from '@/service/subsonic-api'
 import { toast } from 'react-toastify'
 import { usePlayerActions } from '@/store/player.store'
@@ -47,7 +46,6 @@ const GENRE_GRADIENTS: Record<string, string> = {
 }
 
 export default function GenreCards() {
-  const navigate = useNavigate()
   const { setSongList } = usePlayerActions()
   const [genres, setGenres] = useState<Genre[]>([])
   const [isLoading, setIsLoading] = useState(true)

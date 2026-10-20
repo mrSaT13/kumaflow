@@ -135,12 +135,6 @@ export function AIPlaylistCards() {
         .map(([g, w]) => `${g} (${w})`)
         .join(', ')
 
-      const topArtists = Object.entries(preferredArtists)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([id]) => id)
-        .join(', ')
-
       setProgress(20)
       setProgressMessage('🤝 Запрос к LLM...')
       

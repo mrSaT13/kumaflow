@@ -4,7 +4,6 @@
  */
 
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { usePlayerActions } from '@/store/player.store'
 import { useML } from '@/store/ml.store'
 import { generateActivityMix } from '@/service/ml-wave-service'
@@ -22,7 +21,6 @@ interface DiscoveryCard {
 }
 
 export default function Discovery() {
-  const navigate = useNavigate()
   const { setSongList } = usePlayerActions()
   const { profile, ratings } = useML()
   const [activeFilter, setActiveFilter] = useState<DiscoveryFilter>('top')

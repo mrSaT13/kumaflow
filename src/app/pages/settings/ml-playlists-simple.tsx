@@ -44,7 +44,7 @@ export default function MLPlaylistsSettings() {
     setLLMCoordinatorEnabled,
   } = useMLPlaylists()
 
-  const { exportProfile, exportMLData, importProfile, resetProfile } = useML()
+  const { exportProfile, exportMLData, importProfile } = useML()
 
   const [isExporting, setIsExporting] = useState(false)
   const [analysisState, setAnalysisState] = useState<AnalysisState>(() => getAnalysisStats())

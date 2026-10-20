@@ -2,14 +2,12 @@
  * Page Design Settings - Настройки дизайна страниц (артист, альбом, трек)
  */
 
-import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Switch } from '@/app/components/ui/switch'
 import { Label } from '@/app/components/ui/label'
 import { usePageDesignSettings, usePageDesignSettingsActions } from '@/store/page-design.store'
 
 export function PageDesignSettings() {
-  const { t } = useTranslation()
   const settings = usePageDesignSettings()
   const {
     setNewArtistDesignEnabled,

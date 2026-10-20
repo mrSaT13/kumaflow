@@ -89,7 +89,7 @@ export async function detectKeyFromAudioBuffer(
 /**
  * Вычислить chromagram из аудио сэмплов
  */
-function computeChromagram(samples: Float32Array, sampleRate: number): number[] {
+function computeChromagram(samples: Float32Array, _sampleRate: number): number[] {
   const chroma = new Array(12).fill(0)
   
   // Простой алгоритм через zero-crossing rate и энергию

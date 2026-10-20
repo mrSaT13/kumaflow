@@ -4,13 +4,11 @@
 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { usePlayerActions } from '@/store/player.store'
 import { useML } from '@/store/ml.store'
 import { Heart, History } from 'lucide-react'
 
 export default function FavoritesHistory() {
   const navigate = useNavigate()
-  const { setSongList } = usePlayerActions()
   const { profile, ratings } = useML()
   
   const [isLoading, setIsLoading] = useState<'favorites' | 'history' | null>(null)

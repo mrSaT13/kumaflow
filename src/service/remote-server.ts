@@ -61,7 +61,7 @@ interface RemoteControlConfig {
 /**
  * Сохранить часть настроек Remote Control (port/ip/pin/enabled) в JSON
  */
-async function saveRemoteSettings(partial: Partial<RemoteControlConfig>) {
+export async function saveRemoteSettings(partial: Partial<RemoteControlConfig>) {
   try {
     const configPath = getConfigPath()
     let config: RemoteControlConfig = {}

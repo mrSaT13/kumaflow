@@ -165,7 +165,7 @@ ${tracks.slice(-5).map((t, i) => `${i+1}. ${t.artist} - ${t.title} (BPM: ${t.bpm
    */
   private async generateFeedback(
     analysis: string,
-    tracks: ISong[]
+    _tracks: ISong[]
   ): Promise<PlaylistFeedback> {
     try {
       // Парсим JSON из ответа

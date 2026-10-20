@@ -5,7 +5,6 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { toast } from 'react-toastify'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
@@ -23,7 +22,6 @@ import {
 import CryptoJS from 'crypto-js'
 
 export function SharedListensSettings() {
-  const { t } = useTranslation()
   const [accounts, setAccounts] = useState<SharedAccount[]>([])
   const [newAccount, setNewAccount] = useState<Partial<SharedAccount>>({
     name: '',

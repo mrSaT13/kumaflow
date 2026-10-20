@@ -5,7 +5,7 @@
 
 import { isBrainActive, useBrainStore } from '@/store/brain.store'
 import { ensureBrainReady, requestBrainReady } from './brain-bootstrap'
-import { brainGet, brainPost, brainRaw } from './brain-client'
+import { brainDelete, brainGet, brainPost, brainRaw } from './brain-client'
 import type { BrainEvent, BrainRating } from './brain-sync'
 
 export interface WaveSettings {
@@ -422,6 +422,28 @@ export async function waveSeedStart(opts: {
     similarArtists: res?.similar_artists ?? [],
     serverUsed: !!res?.server_used,
   }
+}
+
+/**
+ * Сбросить серверный сид радио — DELETE /api/wave/seed.
+ *
+ * Зачем: с 0.3.23 сохранённый сид — якорь ВОЛНЫ (стиль держится, пока
+ * радио живое). Локальный сброс сида в плеере гасил только localStorage, а
+ * мозг продолжал держать сид и рулить волной. Теперь обычный запуск волны и
+ * кнопка «×» гасят сид и на стороне мозга.
+ *
+ * Мозг недоступен — тихо возвращаемся: сервер сам протухнет сид через 12 ч.
+ */
+export async function waveSeedClear(): Promise<boolean> {
+  const st = useBrainStore.getState()
+  if (!isBrainActive()) return false
+  const uid = st.userId ?? (await ensureBrainReady())
+  if (!uid) return false
+  const q = new URLSearchParams({ user_id: uid })
+  const res = await brainDelete<{ ok?: boolean }>(
+    `/api/wave/seed?${q.toString()}`,
+  )
+  return !!res?.ok
 }
 
 // ==================== Нормализация кодов: мозг ↔ плеер ====================

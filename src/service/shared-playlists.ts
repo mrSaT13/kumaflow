@@ -226,7 +226,7 @@ export async function getFeaturedPlaylists(): Promise<SharedPlaylist[]> {
 
     for (const playlist of publicPlaylists) {
       // Получаем средний рейтинг
-      const { average, count } = getAverageRating(playlist.id)
+      const { average } = getAverageRating(playlist.id)
 
       // Получаем пользователя-автора (owner в Navidrome)
       const author = playlist.owner || currentUser

@@ -102,51 +102,6 @@ function extname(path: string): string {
 }
 
 /**
- * Распарсить метаданные аудиофайла
- */
-async function parseAudioMetadata(
-  file: { path: string; name: string },
-  folderId: string,
-): Promise<LocalTrack | null> {
-  try {
-    const api = (window as any).api
-
-    // Получаем метаданные через Electron API
-    const metadata = await api.getAudioMetadata(file.path)
-
-    const filename = file.name.split(/[\\/]/).pop() || ''
-    const extension = filename.split('.').pop()?.toLowerCase() || ''
-
-    const track: LocalTrack = {
-      id: `local_track_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      path: file.path,
-      filename,
-      title: metadata.title || filename.replace(/\.[^/.]+$/, ''),
-      artist: metadata.artist || 'Неизвестный исполнитель',
-      album: metadata.album,
-      albumArtist: metadata.albumArtist,
-      genre: metadata.genre,
-      year: metadata.year,
-      trackNumber: metadata.trackNumber,
-      duration: metadata.duration,
-      bitrate: metadata.bitrate,
-      sampleRate: metadata.sampleRate,
-      fileSize: metadata.fileSize,
-      format: extension,
-      coverArtPath: metadata.hasCover ? file.path : undefined,
-      folderId,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }
-
-    return track
-  } catch (error) {
-    console.error('[Audio Metadata] Failed to parse:', file.path, error)
-    return null
-  }
-}
-
-/**
  * Получить обложку из локального файла
  */
 export async function getLocalCoverArt(

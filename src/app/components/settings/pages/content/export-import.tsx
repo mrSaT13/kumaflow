@@ -1,5 +1,4 @@
 import { useRef, useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Download, Upload, RotateCcw, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
@@ -14,7 +13,6 @@ import {
 } from '@/service/settings-export'
 
 export function SettingsExportImport() {
-  const { t } = useTranslation()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [backups, setBackups] = useState<Array<{ key: string; date: string }>>([])
 

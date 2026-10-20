@@ -29,7 +29,6 @@ interface NewTrackNotification {
 class ArtistTrackMonitorService {
   private checkInterval: number = 6 * 60 * 60 * 1000 // 6 часов (консервативно для rate limit)
   private intervalId: NodeJS.Timeout | null = null
-  private readonly MIN_CHECK_INTERVAL = 2 * 60 * 60 * 1000 // Минимум 2 часа
 
   /**
    * Запуск мониторинга

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useExternalApiStore } from '@/store/external-api.store'
 import { llmService } from '@/service/llm-service'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card'
@@ -13,7 +12,6 @@ import { Badge } from '@/app/components/ui/badge'
 import { toast } from 'react-toastify'
 
 export function LLMSettings() {
-  const { t } = useTranslation()
   const settings = useExternalApiStore(state => state.settings)
   const { 
     setLlmEnabled, 

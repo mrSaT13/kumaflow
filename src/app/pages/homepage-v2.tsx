@@ -28,7 +28,7 @@ import {
   TrendingUp,
   Zap,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { getSimpleCoverArtUrl } from '@/api/httpClient'
@@ -46,6 +46,7 @@ import {
 } from '@/app/hooks/use-brain-handoff'
 import { getRecentBrainEvents } from '@/service/brain-events'
 import { mapWaveSettings, waveContinue } from '@/service/brain-wave'
+import { readLocalWaveSettings } from '@/service/wave-settings-local'
 import { generateMyWavePlaylist } from '@/service/ml-wave-service'
 import { myWaveDiscoveryTracker } from '@/service/mywave-discoveries'
 import { subsonic } from '@/service/subsonic'
@@ -56,11 +57,11 @@ import {
   getStarredArtists,
 } from '@/service/subsonic-api'
 import {
-  clearWaveSeed,
   readWaveSeed,
   seedLabel,
   type WaveSeed,
 } from '@/service/wave-identity'
+import { clearWaveSeedPlaylist } from '@/service/wave-seed'
 import { useAppStore } from '@/store/app.store'
 import { isBrainActive } from '@/store/brain.store'
 import { useDopamineSettings } from '@/store/dopamine.store'
@@ -82,6 +83,7 @@ import {
   type WaveTrio,
 } from '@/app/components/home/kuma-wave-background'
 import { KumaWaveHero } from '@/app/components/home/kuma-wave-hero'
+import { VibeWaveBackground } from '@/app/components/home/vibe-wave-background'
 import type { ISong } from '@/types/responses/song'
 import { generateCSSGradient, getGenreColor } from '@/utils/genreColors'
 import { isDarkTheme } from '@/utils/theme'
@@ -419,6 +421,10 @@ function ViralArtistsSection({
 /**
  * 🆕 InStyleArtistsSection — все лайкнутые артисты, рандомно при каждом запуске
  */
+
+// Стабильная пустая ссылка для дефолтов useQuery: `= []` в деструктуризации
+// создаёт новый массив каждый рендер и перезапускает эффекты по кругу.
+const EMPTY_ARR: any[] = []
 function InStyleArtistsSection({
   artists,
   isLoading,
@@ -428,17 +434,17 @@ function InStyleArtistsSection({
   isLoading: boolean
   onArtistClick: (artistId: string, artistName: string) => void
 }) {
-  const [randomizedArtists, setRandomizedArtists] = useState<any[]>([])
   const themeClasses = useThemeClasses()
 
-  // Рандомизируем артисты при каждом монтировании
-  useEffect(() => {
-    if (artists.length === 0) return
-
-    // Перемешиваем массив
-    const shuffled = [...artists].sort(() => Math.random() - 0.5)
-    setRandomizedArtists(shuffled.slice(0, 15)) // Показываем до 15
-  }, [artists])
+  // Рандомизация БЕЗ setState-in-effect: shuffle в useMemo, ключ — состав
+  // id. Иначе любая смена identity массива artists (рефетч, ререндер)
+  // перезапускала эффект → setState → максимум глубины обновлений.
+  const artistKey = artists.map((a: any) => a.id).join(',')
+  const randomizedArtists = useMemo(() => {
+    if (artists.length === 0) return []
+    return [...artists].sort(() => Math.random() - 0.5).slice(0, 15)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artistKey])
 
   if (isLoading) {
     return (
@@ -741,7 +747,7 @@ function BrainHandoffPanel({ handoff }: { handoff: BrainHandoff }) {
 export default function NewHomepage() {
   const navigate = useNavigate()
   const [isGenerating, setIsGenerating] = useState<string | null>(null)
-  const [myWaveArtists, setMyWaveArtists] = useState<any[]>([])
+  const [, setMyWaveArtists] = useState<any[]>([])
   const [isWaveSettingsOpen, setIsWaveSettingsOpen] = useState(false)
   // Пилюля активного контекста волны как у Яндекса («Работаю ×»)
   const [waveHint, setWaveHint] = useState<string>('')
@@ -756,7 +762,7 @@ export default function NewHomepage() {
       return
     }
     try {
-      const s = JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
+      const s = readLocalWaveSettings()
       const hint = [s.activity, s.characteristic, s.mood, s.language]
         .filter(Boolean)
         .map((v: string) => waveLabel(v))
@@ -773,7 +779,9 @@ export default function NewHomepage() {
   // «В стиле: Reamonn» — не то же самое.
   const clearWaveHint = useCallback(() => {
     if (readWaveSeed()) {
-      clearWaveSeed()
+      // Гасим сид и на сервере: там он якорь волны (стиль держится, пока
+      // радио живое), локальный сброс его больше не отменяет.
+      clearWaveSeedPlaylist()
       setWaveSeedHint(null)
       setWaveHint('')
       return
@@ -789,11 +797,37 @@ export default function NewHomepage() {
   const { setSongList, setQueueTail, togglePlayPause } = usePlayerActions()
   // Handoff с другого устройства («Продолжить с …») — живой слот мозга.
   const brainHandoff = useBrainHandoff()
-  // 🌊 Hero «Моя волна»: раскладка kuma/yandex + живая анимация (тумблеры во «Внешнем виде»).
-  // Старым persisted-настройкам поля может не хватать — дефолт через ??.
+  // 🌊 Hero «Моя волна»: три вида — KumaWave V1 / V2 / V3 — плюс живая анимация
+  // (тумблеры во «Внешнем виде»). Старым persisted-настройкам поля может не
+  // хватать — дефолт через withWaveDefaults (там же миграция kuma→v1 и т.д.).
   const homepageSettings = useHomepageSettings()
-  const waveLayout = homepageSettings.waveHero?.layout ?? 'kuma'
+  const waveLayout = homepageSettings.waveHero?.layout ?? 'v1'
+  // Центрированный блок контента у V2 и V3 общий: они отличаются только
+  // фоном. Отдельный флаг иначе пришлось бы дублировать в двух местах JSX.
+  const waveCentered = waveLayout !== 'v1'
   const waveAlive = homepageSettings.waveHero?.alive ?? true
+  // Кроссфейд видов V2/V3: старый фон держим 700мс поверх нового
+  // и гасим (opacity 1→0), иначе переключение — резкая подмена.
+  // С V1 не кроссфейдим: там другая вёрстка карточки.
+  const [fxPrevLayout, setFxPrevLayout] = useState<null | 'v2' | 'v3'>(null)
+  const prevLayoutRef = useRef(waveLayout)
+  const fxTimer = useRef(0)
+  useEffect(() => {
+    if (prevLayoutRef.current === waveLayout) return
+    const prev = prevLayoutRef.current
+    prevLayoutRef.current = waveLayout
+    const centered = (l: string) => l === 'v2' || l === 'v3'
+    if (centered(prev) && centered(waveLayout)) {
+      setFxPrevLayout(prev as 'v2' | 'v3')
+      window.clearTimeout(fxTimer.current)
+      fxTimer.current = window.setTimeout(() => setFxPrevLayout(null), 700)
+    } else {
+      setFxPrevLayout(null)
+    }
+    return () => window.clearTimeout(fxTimer.current)
+  }, [waveLayout])
+  // v3: ховер-погружение — курсор на карточке ускоряет поток (excited).
+  const [waveHover, setWaveHover] = useState(false)
   // Мерж со значениями по умолчанию (у старых сохранений новых полей нет).
   const waveHeroSettings = withWaveDefaults(homepageSettings.waveHero)
   // Треки последней сгенерированной Волны — чтобы кнопка знала, играет ли сейчас Волна
@@ -869,10 +903,26 @@ export default function NewHomepage() {
   )
 
   // 🌊 Цвета капли: акцент играющего трека → жанр трека → топ-жанр → дефолт.
+  // currentSongColor считается асинхронно по обложке и в момент переключения
+  // трека ещё принадлежит ПРЕДЫДУЩЕМУ — волна отставала бы на трек.
+  // Поэтому пока свежий цвет не приехал, берём жанр нового трека сразу.
   const { currentSongColor } = useSongColor()
+  const songId = currentSong?.id
+  const [coverStale, setCoverStale] = useState(true)
+  const songRef = useRef(songId)
+  useEffect(() => {
+    if (songRef.current !== songId) {
+      songRef.current = songId
+      setCoverStale(true)
+    }
+  }, [songId])
+  useEffect(() => {
+    setCoverStale(false)
+  }, [currentSongColor])
+  const liveCover = coverStale ? null : currentSongColor
   const isWaveDark = themeClasses.isDark
   const waveColors: WaveTrio | undefined =
-    buildWaveTrio(currentSongColor, isWaveDark) ??
+    buildWaveTrio(liveCover, isWaveDark) ??
     buildWaveTrio(
       currentSong?.genre ? getGenreColor(currentSong.genre) : topGenres[0] ? getGenreColor(topGenres[0]) : null,
       isWaveDark,
@@ -892,9 +942,6 @@ export default function NewHomepage() {
     ? userName.charAt(0).toUpperCase() + userName.slice(1)
     : ''
 
-  // ✅ Исправлено: likedSongs = локальные + Navidrome starred
-  const localLikedCount = profile.likedSongs?.length || 0
-
   // Загружаем лайкнутые треки из Navidrome
   const { data: navidromeStarredSongs = [] } = useQuery({
     queryKey: ['starred-songs-count'],
@@ -906,7 +953,6 @@ export default function NewHomepage() {
     gcTime: 1000 * 60 * 60,
   })
 
-  const navidromeLikedCount = navidromeStarredSongs.length || 0
   // Общее количество: локальные + Navidrome (без дублей — используем Set по ID)
   const localLikedIds = new Set(profile.likedSongs || [])
   const navidromeLikedIds = new Set(navidromeStarredSongs.map((s) => s.id))
@@ -921,19 +967,24 @@ export default function NewHomepage() {
   })
 
   // Загружаем лайкнутых артистов (основной источник)
-  const { data: starredArtists = [] } = useQuery({
+  // ВАЖНО: дефолт берём из модульного EMPTY_ARR, а не `= []` — литерал
+  // создавал бы новый identity каждый рендер, и эффект ниже перезапускался
+  // бы бесконечно (setState → рендер → новый [] → снова setState).
+  const { data: starredData } = useQuery({
     queryKey: ['starred-artists'],
     queryFn: getStarredArtists,
     staleTime: 1000 * 60 * 30,
   })
+  const starredArtists = starredData ?? EMPTY_ARR
 
   // Fallback: случайные артисты из треков
-  const { data: randomSongs = [] } = useQuery({
+  const { data: randomSongsData } = useQuery({
     queryKey: ['random-songs-for-artists'],
     queryFn: () => getRandomSongs(100),
     enabled: starredArtists.length === 0,
     staleTime: 1000 * 60 * 30,
   })
+  const randomSongs = randomSongsData ?? EMPTY_ARR
 
   // Вычисляем уникальных артистов
   const [artistsToUse, setArtistsToUse] = useState<any[]>([])
@@ -954,7 +1005,13 @@ export default function NewHomepage() {
             isStarred: true,
           }))
           console.log('[Homepage] Using', artists.length, 'starred artists')
-          setArtistsToUse(artists)
+          // Стейт — только если состав реально изменился, иначе новый
+          // identity массива каждый рефетч = бесконечный цикл рендеров.
+          setArtistsToUse((prev) =>
+            prev.length === artists.length && prev.every((p, i) => p.id === artists[i].id)
+              ? prev
+              : artists,
+          )
           setArtistsLoading(false)
         }
         return
@@ -981,7 +1038,11 @@ export default function NewHomepage() {
             artists.length,
             'artists from random songs',
           )
-          setArtistsToUse(artists)
+          setArtistsToUse((prev) =>
+            prev.length === artists.length && prev.every((p, i) => p.id === (artists[i] as any).id)
+              ? prev
+              : (artists as any[]),
+          )
           setArtistsLoading(false)
         }
         return
@@ -1023,7 +1084,7 @@ export default function NewHomepage() {
     // Подпись контекста для шапки полноэкранного ("Моя волна под занятие / Работаю")
     const waveHint = (() => {
       try {
-        const s = JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
+        const s = readLocalWaveSettings()
         return [s.activity, s.characteristic, s.mood, s.language]
           .filter(Boolean)
           .map((v: string) => waveLabel(v))
@@ -1036,15 +1097,13 @@ export default function NewHomepage() {
     try {
       // Обычный запуск волны — сид сбрасывается. Иначе после «В стиле: …»
       // капсула продолжит врать, что лента посажена на артиста, хотя
-      // запущена обычная волна с пилюлями.
-      clearWaveSeed()
+      // запущена обычная волна с пилюлями. Сброс идёт и на сервер.
+      clearWaveSeedPlaylist()
       setWaveSeedHint(null)
       // Источник как в мобайле: Brain (если выбран и подключен) → иначе локальный ML
       if (getWaveSource() === 'brain' && isBrainActive()) {
         try {
-          const settingsRaw = JSON.parse(
-            localStorage.getItem('my-wave-settings') || '{}',
-          )
+          const settingsRaw = readLocalWaveSettings()
           const res = await waveContinue({
             queue: [],
             count: trackCount,
@@ -1135,9 +1194,7 @@ export default function NewHomepage() {
     setIsGenerating('mywave')
 
     try {
-      const settingsRaw = JSON.parse(
-        localStorage.getItem('my-wave-settings') || '{}',
-      )
+      const settingsRaw = readLocalWaveSettings()
       const res = await waveContinue({
         // Уже играющее + один мост: морфимся от того, что звучит сейчас.
         queue: [current.id],
@@ -1311,8 +1368,10 @@ export default function NewHomepage() {
           {/* Карточка "Моя волна" */}
           <div
             className="relative rounded-3xl overflow-hidden shadow-xl group"
+            onMouseEnter={() => setWaveHover(true)}
+            onMouseLeave={() => setWaveHover(false)}
             style={
-              waveLayout === 'yandex'
+              waveCentered
                 ? { background: isWaveDark ? '#141A26' : '#F1F2F6' }
                 : {
                     background: myWaveGradient,
@@ -1321,16 +1380,58 @@ export default function NewHomepage() {
                   }
             }
           >
-            {waveLayout === 'yandex' ? (
-              <KumaWaveBackground
-                alive={waveAlive}
-                playing={isWaveActive && isPlaying}
-                dark={isWaveDark}
-                colors={waveColors}
-                genre={currentSong?.genre}
-                effects={waveHeroSettings.effects}
-                lines={waveHeroSettings.lines}
-              />
+            {waveCentered ? (
+              <div className="absolute inset-0">
+                {waveLayout === 'v3' ? (
+                  <div key="v3" className="absolute inset-0 transition-opacity duration-700 opacity-100">
+                    <VibeWaveBackground
+                      alive={waveAlive}
+                      playing={isPlaying}
+                      dark={isWaveDark}
+                      accent={waveColors?.[0] ?? null}
+                      genre={currentSong?.genre ?? null}
+                      excited={waveHover}
+                    />
+                  </div>
+                ) : (
+                  <div key="v2" className="absolute inset-0 transition-opacity duration-700 opacity-100">
+                    <KumaWaveBackground
+                      alive={waveAlive}
+                      playing={isPlaying}
+                      dark={isWaveDark}
+                      colors={waveColors}
+                      genre={currentSong?.genre}
+                      effects={waveHeroSettings.effects}
+                      lines={waveHeroSettings.lines}
+                    />
+                  </div>
+                )}
+                {/* Уходящий слой: поверх нового, гаснет 700мс. Двойная
+                    отрисовка только на время перехода. */}
+                {fxPrevLayout && fxPrevLayout !== waveLayout && (
+                  <div className="absolute inset-0 transition-opacity duration-700 opacity-0 pointer-events-none">
+                    {fxPrevLayout === 'v3' ? (
+                      <VibeWaveBackground
+                        alive={waveAlive}
+                        playing={isPlaying}
+                        dark={isWaveDark}
+                        accent={waveColors?.[0] ?? null}
+                        genre={currentSong?.genre ?? null}
+                      />
+                    ) : (
+                      <KumaWaveBackground
+                        alive={waveAlive}
+                        playing={isPlaying}
+                        dark={isWaveDark}
+                        colors={waveColors}
+                        genre={currentSong?.genre}
+                        effects={waveHeroSettings.effects}
+                        lines={waveHeroSettings.lines}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
             ) : (
               <>
                 <WaveBlob alive={waveAlive} />
@@ -1348,7 +1449,7 @@ export default function NewHomepage() {
               </>
             )}
 
-            {waveLayout === 'yandex' ? (
+            {waveCentered ? (
               <KumaWaveHero
                 onPlay={handleWaveButton}
                 onOpenSettings={() => setIsWaveSettingsOpen(true)}

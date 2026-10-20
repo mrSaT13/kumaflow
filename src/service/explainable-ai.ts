@@ -56,14 +56,13 @@ export function explainRecommendation(
   track: ISong,
   profile: MLProfile,
   ratings: Record<string, TrackRating>,
-  listeningHistory?: TrackRating[],
   timeAdaptivityEnabled?: boolean  // Новая переменная
 ): Explanation[] {
   const explanations: Explanation[] = []
   const audioFeatures = analyzeTrack(track)
 
   // 1. Ищем похожие треки (Vibe Similarity) — самое важное объяснение
-  const similarTrack = findMostSimilarTrack(track, profile, ratings)
+  const similarTrack = findMostSimilarTrack(track, ratings)
   if (similarTrack && similarTrack.similarity > 0.85) {
     explanations.push({
       type: 'similar-track',
@@ -115,8 +114,8 @@ export function explainRecommendation(
   }
 
   // 5. Подробные совпадения по аудио-признакам
-  const targetBpm = getTargetBpm(profile)
-  const targetEnergy = getTargetEnergy(profile)
+  const targetBpm = getTargetBpm()
+  const targetEnergy = getTargetEnergy()
   
   const matchDetails: Explanation['details']['matchDetails'] = {}
   
@@ -286,7 +285,6 @@ function getTimeOfDayExplanation(
  */
 function findMostSimilarTrack(
   track: ISong,
-  profile: MLProfile,
   ratings: Record<string, TrackRating>
 ): { id: string; title: string; similarity: number } | null {
   const targetFeatures = analyzeTrack(track)
@@ -375,7 +373,7 @@ function getGenreRank(genre: string, preferredGenres: Record<string, number>): n
  * Получить целевой BPM из профиля
  * На основе анализа истории прослушиваний
  */
-function getTargetBpm(profile: MLProfile): { min: number; max: number; mid: number; range: number } | null {
+function getTargetBpm(): { min: number; max: number; mid: number; range: number } | null {
   // TODO: Вычислить на основе истории прослушиваний
   // Пока используем дефолтные значения
   // В будущем можно анализировать preferredArtists и их треки
@@ -393,7 +391,7 @@ function getTargetBpm(profile: MLProfile): { min: number; max: number; mid: numb
  * Получить целевую Energy из профиля
  * На основе анализа истории прослушиваний
  */
-function getTargetEnergy(profile: MLProfile): { min: number; max: number; mid: number; range: number } | null {
+function getTargetEnergy(): { min: number; max: number; mid: number; range: number } | null {
   // TODO: Вычислить на основе истории прослушиваний
   // Пока используем дефолтные значения
   

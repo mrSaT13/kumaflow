@@ -124,8 +124,6 @@ export class AutoRecommender {
    * Генерация Daily Mix (как в Spotify)
    */
   async generateDailyMix(mixNumber: number = 1): Promise<GeneratedPlaylist> {
-    const userVibe = await behaviorTracker.getUserVibeVector(100)
-    
     // 5 вариантов Daily Mix
     const mixConfigs = [
       { name: 'Микс дня #1', focus: 'topGenres', gradient: 'from-orange-400 to-yellow-500' },

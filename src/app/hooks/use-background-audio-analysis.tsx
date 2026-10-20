@@ -11,15 +11,6 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { audioAnalysisService } from '@/service/audio-analysis'
 import { usePlayerStore } from '@/store/player.store'
 
-interface AnalyzedTrack {
-  id: string
-  bpm?: number
-  energy?: number
-  danceability?: number
-  acousticness?: number
-  valence?: number
-}
-
 export function useBackgroundAudioAnalysis() {
   const analysisQueue = useRef<string[]>([])
   const isAnalyzing = useRef(false)

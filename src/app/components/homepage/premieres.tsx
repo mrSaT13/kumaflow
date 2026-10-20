@@ -154,7 +154,7 @@ export default function Premieres() {
       </div>
       
       <div className="premieres-list">
-        {premieres.map((track, index) => (
+        {premieres.map((track) => (
           <div
             key={track.id}
             className="premiere-track"

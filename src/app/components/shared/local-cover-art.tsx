@@ -26,7 +26,7 @@ export function LocalCoverArt({
   className = '',
   asBackground = false,
 }: LocalCoverArtProps) {
-  const { coverUrl: localCoverUrl, loading } = useLocalCoverArt(filePath)
+  const { coverUrl: localCoverUrl } = useLocalCoverArt(filePath)
   const [error, setError] = useState(false)
 
   // Определяем какой URL использовать

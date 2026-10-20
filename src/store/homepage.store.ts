@@ -19,7 +19,15 @@ export interface HomepageSection {
   order: number
 }
 
-export type WaveHeroLayout = 'kuma' | 'yandex'
+/**
+ * Раскладка hero «Моя волна», три вида:
+ *   v1 — KumaWave V1: иконка слева, живое пятно WaveBlob
+ *   v2 — KumaWave V2: по центру, фон KumaWaveBackground (SVG + жанры)
+ *   v3 — KumaWave V3: по центру, фон VibeWaveBackground (WebGL-шейдер,
+ *        реагирует на музыку и на лайк/дизлайк)
+ * Старые значения 'kuma'/'yandex'/'vibe' маппятся в withWaveDefaults.
+ */
+export type WaveHeroLayout = 'v1' | 'v2' | 'v3'
 
 export type WaveMoodKey =
   | 'fire'
@@ -34,7 +42,7 @@ export type WaveMoodKey =
   | 'mist'
 
 export interface WaveHeroSettings {
-  /** Раскладка hero-карточки: наша или центрированная как у Яндекса */
+  /** Раскладка hero-карточки: наша, центрированная или шейдерная */
   layout: WaveHeroLayout
   /** Живая CSS-анимация пятна (transform only). false = статика */
   alive: boolean
@@ -61,13 +69,20 @@ export const DEFAULT_WAVE_EFFECTS: Record<WaveMoodKey, boolean> = {
 
 /** Мерж поверх старых persisted-настроек, где новых полей может не быть. */
 export function withWaveDefaults(partial?: Partial<WaveHeroSettings>): WaveHeroSettings {
-  const { effects, ...rest } = partial ?? {}
+  const { effects, layout, ...rest } = partial ?? {}
+  // Миграция старых названий: kuma→v1, yandex→v2, vibe→v3.
+  const legacy = layout as string | undefined
+  const migrated: WaveHeroLayout =
+    legacy === 'kuma' || legacy === 'v1' ? 'v1'
+    : legacy === 'yandex' || legacy === 'v2' ? 'v2'
+    : legacy === 'vibe' || legacy === 'v3' ? 'v3'
+    : 'v1'
   return {
-    layout: 'kuma',
     alive: true,
     lines: true,
     expanded: false,
     ...rest,
+    layout: migrated,
     effects: { ...DEFAULT_WAVE_EFFECTS, ...effects },
   }
 }
@@ -107,7 +122,7 @@ const defaultSections: HomepageSection[] = [
 const defaultSettings: HomepageSettings = {
   sections: defaultSections,
   newDesignEnabled: false,  // 🆕 По умолчанию старый дизайн
-  waveHero: { layout: 'kuma', alive: true, lines: true, expanded: false, effects: { ...DEFAULT_WAVE_EFFECTS } },
+  waveHero: { layout: 'v1', alive: true, lines: true, expanded: false, effects: { ...DEFAULT_WAVE_EFFECTS } },
 }
 
 export const useHomepageSettingsStore = createWithEqualityFn<HomepageSettingsStore>()(

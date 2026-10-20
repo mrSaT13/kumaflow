@@ -34,7 +34,6 @@ export function FullscreenControls() {
   const isShuffleActive = usePlayerShuffle()
   const loopState = usePlayerLoop()
   const { hasPrev, hasNext } = usePlayerPrevAndNext()
-  const audioPlayerRef = usePlayerStore((state) => state.playerState.audioPlayerRef)
   const { isSong } = usePlayerMediaType()
   const {
     isPlayingOneSong,

@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next'
 import { useAutoDJSettings, useAutoDJActions } from '@/store/auto-dj.store'
 import {
   Card,
@@ -13,7 +12,6 @@ import { Slider } from '@/app/components/ui/slider'
 import { Badge } from '@/app/components/ui/badge'
 
 export function AutoDJContent() {
-  const { t } = useTranslation()
   const settings = useAutoDJSettings()
   const { setItemCount, setTiming, setQueueCap, toggleEnabled } =
     useAutoDJActions()

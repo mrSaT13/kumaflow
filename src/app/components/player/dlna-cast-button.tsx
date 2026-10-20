@@ -2,8 +2,6 @@ import { useState } from 'react'
 import { Cast, X } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { toast } from 'react-toastify'
-import { usePlayerStore, selectCurrentSong,
-} from '@/store/player.store'
 import { DLNAModal } from './dlna-modal'
 
 interface DLNADevice {
@@ -18,8 +16,6 @@ interface DLNADevice {
 export function DLNACastButton() {
   const [modalOpen, setModalOpen] = useState(false)
   const [currentDevice, setCurrentDevice] = useState<DLNADevice | null>(null)
-
-  const currentSong = usePlayerStore(selectCurrentSong)
 
   const stopCasting = async () => {
     try {

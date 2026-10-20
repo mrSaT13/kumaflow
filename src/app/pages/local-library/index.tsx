@@ -4,7 +4,6 @@
 
 import { FolderOpen, Music2, Play, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { ScrollArea } from '@/app/components/ui/scroll-area'
@@ -21,11 +20,10 @@ import { usePlayerActions } from '@/store/player.store'
 import { useAppStore } from '@/store/app.store'
 
 export default function LocalLibrary() {
-  const navigate = useNavigate()
   const { tracks, folders, isScanning } = useLocalMusicStore()
   const { setSongList } = usePlayerActions()
   const [searchQuery, setSearchQuery] = useState('')
-  const [sortBy, setSortBy] = useState<'title' | 'artist' | 'album' | 'year'>(
+  const [sortBy] = useState<'title' | 'artist' | 'album' | 'year'>(
     'title',
   )
 
@@ -245,7 +243,7 @@ function formatDuration(duration?: number): string {
  * Компонент обложки для ячейки таблицы
  * Показывает стандартную заглушку для всех локальных треков
  */
-function LocalCoverArtCell({ alt }: { alt?: string }) {
+function LocalCoverArtCell() {
   return (
     <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
       <Music2 className="w-5 h-5 text-muted-foreground" />

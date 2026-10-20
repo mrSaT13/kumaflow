@@ -76,6 +76,11 @@ export async function brainPost<T>(path: string, body: unknown): Promise<T | nul
   return brainFetch<T>(path, { method: 'POST', body: JSON.stringify(body ?? {}) })
 }
 
+/** DELETE — для сброса серверного состояния (например, сида радио). */
+export async function brainDelete<T>(path: string): Promise<T | null> {
+  return brainFetch<T>(path, { method: 'DELETE' })
+}
+
 /** Сырой запрос с видимым HTTP-статусом (для диагностики publish). */
 export async function brainRaw(
   path: string,

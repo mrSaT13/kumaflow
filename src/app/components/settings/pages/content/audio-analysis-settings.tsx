@@ -4,14 +4,11 @@ import { Progress } from '@/app/components/ui/progress'
 import { Switch } from '@/app/components/ui/switch'
 import { Label } from '@/app/components/ui/label'
 import { useBackgroundAudioAnalysis } from '@/app/hooks/use-background-audio-analysis'
-import { usePlaybackSettings, usePlaybackActions } from '@/store/playback.store'
 import { toast } from 'react-toastify'
 
 export function AudioAnalysisSettings() {
   const { isAnalyzing, queueLength, analyzedCount, totalInPlaylist } = useBackgroundAudioAnalysis()
   const [analysisEnabled, setAnalysisEnabled] = useState(true)
-  const { settings } = usePlaybackSettings()
-  const { setProgressBarType, setAutoColorByGenre } = usePlaybackActions()
 
   const progress = totalInPlaylist > 0 ? Math.round((analyzedCount / totalInPlaylist) * 100) : 0
 

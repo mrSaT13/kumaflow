@@ -67,7 +67,7 @@ const defaultTheme = defaultDark
 export const useThemeStore = createWithEqualityFn<ThemeStore>()(
   persist(
     devtools(
-      immer((set, get) => ({
+      immer((set) => ({
         currentThemeId: 'default-dark',
         currentTheme: defaultTheme,
         

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Stack } from '/@/shared/components/stack/stack'
 import { Text } from '/@/shared/components/text/text'
 import { Tabs } from '/@/renderer/components/tabs/tabs'
@@ -51,7 +50,6 @@ const MOOD_CATEGORIES: Record<string, MoodCategory[]> = {
 }
 
 export const AIMixSection = ({ onMoodSelect }: AIMixSectionProps) => {
-  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<string>('top')
 
   const handleTileClick = (moodId: string) => {

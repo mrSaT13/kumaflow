@@ -10,7 +10,6 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
 import { getAllCacheEntries, deleteCacheEntry, getCachedSongUrl } from '@/service/cache.service'
 import { usePlayerActions } from '@/store/player.store'
 import { Button } from '@/app/components/ui/button'
@@ -36,14 +35,12 @@ interface CacheItem {
 }
 
 export function CachePage() {
-  const { t } = useTranslation()
   const navigate = useNavigate()
-  const { setSongList, playSong } = usePlayerActions()
+  const { setSongList } = usePlayerActions()
 
   const [items, setItems] = useState<CacheItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'all' | 'song' | 'cover' | 'podcast'>('all')
-  const [isPlaying, setIsPlaying] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
   // Загрузка кэшированных элементов

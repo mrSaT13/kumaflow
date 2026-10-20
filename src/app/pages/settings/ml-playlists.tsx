@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useML } from '@/store/ml.store'
 import { useMLPlaylists } from '@/store/ml-playlists.store'
 import { toast } from 'react-toastify'
@@ -12,7 +11,6 @@ import { Progress } from '@/app/components/ui/progress'
 import { Badge } from '@/app/components/ui/badge'
 
 export default function MLPlaylistsSettings() {
-  const { t } = useTranslation()
   const {
     settings,
     playlists,
@@ -29,7 +27,7 @@ export default function MLPlaylistsSettings() {
     resetSettings,
   } = useMLPlaylists()
 
-  const { exportProfile, importProfile, resetProfile } = useML()
+  const { exportProfile, importProfile } = useML()
   const [isScanning, setIsScanning] = useState(false)
 
   const handleStartScan = () => {

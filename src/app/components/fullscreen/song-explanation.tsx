@@ -57,17 +57,6 @@ export function FullscreenSongExplanation() {
     return null
   }
   
-  const handleNavigateToArtist = async () => {
-    try {
-      const songs = await getArtistAllSongs(currentSong.artist)
-      if (songs && songs.length > 0) {
-        window.location.hash = `/artists/${songs[0].artistId}`
-      }
-    } catch (error) {
-      console.error('Failed to navigate to artist:', error)
-    }
-  }
-  
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>

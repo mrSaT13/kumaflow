@@ -1,7 +1,20 @@
 import { useHomepageSettings, useHomepageSettingsActions, withWaveDefaults } from '@/store/homepage.store'
+import type { WaveHeroLayout } from '@/store/homepage.store'
 import { WAVE_MOODS_META } from '@/app/components/home/kuma-wave-background'
 import { Settings, Sparkles, Monitor, Waves } from 'lucide-react'
 import { toast } from 'react-toastify'
+
+const WAVE_LAYOUTS: { id: WaveHeroLayout; label: string }[] = [
+  { id: 'v1', label: 'KumaWave V1' },
+  { id: 'v2', label: 'KumaWave V2' },
+  { id: 'v3', label: 'KumaWave V3' },
+]
+
+const WAVE_LAYOUT_HINTS: Record<WaveHeroLayout, string> = {
+  v1: 'Иконка слева + кнопки, живое пятно WaveBlob',
+  v2: 'По центру: ▶ Моя волна + Настроить + пилюли, фон SVG + эффекты жанров',
+  v3: 'Тот же центр, но фон — WebGL-шейдер: палитра под обложку, пятно дышит в такт музыке, лайк и дизлайк меняют цвет',
+}
 
 function WaveSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -100,31 +113,42 @@ export default function AppearanceSettings() {
           <div className="flex-1">
             <h2 className="text-lg font-semibold">Hero «Моя волна»</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Центрированная раскладка как у Яндекса и живое пятно на цветах вашей темы
+              Три фона волны: KumaWave V1, V2 и V3 (WebGL-шейдер под музыку)
             </p>
           </div>
         </div>
 
-        <div className="flex items-center justify-between bg-secondary/50 rounded-lg p-4">
+        {/* Раскладка стала выбором из трёх, а не тумблером: вида стало три,
+            а не два. */}
+        <div className="bg-secondary/50 rounded-lg p-4 space-y-3">
           <div>
-            <p className="font-medium">Раскладка как у Яндекса</p>
-            <p className="text-xs text-muted-foreground">
-              {waveHero.layout === 'yandex' ? 'По центру: ▶ Моя волна + Настроить + пилюли' : 'Наша раскладка: иконка слева + кнопки'}
-            </p>
+            <p className="font-medium">Вид волны</p>
+            <p className="text-xs text-muted-foreground">{WAVE_LAYOUT_HINTS[waveHero.layout]}</p>
           </div>
 
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={waveHero.layout === 'yandex'}
-              onChange={(e) => {
-                setWaveHeroLayout(e.target.checked ? 'yandex' : 'kuma')
-                toast.success(e.target.checked ? '🌊 Яндекс-раскладка включена' : '🌊 Наша раскладка включена', { autoClose: 2000 })
-              }}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {WAVE_LAYOUTS.map((opt) => {
+              const active = waveHero.layout === opt.id
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => {
+                    setWaveHeroLayout(opt.id)
+                    toast.success(`🌊 ${opt.label}`, { autoClose: 2000 })
+                  }}
+                  aria-pressed={active}
+                  className={
+                    active
+                      ? 'rounded-lg px-3 py-2 text-sm font-medium bg-primary text-primary-foreground transition-colors'
+                      : 'rounded-lg px-3 py-2 text-sm font-medium bg-background border border-border hover:bg-accent transition-colors'
+                  }
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         <div className="flex items-center justify-between bg-secondary/50 rounded-lg p-4">

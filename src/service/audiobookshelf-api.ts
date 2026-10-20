@@ -129,18 +129,6 @@ class AudiobookshelfService {
   }
 
   /**
-   * Получить URL для стриминга с учётом CORS
-   */
-  private getStreamUrlWithCors(bookId: string): string {
-    if (useCorsProxy()) {
-      // Если включён CORS прокси, используем его для стриминга
-      const proxyUrl = getCorsProxyUrl()
-      return `${proxyUrl}/s/item/${bookId}?token=${this.apiKey}`
-    }
-    return `${this.baseUrl}/s/item/${bookId}?token=${this.apiKey}`
-  }
-
-  /**
    * Выполнить запрос через IPC (Electron) или напрямую (Web)
    */
   private async request<T>(endpoint: string, method: string = 'GET', body?: any): Promise<T> {

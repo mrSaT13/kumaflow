@@ -14,7 +14,6 @@ import { Input } from '@/app/components/ui/input'
 import { useExternalApiStore } from '@/store/external-api.store'
 import { llmService } from '@/service/llm-service'
 import { toast } from 'react-toastify'
-import { usePlayerActions } from '@/store/player.store'
 
 export function AIPlaylistGenerator() {
   const [open, setOpen] = useState(false)
@@ -22,7 +21,6 @@ export function AIPlaylistGenerator() {
   const [description, setDescription] = useState('')
   const [trackCount, setTrackCount] = useState(25)
   const settings = useExternalApiStore(state => state.settings)
-  const { setSongList } = usePlayerActions()
 
   const generatePlaylist = async () => {
     if (!settings.llmEnabled) {

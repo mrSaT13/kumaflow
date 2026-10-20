@@ -12,7 +12,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft, Play, Shuffle, Clock, Music,
   User, Disc3, Activity, TrendingUp, Calendar,
@@ -45,7 +44,6 @@ interface PlaylistParams {
 export default function GeneratedPlaylistPage() {
   const { playlistType, playlistId } = useParams<PlaylistParams>()
   const navigate = useNavigate()
-  const { t } = useTranslation()
   const { setSongList, play } = usePlayerActions()
   const queryClient = useQueryClient()  // 🆕 Для перегенерации
 

@@ -25,7 +25,7 @@ const PRESET_OPTIONS = [
 
 export function SleepTimerButton() {
   const { t } = useTranslation()
-  const { isEnabled, mode, enable, enableEndOfSong, disable, getRemainingTime, isActive } = useSleepTimer()
+  const { mode, enable, enableEndOfSong, disable, getRemainingTime, isActive } = useSleepTimer()
   const [customMinutes, setCustomMinutes] = useState(30)
 
   const handlePresetClick = (minutes: number, modeType: 'timed' | 'endOfSong') => {

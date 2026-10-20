@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { memo, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { PodcastFallback } from '@/app/components/fallbacks/podcast-fallbacks'
 import { EpisodeList } from '@/app/components/podcasts/episode-list'
 import { PodcastInfo } from '@/app/components/podcasts/podcast-info'
@@ -98,7 +98,6 @@ function formatDurationDisplay(seconds: number): string {
 
 export default function Podcast() {
   const { podcastId } = useParams() as { podcastId: string }
-  const navigate = useNavigate()
   const [localPodcastEpisodes, setLocalPodcastEpisodes] = useState<any[]>([])
   const [isLoadingLocal, setIsLoadingLocal] = useState(false)
   

@@ -4,7 +4,6 @@
  */
 
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { usePlayerActions } from '@/store/player.store'
 import { useML } from '@/store/ml.store'
 import { generateActivityMix, generateMoodMix } from '@/service/ml-wave-service'
@@ -23,7 +22,6 @@ interface AIPlaylist {
 }
 
 export default function AISets() {
-  const navigate = useNavigate()
   const { setSongList } = usePlayerActions()
   const { profile, ratings } = useML()
   const [activeFilter, setActiveFilter] = useState<AIFilter>('top')

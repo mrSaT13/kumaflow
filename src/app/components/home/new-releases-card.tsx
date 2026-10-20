@@ -3,7 +3,6 @@
  */
 
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Music, Radio, Loader2 } from 'lucide-react'
 import { Card, CardContent } from '@/app/components/ui/card'
 import { Button } from '@/app/components/ui/button'
@@ -13,7 +12,6 @@ import { toast } from 'react-toastify'
 import { useArtistSubscriptions } from '@/store/artist-subscriptions.store'
 
 export function NewReleasesCard() {
-  const { t } = useTranslation()
   const { setSongList } = usePlayerActions()
   const { subscriptions } = useArtistSubscriptions()
   const [isLoading, setIsLoading] = useState(false)

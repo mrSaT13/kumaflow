@@ -49,7 +49,7 @@ export default function GenreExploration() {
     { id: 'rnb', name: 'R&B', gradient: GENRE_GRADIENTS['R&B'] },
   ]
 
-  const handlePlayGenre = async (genreName: string, gradient: string) => {
+  const handlePlayGenre = async (genreName: string) => {
     if (isLoading) return
     
     setIsLoading(genreName)
@@ -97,7 +97,7 @@ export default function GenreExploration() {
           <div
             key={playlist.id}
             className="genre-card"
-            onClick={() => handlePlayGenre(playlist.name.split(' ')[0], playlist.gradient)}
+            onClick={() => handlePlayGenre(playlist.name.split(' ')[0])}
           >
             <div className="genre-background">
               <div className={`absolute inset-0 bg-gradient-to-br ${playlist.gradient} opacity-90`} />

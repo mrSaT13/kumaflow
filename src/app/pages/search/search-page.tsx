@@ -22,33 +22,8 @@ import {
   Loader2,
 } from 'lucide-react'
 
-function useThemeClasses() {
-  // Используем CSS переменные из темы вместо проверки Theme.Dark
-  // Это гарантирует работу со всеми 48 темами
-  // НО теперь используем inline style с var(--theme-*) вместо Tailwind классов
-
-  return {
-    isDark: true, // Для обратной совместимости
-    bg: 'bg-background',
-    bgGradient: 'bg-background',  // Используем просто bg-background без градиента
-    cardBg: 'bg-background-alternate border-border',
-    cardHover: 'hover:bg-background-alternate/50',
-    text: {
-      primary: 'text-foreground',
-      secondary: 'text-muted-foreground',
-      muted: 'text-muted-foreground/70',
-    },
-    link: 'text-accent hover:text-accent/80',
-    borderDashed: 'border-border/50',
-    input: 'bg-background-alternate border-border text-foreground placeholder-muted-foreground',
-    headerBg: 'bg-background-alternate/90',
-    headerBorder: 'border-border',
-  }
-}
-
 export default function SearchPage() {
   const navigate = useNavigate()
-  const t = useThemeClasses()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<{ songs: ISong[], artists: any[], albums: any[] }>({ songs: [], artists: [], albums: [] })
   const [isLoading, setIsLoading] = useState(false)
@@ -94,10 +69,6 @@ export default function SearchPage() {
 
   const handleGoToArtist = (artistId: string) => {
     navigate(`/library/artists/${artistId}`)
-  }
-
-  const handleGoToAlbum = (albumId: string) => {
-    navigate(`/library/albums/${albumId}`)
   }
 
   const handlePlayArtistRadio = async (artistId: string, artistName: string) => {

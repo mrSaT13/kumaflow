@@ -8,8 +8,6 @@
  * Rate Limit: 60 запросов/минуту
  */
 
-import CryptoJS from 'crypto-js'
-
 export interface DiscogsRelease {
   id: number
   title: string
@@ -93,32 +91,6 @@ class DiscogsService {
     }
 
     this.lastRequestTime = Date.now()
-  }
-
-  /**
-   * Генерация OAuth подписи
-   */
-  private generateOAuthSignature(method: string, url: string, params: Record<string, string>): string {
-    const normalizedParams = Object.keys(params)
-      .sort()
-      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
-      .join('&')
-
-    const baseString = `${method.toUpperCase()}&${encodeURIComponent(url)}&${encodeURIComponent(normalizedParams)}`
-    const signingKey = `${encodeURIComponent(this.consumerSecret)}&${encodeURIComponent(this.tokenSecret)}`
-
-    return CryptoJS.HmacSHA1(baseString, signingKey).toString(CryptoJS.enc.Base64)
-  }
-
-  /**
-   * OAuth заголовки
-   */
-  private getOAuthHeader(params: Record<string, string>): string {
-    const oauthParams = Object.entries(params)
-      .map(([key, value]) => `${key}="${encodeURIComponent(value)}"`)
-      .join(', ')
-
-    return `OAuth ${oauthParams}`
   }
 
   /**
