@@ -20,6 +20,7 @@ import { orchestratePlaylist, orchestratePlaylistWithBridges, createEnergyWave }
 import { analyzeTrack, vibeSimilarity } from './vibe-similarity'
 import { generateMLRecommendations } from './ml-wave-service'
 import { tryBrainAutoDJ } from './brain-autodj'
+import { readLocalWaveSettings } from './wave-settings-local'
 import { isArtistBanned } from './ban-filter'
 import { useMLStore } from '@/store/ml.store'
 import type { ISong } from '@/types/responses/song'
@@ -129,6 +130,12 @@ export async function generateSmartAutoDJ(
     count,
     poolByExternalId,
     remainingAfterCurrent,
+    // Пилюли волны (настроение/занятие/характер/язык). Без них автопродление
+    // спрашивало мозг вообще без контекста: мозг отдавал «просто микс», и
+    // выбранное настроение было слышно только в первой пачке, а дальше
+    // волна скатывалась в обычную. Общие пилюли живут на сервере, но
+    // локальный выбор (my-wave-settings) тоже надо передать.
+    waveSettings: readLocalWaveSettings(),
   })
   // reason заполняется всегда: null — мозг дал треки, иначе — почему не дал.
   brainReason = brain.reason
@@ -168,7 +175,7 @@ export async function generateSmartAutoDJ(
   
   // Вычисляем средний вайб последних треков
   const lastVibeProfile = lastPlayedTracks.length > 0
-    ? lastPlayedTracks.map(t => analyzeTrack(t)).reduce((acc, vibe, i, arr) => ({
+    ? lastPlayedTracks.map(t => analyzeTrack(t)).reduce((acc, vibe, _i, arr) => ({
         energy: acc.energy + vibe.energy / arr.length,
         valence: acc.valence + vibe.valence / arr.length,
         danceability: acc.danceability + vibe.danceability / arr.length,

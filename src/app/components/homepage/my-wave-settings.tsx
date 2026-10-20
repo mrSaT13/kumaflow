@@ -5,16 +5,16 @@
 
 import { useState, useEffect } from 'react'
 import type { ComponentType } from 'react'
-import { useML } from '@/store/ml.store'
 import { isBrainActive } from '@/store/brain.store'
 import { toast } from 'react-toastify'
 import {
   X, RefreshCw, Heart, Sparkles, Zap, Music, Mic, Cpu, MonitorSmartphone,
   Sunrise, Car, Laptop, Dumbbell, MoonStar, Languages, Globe, Loader2,
-  BookOpen, Footprints, PartyPopper, Coffee, CloudRain, Waves,
+  BookOpen, Footprints, PartyPopper, Coffee, CloudRain, Waves, Sun,
   Flame, Smile, AlertTriangle, Rocket, ChevronDown,
 } from 'lucide-react'
 import { waveSettingsGet, waveSettingsPut, waveOptions } from '@/service/brain-wave'
+import { WAVE_SETTINGS_KEY } from '@/service/wave-settings-local'
 
 export const WAVE_SOURCE_KEY = 'my-wave-source'
 // Тип переехал в service/wave-identity — там же контекст волны и её распознавание.
@@ -45,6 +45,18 @@ export const WAVE_LABELS: Record<string, string> = {
   russian: 'Русский',
   foreign: 'Иностранный',
   instrumental: 'Без слов',
+  // Канонические коды настроений — мозг теперь отдаёт их в каталоге
+  // /api/wave/options (вместе с подписью), и код приходит в localStorage.
+  // Без этих подписей чип на главной показывал бы «aggressive».
+  aggressive: 'Боевое',
+  dance: 'Танцевальное',
+  dreamy: 'Мечтательное',
+  melancholic: 'Меланхоличное',
+  warm: 'Тёплое',
+  tense: 'Тревожное',
+  romantic: 'Романтичное',
+  epic: 'Эпичное',
+  relaxed: 'Расслабленное',
 }
 
 export function waveLabel(key: string): string {
@@ -100,11 +112,11 @@ type MoodTone = (typeof MOOD_TONES)[number]
 const MOOD_TONE_KEYWORDS: Array<[MoodTone, string[]]> = [
   ['sad', ['sad', 'груст', 'меланхол', 'dark', 'тёмн', 'темн', 'somber', 'grief', 'nostalg']],
   ['tense', ['anxious', 'anxiety', 'тревож', 'stress', 'напряж', 'tense', 'angst', 'worry']],
-  ['calm', ['calm', 'спокойн', 'relax', 'peace', 'chill', 'медленн', 'dream', 'ambient', 'soft', 'gentle']],
+  ['calm', ['calm', 'спокойн', 'relax', 'peace', 'chill', 'медленн', 'dream', 'ambient', 'soft', 'gentle', 'dreamy']],
   ['dance', ['dance', 'танц', 'club', 'euphor', 'groov']],
   ['happy', ['happy', 'весел', 'весёл', 'радост', 'upbeat', 'bright', 'cheer', 'playful', 'fun']],
-  ['energetic', ['energetic', 'энергич', 'бодр', 'power', 'fast', 'driv', 'pump', 'intense', 'активн']],
-  ['bold', ['confident', 'уверен', 'epic', 'эпик', 'heroic', 'triumph', 'proud', 'drive']],
+  ['energetic', ['energetic', 'энергич', 'бодр', 'power', 'fast', 'driv', 'pump', 'intense', 'активн', 'aggress', 'боев', 'бое']],
+  ['bold', ['confident', 'уверен', 'epic', 'эпик', 'heroic', 'triumph', 'proud']],
 ]
 
 /** Тон настроения по коду/названию. */
@@ -118,14 +130,15 @@ function moodTone(code: string, label?: string): MoodTone {
 
 /** Иконка настроения по коду/названию — чтобы не было «скрипичных» глифов. */
 const MOOD_ICON_KEYWORDS: Array<[ComponentType<{ className?: string }>, string[]]> = [
-  [Flame, ['энергич', 'power', 'intense', 'hot']],
+  [Flame, ['энергич', 'power', 'intense', 'hot', 'aggress', 'боев', 'бое']],
   [Smile, ['happy', 'весел', 'весёл', 'радост', 'upbeat', 'cheer', 'playful']],
-  [PartyPopper, ['dance', 'танц', 'club', 'party', 'euphor']],
-  [Waves, ['calm', 'спокойн', 'relax', 'chill', 'ambient', 'dream', 'gentle']],
+  [PartyPopper, ['dance', 'танц', 'club', 'euphor']],
+  [Waves, ['calm', 'спокойн', 'relax', 'chill', 'ambient', 'dream', 'dreamy', 'gentle']],
   [CloudRain, ['sad', 'груст', 'меланхол', 'nostalg']],
   [MoonStar, ['dark', 'тёмн', 'темн', 'ноч', 'night', 'grief']],
-  [AlertTriangle, ['anxious', 'тревож', 'stress', 'напряж', 'tense', 'worry']],
+  [AlertTriangle, ['anxious', 'тревож', 'stress', 'напряж', 'tense']],
   [Rocket, ['confident', 'уверен', 'epic', 'эпик', 'heroic', 'triumph']],
+  [Sun, ['warm', 'тёпл', 'тепл', 'уютн']],
 ]
 
 function moodIcon(code: string, label?: string): ComponentType<{ className?: string }> {
@@ -217,8 +230,6 @@ interface MyWaveSettingsProps {
 }
 
 export default function MyWaveSettings({ isOpen, onClose, onApplied }: MyWaveSettingsProps) {
-  const { profile } = useML()
-  
   // Состояния настроек
   const [activity, setActivity] = useState<string>('')
   const [characteristic, setCharacteristic] = useState<string>('')
@@ -244,15 +255,14 @@ export default function MyWaveSettings({ isOpen, onClose, onApplied }: MyWaveSet
     if (!isOpen) return
     let cancelled = false
     try {
-      const raw = JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
+      const raw = JSON.parse(localStorage.getItem(WAVE_SETTINGS_KEY) || '{}')
       setActivity(raw.activity || '')
       setCharacteristic(raw.characteristic || '')
       setMood(raw.mood || '')
       setLanguage(raw.language || '')
       setSource(getWaveSource())
       setBrainOn(isBrainActive())
-    } catch { /* ignore */ }
-    if (isBrainActive()) {
+    } catch { /* ignore */ }    if (isBrainActive()) {
       setServerSyncing(true)
 
       // 1) Каталог пилюль с сервера (занятия/характеры/языки/живые настроения).
@@ -289,7 +299,7 @@ export default function MyWaveSettings({ isOpen, onClose, onApplied }: MyWaveSet
           if (s.mood !== undefined) setMood(s.mood || '')
           if (s.language !== undefined) setLanguage(s.language || '')
           try {
-            localStorage.setItem('my-wave-settings', JSON.stringify({
+            localStorage.setItem(WAVE_SETTINGS_KEY, JSON.stringify({
               activity: s.activity || '',
               characteristic: s.characteristic || '',
               mood: s.mood || '',
@@ -318,7 +328,7 @@ export default function MyWaveSettings({ isOpen, onClose, onApplied }: MyWaveSet
   const handleSave = () => {
     // Сохраняем настройки в localStorage
     const settings = { activity, characteristic, mood, language }
-    localStorage.setItem('my-wave-settings', JSON.stringify(settings))
+    localStorage.setItem(WAVE_SETTINGS_KEY, JSON.stringify(settings))
     localStorage.setItem(WAVE_SOURCE_KEY, source)
 
     // Общие пилюли — на сервер (PUT /api/wave/settings, "" стирает пилюлю).

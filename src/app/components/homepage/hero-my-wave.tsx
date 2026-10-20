@@ -5,10 +5,10 @@
 
 import { Pause, Play, RefreshCw, Settings } from 'lucide-react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { generateMyWavePlaylist } from '@/service/ml-wave-service'
 import { clearWaveSeed } from '@/service/wave-identity'
+import { readLocalWaveSettings } from '@/service/wave-settings-local'
 import { useML } from '@/store/ml.store'
 import { usePlayerActions, usePlayerStore } from '@/store/player.store'
 import MyWaveSettings, {
@@ -18,11 +18,10 @@ import MyWaveSettings, {
 } from './my-wave-settings'
 
 export default function HeroMyWave() {
-  const navigate = useNavigate()
   const [isGenerating, setIsGenerating] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
-  const { getProfile, ratings, profile } = useML()
+  const { ratings, profile } = useML()
   const { setSongList } = usePlayerActions()
 
   // Играет ли СЕЙЧАС Моя волна. Раньше кнопка была stateless: всегда рисовала
@@ -31,8 +30,6 @@ export default function HeroMyWave() {
   const isPlaying = usePlayerStore((s) => s.playerState.isPlaying)
   const playlistName = usePlayerStore((s) => s.songlist.currentPlaylistName)
   const isWaveActive = isWavePlaylistName(playlistName)
-
-  const currentProfile = getProfile()
 
   // Генерация плейлиста "Моя Волна"
   const handlePlayMyWave = async () => {
@@ -58,9 +55,7 @@ export default function HeroMyWave() {
 
     try {
       // Загружаем настройки из localStorage
-      const settingsRaw = JSON.parse(
-        localStorage.getItem('my-wave-settings') || '{}',
-      )
+      const settingsRaw = readLocalWaveSettings()
 
       // Проверяем есть ли реальные настройки
       const hasSettings = settingsRaw && Object.keys(settingsRaw).length > 0
@@ -79,9 +74,7 @@ export default function HeroMyWave() {
       if (playlist.songs.length > 0) {
         let hint = ''
         try {
-          const s =
-            settings ??
-            JSON.parse(localStorage.getItem('my-wave-settings') || '{}')
+          const s = settings ?? readLocalWaveSettings()
           hint = [s.activity, s.characteristic, s.mood, s.language]
             .filter(Boolean)
             .map((v: string) => waveLabel(v))
