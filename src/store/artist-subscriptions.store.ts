@@ -2,6 +2,7 @@ import { devtools, subscribeWithSelector } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { createWithEqualityFn } from 'zustand/traditional'
 import { persist } from 'zustand/middleware'
+import { pushSubscriptionToBrain, removeSubscriptionFromBrain } from '@/service/brain-library-sync'
 
 export interface ArtistSubscription {
   artistId: string
@@ -39,6 +40,7 @@ export const useArtistSubscriptionsStore = createWithEqualityFn<ArtistSubscripti
           notificationsEnabled: true,
           
           subscribe: (artistId: string, artistName: string) => {
+            const name = (artistName || '').trim()
             set((state) => {
               const exists = state.subscriptions.find(s => s.artistId === artistId)
               if (!exists) {
@@ -50,16 +52,20 @@ export const useArtistSubscriptionsStore = createWithEqualityFn<ArtistSubscripti
                 console.log(`[ArtistSubscriptions] Подписка на "${artistName}"`)
               }
             })
+            // Library Sync: ретранслируем в мозг (best-effort, YM докачает новинки).
+            if (name) void pushSubscriptionToBrain(artistId, name)
           },
           
           unsubscribe: (artistId: string) => {
+            const sub = get().subscriptions.find(s => s.artistId === artistId)
+            const name = sub?.artistName ?? ''
             set((state) => {
-              const sub = state.subscriptions.find(s => s.artistId === artistId)
               if (sub) {
                 state.subscriptions = state.subscriptions.filter(s => s.artistId !== artistId)
                 console.log(`[ArtistSubscriptions] Отписка от "${sub.artistName}"`)
               }
             })
+            if (name) void removeSubscriptionFromBrain(artistId, name)
           },
           
           isSubscribed: (artistId: string) => {

@@ -30,6 +30,7 @@ import { checkAndGenerateHolidayPlaylists } from '@/service/holiday-playlist-gen
 import { startBrainFlushLoop } from '@/service/brain-events'  // 1.6.2: Brain flush
 import { startBrainBootstrapLoop } from '@/service/brain-bootstrap'  // 1.7.3: user_id мозга без настроек
 import { startBrainAutoSyncLoop } from '@/service/brain-autosync'  // Автосинк вкусов (вкл по умолчанию)
+import { startBrainLibrarySyncLoop } from '@/service/brain-library-sync'  // 1.14.0: новинки подписок из мозга
 import { wavePublish } from '@/service/brain-wave'  // 1.6.2: живая очередь мозгу
 import { isBrainActive } from '@/store/brain.store'
 import { usePlayerStore, selectCurrentSong } from '@/store/player.store'
@@ -107,6 +108,10 @@ function App() {
     // Автосинк вкусов в мозг (первый прогон ~20с, дальше каждые 30 мин).
     // Работает только если мозг включен и настроен; тумблер — в настройках мозга.
     startBrainAutoSyncLoop()
+
+    // 1.14.0: новинки подписанных артистов из мозга (Library Sync).
+    // Первый опрос через минуту, дальше каждые 15 мин; без мозга — тихо.
+    startBrainLibrarySyncLoop()
 
     // 1.6.2: живая очередь мозгу при ЛЮБОМ изменении очереди/текущего трека
     // (троттлинг 5с внутри wavePublish, best-effort).
