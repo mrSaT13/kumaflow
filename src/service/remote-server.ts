@@ -306,6 +306,43 @@ function stopMdnsAdvertise() {
   bonjourInstance = null
 }
 
+/**
+ * Автоправило брандмауэра (только Windows). Symptom: «на работе пульт
+ * виден, дома нет» — сеть дома помечена «Общедоступная», и брандмауэр
+ * молча режет входящие на порт пульта. Добавляем правило для текущего
+ * exe (без localport — переживает смену порта), по всем профилям.
+ * Idempotent: если правило уже есть — ничего не делаем, запуск не трогаем.
+ */
+let firewallRuleEnsured = false
+function ensureFirewallRule(exePath: string) {
+  if (firewallRuleEnsured || process.platform !== 'win32' || !exePath) return
+  firewallRuleEnsured = true
+  try {
+    const { execFile } = require('child_process') as typeof import('child_process')
+    const run = (args: string[]) => new Promise<string>((resolve) => {
+      execFile('netsh', args, { windowsHide: true, timeout: 10000 },
+        (err, stdout) => resolve(String(stdout || '') + (err ? ' __err__' : '')))
+    })
+    void (async () => {
+      const name = 'KumaFlow Remote Control'
+      const check = await run(['advfirewall', 'firewall', 'show', 'rule', `name=${name}`, `program=${exePath}`])
+      if (check.includes(name) && !check.includes('__err__')) {
+        console.log('[Remote] firewall rule already exists, skip')
+        return
+      }
+      const add = await run(['advfirewall', 'firewall', 'add', 'rule', `name=${name}`,
+        `program=${exePath}`, 'dir=in', 'action=allow', 'protocol=TCP'])
+      if (add.includes('__err__')) {
+        console.warn('[Remote] firewall rule add failed (run as admin once):', add.trim())
+      } else {
+        console.log('[Remote] firewall rule added for', exePath)
+      }
+    })()
+  } catch (e) {
+    console.warn('[Remote] firewall rule skipped:', (e as Error)?.message)
+  }
+}
+
 let currentState: any = {}
 
 /**
@@ -734,6 +771,9 @@ export async function startRemoteServer(config: RemoteConfig): Promise<void> {
         console.log(`[Remote] Server started on ${currentHost}:${settings.port}${currentPin ? ' (PIN защищён)' : ''}`)
         console.log(`[Remote] Open http://localhost:${settings.port}`)
         startMdnsAdvertise(settings.port)
+        try {
+          ensureFirewallRule(app.getPath('exe'))
+        } catch (_) {}
         resolve()
       })
 
