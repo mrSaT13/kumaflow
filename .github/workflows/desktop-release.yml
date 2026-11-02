@@ -56,29 +56,35 @@ jobs:
       - name: Build renderer + main (electron-vite)
         run: pnpm run electron:build
 
-      # Два шага вместо одного: electron-builder на Windows часто падает,
-      # собирая x64 и arm64 подряд в одной жизни — MSBuild держит файлы
-      # build-директории («being used by another process»). Между шагами
-      # гасим осиротевшие процессы и вычищаем нативные build-директории.
+      # electron-builder'овский внутренний npmRebuild гоняет ОБЕ арки подряд
+      # (флаг --x64 игнорирует) и падает на arm64 из-за файл-локов.
+      # Поэтому: нативные модули пересобираем сами по одной арке
+      # (install-app-deps --arch), а сборку делаем с npmRebuild=false.
+      - name: Rebuild native deps (x64)
+        run: pnpm exec electron-builder install-app-deps --arch x64
+
       - name: Build and publish x64 (electron-builder -> GitHub Release)
-        run: pnpm exec electron-builder --win --publish always --x64
+        run: pnpm exec electron-builder -c.npmRebuild=false --win --publish always --x64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Stop stale MSBuild and clean native build dirs
         shell: pwsh
         run: |
-          taskkill /F /IM MSBuild.exe /IM VCTip.exe /IM node-gyp-build.exe 2>$null | Out-Null
+          taskkill /F /IM MSBuild.exe /IM VCTip.exe /IM cl.exe 2>$null | Out-Null
           foreach ($p in 'bufferutil', 'utf-8-validate', 'register-scheme') {
             Get-ChildItem 'node_modules\.pnpm' -Directory -Filter "$p@*" | ForEach-Object {
               $b = Join-Path $_.FullName "node_modules\$p\build"
               if (Test-Path $b) { Remove-Item $b -Recurse -Force }
+              Write-Host "cleaned $b"
             }
           }
-          Write-Host 'native build dirs cleaned'
+
+      - name: Rebuild native deps (arm64)
+        run: pnpm exec electron-builder install-app-deps --arch arm64
 
       - name: Build and publish arm64 (electron-builder -> GitHub Release)
-        run: pnpm exec electron-builder --win --publish always --arm64
+        run: pnpm exec electron-builder -c.npmRebuild=false --win --publish always --arm64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
