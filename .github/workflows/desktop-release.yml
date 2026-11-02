@@ -15,7 +15,10 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    # windows-2022: VS 2022 с компонентом VC.Tools.ARM64 — node-gyp 11.5
+    # из проекта его понимает. windows-latest ушёл на VS 2026 ("18"),
+    # которую node-gyp не знает: x64 собирается, arm64 падает.
+    runs-on: windows-2022
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,8 +52,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
         shell: pwsh
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: 0
 
       - name: Build renderer + main (electron-vite)
         run: pnpm run electron:build
