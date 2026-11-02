@@ -1,0 +1,70 @@
+name: Desktop Release (exe)
+
+# Сборка ПК-плеера: пушим тег v* (например v1.14.1) — GitHub сам собирает
+# и публикует релиз с exe (x64 + arm64) и latest.yml для автообновления.
+# Идентично локальной сборке: electron-vite build -> electron-builder --win.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Защита от «тег не совпадает с версией в package.json» — exe
+      # будет носить версию из package.json, расхождений не должно быть.
+      - name: Version guard (tag == package.json)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $ver = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tag = '${{ github.ref_name }}'
+          if ("v$ver" -ne $tag) {
+            Write-Error "Tag $tag does not match package.json version $ver. Bump version and re-tag."
+          }
+
+      - name: Fix Windows line endings # node-gyp/pnpm могут ругаться на CRLF
+        run: git config --global core.autocrlf false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        shell: pwsh
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 0
+
+      - name: Build renderer + main (electron-vite)
+        run: pnpm run electron:build
+
+      - name: Build and publish (electron-builder -> GitHub Release)
+        run: pnpm exec electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # electron-builder публикует в DRAFT; для автообновлений (latest.yml)
+      # релиз должен быть опубликован — переводим из черновика.
+      - name: Publish draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
