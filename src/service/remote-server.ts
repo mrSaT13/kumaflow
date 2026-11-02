@@ -332,10 +332,20 @@ function ensureFirewallRule(exePath: string) {
       }
       const add = await run(['advfirewall', 'firewall', 'add', 'rule', `name=${name}`,
         `program=${exePath}`, 'dir=in', 'action=allow', 'protocol=TCP'])
-      if (add.includes('__err__')) {
-        console.warn('[Remote] firewall rule add failed (run as admin once):', add.trim())
-      } else {
+      if (!add.includes('__err__')) {
         console.log('[Remote] firewall rule added for', exePath)
+        return
+      }
+      // Не хватило прав (обычно плеер не под админом): UAC-подтверждение.
+      // Start-Process -Verb RunAs — стандартный диалог Windows, один раз.
+      try {
+        const { spawn } = require('child_process') as typeof import('child_process')
+        spawn('powershell', ['-NoProfile', '-Command',
+          `Start-Process netsh -ArgumentList 'advfirewall','firewall','add','rule',"name=${name}","program=${exePath}",'dir=in','action=allow','protocol=TCP' -Verb RunAs -Wait`],
+          { windowsHide: true, detached: true, stdio: 'ignore' }).unref()
+        console.log('[Remote] firewall rule: UAC prompt requested (approve once)')
+      } catch (e2) {
+        console.warn('[Remote] firewall rule UAC fallback failed:', (e2 as Error)?.message)
       }
     })()
   } catch (e) {
